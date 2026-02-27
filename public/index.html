@@ -474,10 +474,14 @@
                       return (
                         <div key={r.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr auto", padding: "16px 20px", borderBottom: i < sRuns.length - 1 ? `1px solid ${C.border}` : "none", gap: 12, alignItems: "center" }}>
                           <div>
-                            {r.webUrl
-                              ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 500, textDecoration: "none", borderBottom: `1px dotted ${C.dim}` }}>{r.emailName}</a>
-                              : <p style={{ fontSize: 14, fontWeight: 500 }}>{r.emailName}</p>
-                            }
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {r.webUrl
+                                ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 500, textDecoration: "none", borderBottom: `1px dotted ${C.dim}` }}>{r.emailName}</a>
+                                : <p style={{ fontSize: 14, fontWeight: 500 }}>{r.emailName}</p>
+                              }
+                              {r.adminNote && <span title={r.adminNote} style={{ cursor: "help", fontSize: 13 }}>📝</span>}
+                            </div>
+                            {r.description && <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic", margin: "2px 0 0" }}>{r.description}</p>}
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
                               <span style={{ fontSize: 12, color: C.dim }}>{fmtDate(r.sendDate)}</span>
                               {r.autoSynced && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.accentDim, color: C.accent, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>API</span>}
@@ -700,6 +704,7 @@
                             ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 16, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${C.dim}` }}>{r.emailName}</a>
                             : <p style={{ fontSize: 16, fontWeight: 600 }}>{r.emailName}</p>
                           }
+                          {r.description && <p style={{ fontSize: 13, color: C.muted, fontStyle: "italic", margin: "4px 0 0" }}>{r.description}</p>}
                           <p style={{ fontSize: 13, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}</p>
                         </div>
                         <NumDisplay label="Opens" value={num(r.totalOpens)} color={C.accent} />
@@ -924,10 +929,13 @@
       const [op, setOp] = useState(run?.totalOpens ?? "");
       const [cl, setCl] = useState(run?.totalClicks ?? "");
       const [ctId, setCtId] = useState(run?.contractId || (activeContract?.id || ""));
+      const [desc, setDesc] = useState(run?.description || "");
+      const [note, setNote] = useState(run?.adminNote || "");
       return (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{run ? "Edit Run" : "Add Manual Run"}</h3>
           <Input label="Email Name" value={en} onChange={e => setEn(e.target.value)} placeholder="e.g. Shower Curtain Liner Hack" />
+          <Input label="Description" value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Patches + Jacket hero placement" help="Visible to the sponsor in their view" />
           <Input label="Send Date" type="date" value={sd} onChange={e => setSd(e.target.value)} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Input label="Total Opens" type="number" value={op} onChange={e => setOp(e.target.value)} placeholder="25832" />
@@ -942,9 +950,14 @@
               </select>
             </div>
           )}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Admin Note</label>
+            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Internal only — sponsor won't see this" rows={3} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.amber}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box", resize: "vertical", outline: "none" }} />
+            <p style={{ fontSize: 11, color: C.dim, margin: "5px 0 0" }}>Private note — only visible in admin view</p>
+          </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => onSave({ sponsorId, emailName: en.trim() || "Untitled", sendDate: sd, totalOpens: parseInt(op) || 0, totalClicks: parseInt(cl) || 0, contractId: ctId || null, autoSynced: false })} color={C.white} bg={C.green}>{run ? "Update" : "Save"}</Btn>
+            <Btn onClick={() => onSave({ sponsorId, emailName: en.trim() || "Untitled", sendDate: sd, totalOpens: parseInt(op) || 0, totalClicks: parseInt(cl) || 0, contractId: ctId || null, description: desc.trim(), adminNote: note.trim(), autoSynced: false })} color={C.white} bg={C.green}>{run ? "Update" : "Save"}</Btn>
           </div>
         </div>
       );
