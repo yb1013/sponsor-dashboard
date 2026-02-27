@@ -148,8 +148,8 @@
         const hit = patterns.some(p => p && u.includes(p.toLowerCase()));
         if (hit) {
           sc += e.total_clicks || 0;
-          vc += e.verified_total_clicks || 0;
-          matched.push({ url: e.url || e.base_url, clicks: e.total_clicks || 0, verifiedClicks: e.verified_total_clicks || 0 });
+          vc += e.email?.verified_clicks || 0;
+          matched.push({ url: e.url || e.base_url, clicks: e.total_clicks || 0, verifiedClicks: e.email?.verified_clicks || 0 });
         }
       }
       if (sc === 0) return null;
