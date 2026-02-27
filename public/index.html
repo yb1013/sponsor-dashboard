@@ -445,6 +445,9 @@
 
                 {syncMsg && <div style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 13, background: syncMsg.t === "ok" ? C.greenDim : C.redDim, color: syncMsg.t === "ok" ? C.green : C.red, border: `1px solid ${syncMsg.t === "ok" ? "rgba(52,211,153,0.2)" : "rgba(248,113,113,0.2)"}` }}>{syncMsg.m}</div>}
 
+                {/* Cumulative Reach */}
+                {sRuns.length > 0 && <ReachCard runs={sRuns} />}
+
                 {/* Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: costMetrics ? 16 : 32 }}>
                   <MetricCard label="Total Opens" value={num(tot.opens)} sub={`${sRuns.length} run${sRuns.length !== 1 ? "s" : ""}`} color={C.accent} />
@@ -699,6 +702,9 @@
             {/* Progress bar */}
             {contract && <ProgressBar current={runs.length} total={contract.totalRuns} />}
 
+            {/* Cumulative Reach */}
+            {runs.length > 0 && <ReachCard runs={runs} />}
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: hasAnyCost ? 20 : 56 }}>
               <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
               <BigStat label="Total Clicks" value={num(totals.clicks)} color={C.green} sub="across all campaign links" />
@@ -776,6 +782,52 @@
           {terms.map((t, i) => (
             <span key={i} style={{ padding: "6px 14px", borderRadius: 20, background: C.purpleDim, border: "1px solid rgba(167,139,250,0.25)", color: C.purple, fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>✦ {t}</span>
           ))}
+        </div>
+      );
+    }
+
+    function CumulativeChart({ data }) {
+      const W = 800, H = 200;
+      const pad = { top: 10, right: 10, bottom: 30, left: 10 };
+      const maxVal = Math.max(...data.map(d => d.total));
+      const points = data.map((d, i) => ({
+        x: pad.left + (i / (data.length - 1)) * (W - pad.left - pad.right),
+        y: pad.top + (1 - d.total / maxVal) * (H - pad.top - pad.bottom),
+        ...d,
+      }));
+      const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+      const areaPath = linePath + ` L ${points[points.length - 1].x} ${H - pad.bottom} L ${points[0].x} ${H - pad.bottom} Z`;
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.accent} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={C.accent} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill="url(#areaGrad)" />
+          <path d={linePath} fill="none" stroke={C.accent} strokeWidth="2.5" strokeLinejoin="round" />
+          <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="5" fill={C.accent} />
+          {points.map((p, i) => (
+            <text key={i} x={p.x} y={H - 8} textAnchor="middle" style={{ fontSize: 10, fill: C.dim, fontFamily: FONT }}>
+              {new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </text>
+          ))}
+        </svg>
+      );
+    }
+
+    function ReachCard({ runs }) {
+      const sorted = [...runs].sort((a, b) => new Date(a.sendDate) - new Date(b.sendDate));
+      let cumulative = 0;
+      const chartData = sorted.map(r => { cumulative += (r.totalOpens || 0); return { date: r.sendDate, label: r.emailName, total: cumulative }; });
+      const totalOpens = runs.reduce((s, r) => s + (r.totalOpens || 0), 0);
+      return (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 28px", marginBottom: 32, textAlign: "center" }}>
+          <p style={{ fontSize: 13, color: C.dim, marginBottom: 8 }}>Seen by</p>
+          <p style={{ fontSize: 52, fontWeight: 700, fontFamily: MONO, color: C.accent, letterSpacing: -2 }}>{num(totalOpens)}</p>
+          <p style={{ fontSize: 14, color: C.dim, marginBottom: chartData.length >= 3 ? 24 : 0 }}>readers</p>
+          {chartData.length >= 3 && <CumulativeChart data={chartData} />}
         </div>
       );
     }
