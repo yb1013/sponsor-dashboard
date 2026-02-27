@@ -446,7 +446,7 @@
                 {syncMsg && <div style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 13, background: syncMsg.t === "ok" ? C.greenDim : C.redDim, color: syncMsg.t === "ok" ? C.green : C.red, border: `1px solid ${syncMsg.t === "ok" ? "rgba(52,211,153,0.2)" : "rgba(248,113,113,0.2)"}` }}>{syncMsg.m}</div>}
 
                 {/* Cumulative Reach */}
-                {sRuns.length > 0 && <ReachCard runs={sRuns} />}
+                {sRuns.length > 0 && <ReachSection runs={sRuns} />}
 
                 {/* Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: costMetrics ? 16 : 32 }}>
@@ -703,7 +703,7 @@
             {contract && <ProgressBar current={runs.length} total={contract.totalRuns} />}
 
             {/* Cumulative Reach */}
-            {runs.length > 0 && <ReachCard runs={runs} />}
+            {runs.length > 0 && <ReachSection runs={runs} />}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: hasAnyCost ? 20 : 56 }}>
               <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
@@ -786,48 +786,122 @@
       );
     }
 
-    function CumulativeChart({ data }) {
-      const W = 800, H = 200;
-      const pad = { top: 10, right: 10, bottom: 30, left: 10 };
-      const maxVal = Math.max(...data.map(d => d.total));
-      const points = data.map((d, i) => ({
-        x: pad.left + (i / (data.length - 1)) * (W - pad.left - pad.right),
-        y: pad.top + (1 - d.total / maxVal) * (H - pad.top - pad.bottom),
-        ...d,
-      }));
+    function buildChartData(runs) {
+      const sorted = [...runs].filter(r => r.sendDate).sort((a, b) => new Date(a.sendDate) - new Date(b.sendDate));
+      if (sorted.length === 0) return [];
+      const points = [];
+      let cumulative = 0;
+      sorted.forEach((run, i) => {
+        const runOpens = run.totalOpens || 0;
+        const runDate = new Date(run.sendDate);
+        if (i === 0) {
+          const preDate = new Date(runDate);
+          preDate.setDate(preDate.getDate() - 3);
+          points.push({ date: preDate, total: 0, isSend: false, label: null });
+        }
+        if (i > 0) {
+          const prevDate = new Date(sorted[i - 1].sendDate);
+          const daysBetween = Math.round((runDate - prevDate) / (1000 * 60 * 60 * 24));
+          const prevTotal = cumulative;
+          for (let d = 1; d < daysBetween; d++) {
+            const t = d / daysBetween;
+            const eased = 1 - Math.pow(1 - t, 2);
+            const interpDate = new Date(prevDate);
+            interpDate.setDate(interpDate.getDate() + d);
+            points.push({ date: interpDate, total: Math.round(prevTotal + (runOpens * eased * 0.3)), isSend: false, label: null });
+          }
+        }
+        cumulative += runOpens;
+        points.push({ date: runDate, total: cumulative, isSend: true, label: run.emailName });
+      });
+      const today = new Date();
+      const lastSend = new Date(sorted[sorted.length - 1].sendDate);
+      if (today > lastSend) {
+        const daysSince = Math.round((today - lastSend) / (1000 * 60 * 60 * 24));
+        for (let d = 1; d <= Math.min(daysSince, 7); d++) {
+          const postDate = new Date(lastSend);
+          postDate.setDate(postDate.getDate() + d);
+          points.push({ date: postDate, total: cumulative, isSend: false, label: null });
+        }
+      }
+      return points;
+    }
+
+    function CumulativeChart({ data, onHover }) {
+      const containerRef = React.useRef(null);
+      const [hoverX, setHoverX] = React.useState(null);
+      const [hoverY, setHoverY] = React.useState(null);
+      const W = 800, H = 220;
+      const pad = { top: 20, right: 20, bottom: 35, left: 20 };
+      const maxVal = Math.max(...data.map(d => d.total)) || 1;
+      const minDate = data[0].date.getTime();
+      const maxDate = data[data.length - 1].date.getTime();
+      const dateRange = maxDate - minDate || 1;
+      const toX = (date) => pad.left + ((date.getTime() - minDate) / dateRange) * (W - pad.left - pad.right);
+      const toY = (val) => pad.top + (1 - val / maxVal) * (H - pad.top - pad.bottom);
+      const points = data.map(d => ({ x: toX(d.date), y: toY(d.total), ...d }));
       const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
       const areaPath = linePath + ` L ${points[points.length - 1].x} ${H - pad.bottom} L ${points[0].x} ${H - pad.bottom} Z`;
+      const handleMouseMove = (e) => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const mouseXRatio = (e.clientX - rect.left) / rect.width;
+        const svgX = mouseXRatio * W;
+        let closest = points[0], closestDist = Infinity;
+        for (const p of points) { const dist = Math.abs(p.x - svgX); if (dist < closestDist) { closestDist = dist; closest = p; } }
+        onHover({ total: closest.total, date: closest.date, isSend: closest.isSend, label: closest.label });
+        setHoverX(closest.x);
+        setHoverY(closest.y);
+      };
+      const sendPoints = points.filter(p => p.isSend);
       return (
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
-          <defs>
-            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={C.accent} stopOpacity="0.25" />
-              <stop offset="100%" stopColor={C.accent} stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
-          <path d={areaPath} fill="url(#areaGrad)" />
-          <path d={linePath} fill="none" stroke={C.accent} strokeWidth="2.5" strokeLinejoin="round" />
-          <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="5" fill={C.accent} />
-          {points.map((p, i) => (
-            <text key={i} x={p.x} y={H - 8} textAnchor="middle" style={{ fontSize: 10, fill: C.dim, fontFamily: FONT }}>
-              {new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </text>
-          ))}
-        </svg>
+        <div ref={containerRef} onMouseMove={handleMouseMove} onMouseLeave={() => { onHover(null); setHoverX(null); setHoverY(null); }} style={{ cursor: "crosshair", position: "relative" }}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+            <defs>
+              <linearGradient id="reachGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#4F8FF7" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill="url(#reachGrad)" />
+            <path d={linePath} fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+            {sendPoints.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r="5" fill="#4F8FF7" stroke="#06090F" strokeWidth="2" />
+            ))}
+            {hoverX !== null && (
+              <line x1={hoverX} y1={pad.top} x2={hoverX} y2={H - pad.bottom} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="4 3" />
+            )}
+            {hoverX !== null && hoverY !== null && (
+              <circle cx={hoverX} cy={hoverY} r="6" fill="#4F8FF7" stroke="#fff" strokeWidth="2" />
+            )}
+            {sendPoints.map((p, i) => (
+              <text key={i} x={p.x} y={H - 8} textAnchor="middle" style={{ fontSize: 10, fill: "#4A5A72", fontFamily: FONT }}>
+                {new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </text>
+            ))}
+          </svg>
+        </div>
       );
     }
 
-    function ReachCard({ runs }) {
-      const sorted = [...runs].sort((a, b) => new Date(a.sendDate) - new Date(b.sendDate));
-      let cumulative = 0;
-      const chartData = sorted.map(r => { cumulative += (r.totalOpens || 0); return { date: r.sendDate, label: r.emailName, total: cumulative }; });
+    function ReachSection({ runs }) {
+      const [hoverData, setHoverData] = useState(null);
+      const chartData = buildChartData(runs);
       const totalOpens = runs.reduce((s, r) => s + (r.totalOpens || 0), 0);
+      const displayTotal = hoverData ? hoverData.total : totalOpens;
       return (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 28px", marginBottom: 32, textAlign: "center" }}>
           <p style={{ fontSize: 13, color: C.dim, marginBottom: 8 }}>Seen by</p>
-          <p style={{ fontSize: 52, fontWeight: 700, fontFamily: MONO, color: C.accent, letterSpacing: -2 }}>{num(totalOpens)}</p>
-          <p style={{ fontSize: 14, color: C.dim, marginBottom: chartData.length >= 3 ? 24 : 0 }}>readers</p>
-          {chartData.length >= 3 && <CumulativeChart data={chartData} />}
+          <p style={{ fontSize: 52, fontWeight: 700, fontFamily: MONO, color: C.accent, letterSpacing: -2 }}>{num(displayTotal)}</p>
+          <p style={{ fontSize: 14, color: C.dim, marginBottom: chartData.length >= 3 ? 24 : 0 }}>
+            {hoverData
+              ? (hoverData.isSend
+                ? `on ${new Date(hoverData.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — ${hoverData.label}`
+                : new Date(hoverData.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))
+              : "readers"
+            }
+          </p>
+          {chartData.length >= 3 && <CumulativeChart data={chartData} onHover={setHoverData} />}
         </div>
       );
     }
