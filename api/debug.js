@@ -41,6 +41,7 @@ export default async function handler(req, res) {
         url: c.url,
         base_url: c.base_url,
         total_clicks: c.total_clicks,
+        verified_total_clicks: c.verified_total_clicks,
       })),
     }));
 

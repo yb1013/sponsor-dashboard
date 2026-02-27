@@ -98,6 +98,7 @@
     const fmtDate = (d) => { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
     const tsToDate = (ts) => { if (!ts) return null; return new Date(ts * 1000).toISOString().split("T")[0]; };
     const money = (n) => "$" + (n || 0).toFixed(2);
+    const getTerms = (ct) => { const t = []; if (ct.exclusivePlacement) t.push("Exclusive Placement"); if (ct.primaryPlacement) t.push("Primary Placement"); if (ct.categoryExclusivity) t.push("Category Exclusivity"); if (ct.pricingNotes?.trim()) t.push(ct.pricingNotes.trim()); return t; };
 
     const C = { bg: "#06090F", surface: "#0C1018", card: "#111722", border: "#1B2233", accent: "#4F8FF7", accentDim: "rgba(79,143,247,0.10)", green: "#34D399", greenDim: "rgba(52,211,153,0.10)", amber: "#FBBF24", amberDim: "rgba(251,191,36,0.10)", red: "#F87171", redDim: "rgba(248,113,113,0.10)", purple: "#A78BFA", purpleDim: "rgba(167,139,250,0.10)", text: "#E2E8F0", muted: "#8494AB", dim: "#4A5A72", white: "#FFFFFF" };
     const FONT = "'Outfit',sans-serif";
@@ -457,19 +458,13 @@
 
                 {/* Cost Metrics */}
                 {costMetrics && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: (() => { const t = []; if (viewingContract.exclusivePlacement) t.push("Exclusive Placement"); if (viewingContract.categoryExclusivity) t.push("Category Exclusivity"); if (viewingContract.pricingNotes?.trim()) t.push(viewingContract.pricingNotes.trim()); return t.length > 0 ? 12 : 32; })() }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: viewingContract && getTerms(viewingContract).length > 0 ? 12 : 32 }}>
                     <MetricCard label="Cost Per Run" value={money(costMetrics.costPerRun)} sub={`${money(viewingContract.totalPrice)} ÷ ${viewingContract.totalRuns} runs`} color={C.purple} />
                     <MetricCard label="CPM" value={money(costMetrics.cpm)} sub="cost per 1,000 opens" color={C.purple} />
                     <MetricCard label="CPC" value={money(costMetrics.cpc)} sub="cost per click" color={C.purple} />
                   </div>
                 )}
-                {costMetrics && viewingContract && (() => {
-                  const terms = [];
-                  if (viewingContract.exclusivePlacement) terms.push("Exclusive Placement");
-                  if (viewingContract.categoryExclusivity) terms.push("Category Exclusivity");
-                  if (viewingContract.pricingNotes?.trim()) terms.push(viewingContract.pricingNotes.trim());
-                  return terms.length > 0 ? <p style={{ fontSize: 12, color: C.dim, marginBottom: 32 }}>Includes: {terms.join(", ")}</p> : null;
-                })()}
+                {costMetrics && viewingContract && <TermsBadges contract={viewingContract} style={{ marginBottom: 32 }} />}
 
                 {/* Runs */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -651,7 +646,7 @@
                   {ct.totalPrice > 0 && <span style={{ fontFamily: MONO }}>{money(ct.totalPrice)}</span>}
                   <span>{assigned} / {ct.totalRuns} runs</span>
                   {ct.startDate && <span>{fmtDate(ct.startDate)} — {fmtDate(ct.endDate)}</span>}
-                  {ct.showPricingToSponsor && <span style={{ color: C.purple }}>pricing visible</span>}
+                  {(() => { const cpm = ct.showCpmToSponsor ?? ct.showPricingToSponsor; const cpc = ct.showCpcToSponsor ?? ct.showPricingToSponsor; return (cpm || cpc) ? <span style={{ color: C.purple }}>{cpm && cpc ? "CPM + CPC visible" : cpm ? "CPM visible" : "CPC visible"}</span> : null; })()}
                 </div>
                 <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${pctVal}%`, background: barColor, borderRadius: 2, transition: "width 0.3s" }} />
@@ -673,6 +668,11 @@
         return () => clearInterval(interval);
       }, []);
 
+      const showCpm = contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false;
+      const showCpc = contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false;
+      const hasAnyCost = (showCpm || showCpc) && costMetrics;
+      const terms = contract ? getTerms(contract) : [];
+
       return (
         <div style={{ minHeight: "100vh" }}>
           <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -691,26 +691,20 @@
             {/* Progress bar */}
             {contract && <ProgressBar current={runs.length} total={contract.totalRuns} />}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: contract && contract.showPricingToSponsor && costMetrics ? 20 : 56 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: hasAnyCost ? 20 : 56 }}>
               <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
               <BigStat label="Total Clicks" value={num(totals.clicks)} color={C.green} sub="across all campaign links" />
               <BigStat label="Click-Through Rate" value={pct(totals.ctr)} color={C.amber} sub="clicks ÷ opens" />
             </div>
 
-            {/* Cost metrics — only if sponsor pricing is enabled */}
-            {contract && contract.showPricingToSponsor && costMetrics && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20, marginBottom: (() => { const t = []; if (contract.exclusivePlacement) t.push(1); if (contract.categoryExclusivity) t.push(1); if (contract.pricingNotes?.trim()) t.push(1); return t.length > 0 ? 12 : 56; })() }}>
-                <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />
-                <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />
+            {/* Cost metrics — independent CPM/CPC visibility */}
+            {hasAnyCost && (
+              <div style={{ display: "grid", gridTemplateColumns: showCpm && showCpc ? "repeat(2,1fr)" : "1fr", gap: 20, marginBottom: terms.length > 0 ? 12 : 56 }}>
+                {showCpm && <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
+                {showCpc && <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />}
               </div>
             )}
-            {contract && contract.showPricingToSponsor && costMetrics && (() => {
-              const terms = [];
-              if (contract.exclusivePlacement) terms.push("Exclusive Placement");
-              if (contract.categoryExclusivity) terms.push("Category Exclusivity");
-              if (contract.pricingNotes?.trim()) terms.push(contract.pricingNotes.trim());
-              return terms.length > 0 ? <p style={{ fontSize: 12, color: C.dim, marginBottom: 56 }}>Includes: {terms.join(", ")}</p> : null;
-            })()}
+            {hasAnyCost && <TermsBadges contract={contract} style={{ marginBottom: 56 }} />}
             {runs.length > 0 && (
               <React.Fragment>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: C.muted, margin: "0 0 20px", textTransform: "uppercase", letterSpacing: 1.5 }}>Run-by-Run Breakdown</h2>
@@ -762,6 +756,18 @@
           <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${pctVal}%`, background: barColor, borderRadius: 3, transition: "width 0.3s" }} />
           </div>
+        </div>
+      );
+    }
+
+    function TermsBadges({ contract, style = {} }) {
+      const terms = getTerms(contract);
+      if (terms.length === 0) return null;
+      return (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", ...style }}>
+          {terms.map((t, i) => (
+            <span key={i} style={{ padding: "6px 14px", borderRadius: 20, background: C.purpleDim, border: "1px solid rgba(167,139,250,0.25)", color: C.purple, fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>✦ {t}</span>
+          ))}
         </div>
       );
     }
@@ -907,10 +913,24 @@
       const [totalRuns, setTotalRuns] = useState(contract?.totalRuns ?? "");
       const [startDate, setStartDate] = useState(contract?.startDate || "");
       const [endDate, setEndDate] = useState(contract?.endDate || "");
-      const [showPricing, setShowPricing] = useState(contract?.showPricingToSponsor || false);
+      const [showCpm, setShowCpm] = useState(contract?.showCpmToSponsor ?? contract?.showPricingToSponsor ?? false);
+      const [showCpc, setShowCpc] = useState(contract?.showCpcToSponsor ?? contract?.showPricingToSponsor ?? false);
       const [exclPlace, setExclPlace] = useState(contract?.exclusivePlacement || false);
+      const [primPlace, setPrimPlace] = useState(contract?.primaryPlacement || false);
       const [catExcl, setCatExcl] = useState(contract?.categoryExclusivity || false);
       const [pNotes, setPNotes] = useState(contract?.pricingNotes || "");
+      const MiniToggle = ({ on, onToggle, label }) => (
+        <button onClick={onToggle} style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+          background: on ? C.purpleDim : C.bg, border: `1px solid ${on ? "rgba(167,139,250,0.3)" : C.border}`,
+          borderRadius: 8, cursor: "pointer", transition: "all 0.15s", marginBottom: 8,
+        }}>
+          <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: on ? C.purple : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+            <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: on ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: on ? C.purple : C.dim, fontFamily: FONT }}>{label}</span>
+        </button>
+      );
       return (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{contract ? "Edit Contract" : "New Contract"}</h3>
@@ -924,20 +944,10 @@
             <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
           </div>
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Show Pricing to Sponsor</label>
-            <button onClick={() => setShowPricing(!showPricing)} style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
-              background: showPricing ? C.purpleDim : C.bg, border: `1px solid ${showPricing ? "rgba(167,139,250,0.3)" : C.border}`,
-              borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
-            }}>
-              <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: showPricing ? C.purple : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
-                <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: showPricing ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: showPricing ? C.purple : C.dim, fontFamily: FONT }}>
-                {showPricing ? "CPM & CPC visible" : "Hidden from sponsor"}
-              </span>
-            </button>
-            <p style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>When on, the sponsor view will display CPM and CPC metrics.</p>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Sponsor Visibility</label>
+            <MiniToggle on={showCpm} onToggle={() => setShowCpm(!showCpm)} label={showCpm ? "CPM visible to sponsor" : "CPM hidden"} />
+            <MiniToggle on={showCpc} onToggle={() => setShowCpc(!showCpc)} label={showCpc ? "CPC visible to sponsor" : "CPC hidden"} />
+            <p style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>Controls which cost metrics appear in the sponsor view.</p>
           </div>
           <div style={{ marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 12 }}>Package Terms</label>
@@ -945,6 +955,11 @@
               <input type="checkbox" checked={exclPlace} onChange={e => setExclPlace(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple, cursor: "pointer" }} />
               <span style={{ fontSize: 13, color: C.text }}>Exclusive Placement</span>
               <span style={{ fontSize: 11, color: C.dim }}>— sole sponsor per issue</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 10 }}>
+              <input type="checkbox" checked={primPlace} onChange={e => setPrimPlace(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple, cursor: "pointer" }} />
+              <span style={{ fontSize: 13, color: C.text }}>Primary Placement</span>
+              <span style={{ fontSize: 11, color: C.dim }}>— featured top-of-email placement</span>
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
               <input type="checkbox" checked={catExcl} onChange={e => setCatExcl(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple, cursor: "pointer" }} />
@@ -955,7 +970,7 @@
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => name.trim() && onSave({ sponsorId, name: name.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, showPricingToSponsor: showPricing, exclusivePlacement: exclPlace, categoryExclusivity: catExcl, pricingNotes: pNotes.trim() })} color={C.white} bg={C.purple} disabled={!name.trim()}>{contract ? "Update" : "Create"}</Btn>
+            <Btn onClick={() => name.trim() && onSave({ sponsorId, name: name.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, showCpmToSponsor: showCpm, showCpcToSponsor: showCpc, exclusivePlacement: exclPlace, primaryPlacement: primPlace, categoryExclusivity: catExcl, pricingNotes: pNotes.trim() })} color={C.white} bg={C.purple} disabled={!name.trim()}>{contract ? "Update" : "Create"}</Btn>
           </div>
         </div>
       );
