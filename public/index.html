@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sponsor Dashboard</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06090F;
+      color: #E2E8F0;
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+    }
+
+    input:focus {
+      border-color: #4F8FF7 !important;
+      outline: none;
+    }
+
+    ::placeholder {
+      color: #4A5A72;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0C1018;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1B2233;
+      border-radius: 3px;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+
+    a {
+      color: inherit;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const KEYS = { config: "bh-config", sponsors: "bh-sponsors", runs: "bh-runs", contracts: "bh-contracts" };
+    const store = {
+      get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error(e); } },
+    };
+
+    const uid = () => Math.random().toString(36).slice(2, 10);
+    const num = (n) => (n || 0).toLocaleString();
+    const pct = (n) => (n || 0).toFixed(2) + "%";
+    const fmtDate = (d) => { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+    const tsToDate = (ts) => { if (!ts) return null; return new Date(ts * 1000).toISOString().split("T")[0]; };
+    const money = (n) => "$" + (n || 0).toFixed(2);
+
+    const C = { bg: "#06090F", surface: "#0C1018", card: "#111722", border: "#1B2233", accent: "#4F8FF7", accentDim: "rgba(79,143,247,0.10)", green: "#34D399", greenDim: "rgba(52,211,153,0.10)", amber: "#FBBF24", amberDim: "rgba(251,191,36,0.10)", red: "#F87171", redDim: "rgba(248,113,113,0.10)", purple: "#A78BFA", purpleDim: "rgba(167,139,250,0.10)", text: "#E2E8F0", muted: "#8494AB", dim: "#4A5A72", white: "#FFFFFF" };
+    const FONT = "'Outfit',sans-serif";
+    const MONO = "'IBM Plex Mono',monospace";
+
+    // ─── Get patterns array from sponsor (handles old single-pattern format) ─────
+    function getPatterns(sponsor) {
+      if (sponsor.urlPatterns && sponsor.urlPatterns.length > 0) return sponsor.urlPatterns;
+      if (sponsor.urlPattern) return [sponsor.urlPattern];
+      return [];
+    }
+
+    // ─── Beehiiv API ─────────────────────────────────────────────────
+    async function fetchAllPosts(apiKey, pubId, maxPages = 5) {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, pubId, maxPages }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `API error ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function fetchQuickSync(apiKey, pubId, knownPostIds) {
+      const res = await fetch("/api/quick-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, pubId, knownPostIds }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `API error ${res.status}`);
+      }
+      return await res.json();
+    }
+
+    function extractRun(post, patterns) {
+      if (!post.stats) return null;
+      const es = post.stats.email || {};
+      const clicks = post.stats.clicks || [];
+      let sc = 0, vc = 0, matched = [];
+      for (const e of clicks) {
+        const u = (e.url || e.base_url || "").toLowerCase();
+        const hit = patterns.some(p => p && u.includes(p.toLowerCase()));
+        if (hit) {
+          sc += e.total_clicks || 0;
+          vc += e.verified_total_clicks || 0;
+          matched.push({ url: e.url || e.base_url, clicks: e.total_clicks || 0, verifiedClicks: e.verified_total_clicks || 0 });
+        }
+      }
+      if (sc === 0) return null;
+      return {
+        postId: post.id,
+        emailName: post.title || post.subject_line || "Untitled",
+        webUrl: post.web_url || null,
+        sendDate: tsToDate(post.publish_date) || tsToDate(post.created),
+        totalOpens: es.opens || 0,
+        totalClicks: sc,
+        verifiedClicks: vc,
+        matchedUrls: matched,
+        recipients: es.recipients || 0,
+        autoSynced: true,
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    function App() {
+      const [config, setConfig] = useState(() => store.get(KEYS.config) || { apiKey: "", pubId: "" });
+      const [sponsors, setSponsors] = useState(() => store.get(KEYS.sponsors) || []);
+      const [runs, setRuns] = useState(() => store.get(KEYS.runs) || []);
+      const [sel, setSel] = useState(null);
+      const [view, setView] = useState("admin");
+      const [syncing, setSyncing] = useState(false);
+      const [syncMsg, setSyncMsg] = useState(null);
+      const [modal, setModal] = useState(null);
+      const [editRun, setEditRun] = useState(null);
+      const [syncDepth, setSyncDepth] = useState(5);
+      const [verified, setVerified] = useState(false);
+      const [contracts, setContracts] = useState(() => store.get(KEYS.contracts) || []);
+      const [selContract, setSelContract] = useState(null);
+
+      const saveCfg = (c) => { setConfig(c); store.set(KEYS.config, c); };
+      const saveSp = (s) => { setSponsors(s); store.set(KEYS.sponsors, s); };
+      const saveRn = (r) => { setRuns(r); store.set(KEYS.runs, r); };
+      const saveCt = (ct) => { setContracts(ct); store.set(KEYS.contracts, ct); };
+
+      // Sponsor CRUD
+      const addSponsor = (name, patterns) => {
+        const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString() };
+        saveSp([...sponsors, s]);
+        setSel(s.id);
+        setModal(null);
+      };
+      const updateSponsor = (id, updates) => {
+        saveSp(sponsors.map(s => s.id === id ? { ...s, ...updates } : s));
+      };
+      const delSponsor = (id) => {
+        if (!confirm("Delete sponsor and all runs?")) return;
+        saveSp(sponsors.filter(s => s.id !== id));
+        saveRn(runs.filter(r => r.sponsorId !== id));
+        saveCt(contracts.filter(c => c.sponsorId !== id));
+        if (sel === id) { setSel(null); setSelContract(null); }
+      };
+
+      // Run CRUD
+      const addRunManual = (d) => { saveRn([...runs, { id: uid(), ...d }]); setModal(null); };
+      const updateRunManual = (id, u) => { saveRn(runs.map(r => r.id === id ? { ...r, ...u } : r)); setModal(null); setEditRun(null); };
+      const delRun = (id) => { if (confirm("Delete run?")) saveRn(runs.filter(r => r.id !== id)); };
+
+      // Contract CRUD
+      const addContract = (data) => {
+        const updated = contracts.map(c => c.sponsorId === data.sponsorId ? { ...c, isActive: false } : c);
+        const nc = { id: uid(), ...data, isActive: true, created: new Date().toISOString() };
+        saveCt([...updated, nc]);
+        setSelContract(nc.id);
+        setModal(null);
+      };
+      const updateContract = (id, updates) => {
+        saveCt(contracts.map(c => c.id === id ? { ...c, ...updates } : c));
+        setModal(null);
+      };
+      const delContract = (id) => {
+        if (!confirm("Delete contract? Runs will become unassigned.")) return;
+        saveRn(runs.map(r => r.contractId === id ? { ...r, contractId: null } : r));
+        saveCt(contracts.filter(c => c.id !== id));
+        if (selContract === id) setSelContract(null);
+      };
+      const activateContract = (id) => {
+        const ct = contracts.find(c => c.id === id);
+        if (!ct) return;
+        saveCt(contracts.map(c => c.sponsorId === ct.sponsorId ? { ...c, isActive: c.id === id } : c));
+        setSelContract(id);
+      };
+
+      // ─── Sync logic ────
+      const processResults = (allPosts, sponsorIds, currentRuns) => {
+        let nw = 0, up = 0, list = [...currentRuns];
+        for (const sid of sponsorIds) {
+          const sp = sponsors.find(s => s.id === sid);
+          if (!sp) continue;
+          const patterns = getPatterns(sp);
+          if (patterns.length === 0) continue;
+          const existing = new Set(list.filter(r => r.sponsorId === sid).map(r => r.postId));
+          for (const p of allPosts) {
+            const ex = extractRun(p, patterns);
+            if (!ex) continue;
+            if (existing.has(p.id)) {
+              list = list.map(r => r.sponsorId === sid && r.postId === p.id
+                ? { ...r, totalOpens: ex.totalOpens, totalClicks: ex.totalClicks, verifiedClicks: ex.verifiedClicks, matchedUrls: ex.matchedUrls, recipients: ex.recipients, webUrl: ex.webUrl, lastSync: new Date().toISOString() }
+                : r);
+              up++;
+            } else {
+              const newRun = { id: uid(), sponsorId: sid, ...ex, contractId: null, lastSync: new Date().toISOString() };
+              // Auto-assign to active contract if it has capacity
+              const ac = contracts.find(c => c.sponsorId === sid && c.isActive);
+              if (ac) {
+                const assigned = list.filter(r => r.contractId === ac.id).length;
+                if (assigned < ac.totalRuns) newRun.contractId = ac.id;
+              }
+              list.push(newRun);
+              nw++;
+            }
+          }
+        }
+        return { list, nw, up };
+      };
+
+      // Full sync with depth control
+      const doSync = async (sponsorIds, pages = syncDepth) => {
+        if (!config.apiKey || !config.pubId) { setSyncMsg({ t: "err", m: "Set API key & Pub ID in Settings first." }); return; }
+        setSyncing(true); setSyncMsg(null);
+        try {
+          const data = await fetchAllPosts(config.apiKey, config.pubId, pages);
+          const allPosts = data.posts || [];
+          const { list, nw, up } = processResults(allPosts, sponsorIds, runs);
+          saveRn(list);
+          let msg = `Done! ${nw} new, ${up} updated (${allPosts.length} posts scanned, ${data.pagesScanned || '?'}/${data.totalPages || '?'} pages).`;
+          if (data.warning) msg += ` ⚠️ ${data.warning}`;
+          setSyncMsg({ t: "ok", m: msg });
+        } catch (e) {
+          setSyncMsg({ t: "err", m: `Failed: ${e.message}` });
+        } finally { setSyncing(false); }
+      };
+
+      // Quick sync for background auto-refresh
+      const doQuickSync = async (sponsorIds, silent = false) => {
+        if (!config.apiKey || !config.pubId) return;
+        if (syncing) return;
+        if (!silent) setSyncing(true);
+        try {
+          const knownPostIds = [...new Set(runs.filter(r => sponsorIds.includes(r.sponsorId) && r.postId).map(r => r.postId))];
+          const data = await fetchQuickSync(config.apiKey, config.pubId, knownPostIds);
+          const allPosts = data.posts || [];
+          const { list, nw, up } = processResults(allPosts, sponsorIds, runs);
+          saveRn(list);
+          if (!silent && (nw > 0 || up > 0)) setSyncMsg({ t: "ok", m: `Quick sync: ${nw} new, ${up} updated.` });
+        } catch (e) {
+          if (!silent) setSyncMsg({ t: "err", m: `Quick sync failed: ${e.message}` });
+        } finally { if (!silent) setSyncing(false); }
+      };
+
+      const syncOne = (sid, pages) => doSync([sid], pages);
+      const syncAll = () => doSync(sponsors.map(s => s.id), syncDepth);
+
+      // Derived
+      const sponsor = sponsors.find(s => s.id === sel);
+      const sponsorContracts = contracts.filter(c => c.sponsorId === sel).sort((a, b) => new Date(b.created) - new Date(a.created));
+      const activeContract = sponsorContracts.find(c => c.isActive);
+      const viewingContract = selContract ? contracts.find(c => c.id === selContract) : null;
+
+      const allSponsorRuns = runs.filter(r => r.sponsorId === sel).sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate));
+      const sRuns = viewingContract
+        ? allSponsorRuns.filter(r => r.contractId === viewingContract.id)
+        : allSponsorRuns;
+
+      const getClicks = (r) => verified ? (r.verifiedClicks || 0) : (r.totalClicks || 0);
+      const tot = { opens: sRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: sRuns.reduce((s, r) => s + getClicks(r), 0) };
+      tot.ctr = tot.opens > 0 ? (tot.clicks / tot.opens) * 100 : 0;
+
+      const costMetrics = viewingContract && viewingContract.totalPrice > 0 ? {
+        costPerRun: viewingContract.totalPrice / viewingContract.totalRuns,
+        cpm: tot.opens > 0 ? (viewingContract.totalPrice / tot.opens) * 1000 : 0,
+        cpc: tot.clicks > 0 ? viewingContract.totalPrice / tot.clicks : 0,
+      } : null;
+
+      // Sponsor view — always uses totalClicks, filters to active contract
+      if (view === "sponsor" && sponsor) {
+        const svContract = activeContract;
+        const svRuns = svContract
+          ? allSponsorRuns.filter(r => r.contractId === svContract.id)
+          : allSponsorRuns;
+        const svGetClicks = (r) => (r.totalClicks || 0);
+        const svTot = { opens: svRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: svRuns.reduce((s, r) => s + svGetClicks(r), 0) };
+        svTot.ctr = svTot.opens > 0 ? (svTot.clicks / svTot.opens) * 100 : 0;
+        const svCostMetrics = svContract && svContract.totalPrice > 0 ? {
+          cpm: svTot.opens > 0 ? (svContract.totalPrice / svTot.opens) * 1000 : 0,
+          cpc: svTot.clicks > 0 ? svContract.totalPrice / svTot.clicks : 0,
+        } : null;
+        return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} getClicks={svGetClicks} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} />;
+      }
+
+      return (
+        <div style={{ display: "flex", minHeight: "100vh" }}>
+          {/* Sidebar */}
+          <aside style={{ width: 272, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", background: C.surface, flexShrink: 0 }}>
+            <div style={{ padding: "24px 20px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},#8B5CF6)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700 }}>S</div>
+                <h1 style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3 }}>Sponsor Dash</h1>
+              </div>
+              <p style={{ fontSize: 11, color: C.dim, margin: "4px 0 0 38px" }}>Beehiiv Campaign Tracker</p>
+            </div>
+            <div style={{ padding: "0 12px", display: "flex", gap: 6, marginBottom: 4 }}>
+              <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ flex: 1 }}>+ Sponsor</Btn>
+              <Btn onClick={() => setModal("settings")} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}`, padding: "8px 12px" }}>⚙</Btn>
+            </div>
+            {config.apiKey && <div style={{ padding: "8px 12px 4px" }}><Btn onClick={syncAll} color={C.green} bg={C.greenDim} disabled={syncing} style={{ width: "100%" }}>{syncing ? "Syncing..." : "⟳ Sync All"}</Btn></div>}
+            {config.apiKey && <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} /><span style={{ fontSize: 11, color: C.green }}>API Connected</span></div>}
+            <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
+              {sponsors.map(s => {
+                const cnt = runs.filter(r => r.sponsorId === s.id).length;
+                const pats = getPatterns(s);
+                return (
+                  <div key={s.id} onClick={() => { setSel(s.id); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); }}
+                    style={{ padding: "14px 20px", cursor: "pointer", background: sel === s.id ? C.accentDim : "transparent", borderLeft: `3px solid ${sel === s.id ? C.accent : "transparent"}`, transition: "all 0.12s" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <p style={{ fontSize: 14, fontWeight: sel === s.id ? 600 : 400, color: sel === s.id ? C.white : C.text }}>{s.name}</p>
+                      {cnt > 0 && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: C.accentDim, color: C.accent, fontWeight: 600 }}>{cnt}</span>}
+                    </div>
+                    <p style={{ fontSize: 10, color: C.dim, margin: "3px 0 0", fontFamily: MONO }}>{pats.length} pattern{pats.length !== 1 ? "s" : ""}</p>
+                  </div>
+                );
+              })}
+              {sponsors.length === 0 && <p style={{ fontSize: 12, color: C.dim, padding: "24px 20px", textAlign: "center" }}>Add a sponsor to get started</p>}
+            </div>
+          </aside>
+
+          {/* Main */}
+          <main style={{ flex: 1, padding: 32, overflow: "auto" }}>
+            {!sel && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 16 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📊</div>
+                <p style={{ color: C.dim, fontSize: 15, fontWeight: 500 }}>Select a sponsor to view their data</p>
+                {!config.apiKey && <Btn onClick={() => setModal("settings")} color={C.accent} bg={C.accentDim}>Connect Beehiiv API →</Btn>}
+              </div>
+            )}
+
+            {sel && sponsor && (
+              <div className="fade-in">
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>{sponsor.name}</h2>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <Btn onClick={() => setView("sponsor")} color={C.accent} bg={C.accentDim}>Sponsor View</Btn>
+                    <Btn onClick={() => delSponsor(sponsor.id)} color={C.red} bg={C.redDim}>Delete</Btn>
+                  </div>
+                </div>
+
+                {/* Pattern Management */}
+                <PatternManager sponsor={sponsor} onUpdate={(patterns) => updateSponsor(sponsor.id, { urlPatterns: patterns })} />
+
+                {/* Contract Management */}
+                <ContractManager
+                  sponsorId={sel}
+                  contracts={sponsorContracts}
+                  activeContract={activeContract}
+                  viewingContract={viewingContract}
+                  runs={allSponsorRuns}
+                  onActivate={activateContract}
+                  onSelect={(id) => setSelContract(id)}
+                  onClearFilter={() => setSelContract(null)}
+                  onDelete={delContract}
+                  onSetModal={setModal}
+                  onEditContract={(ct) => { setSelContract(ct.id); setModal("editContract"); }}
+                />
+
+                {/* Sync Controls */}
+                {config.apiKey && getPatterns(sponsor).length > 0 && (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+                    <Btn onClick={() => syncOne(sponsor.id, syncDepth)} color={C.white} bg={C.accent} disabled={syncing}>{syncing ? "Syncing..." : "⟳ Sync"}</Btn>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px" }}>
+                      <span style={{ fontSize: 11, color: C.dim }}>Depth:</span>
+                      {[5, 15, 30, 50].map(d => (
+                        <button key={d} onClick={() => setSyncDepth(d)} style={{
+                          padding: "4px 8px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 600, fontFamily: FONT, cursor: "pointer",
+                          background: syncDepth === d ? C.accent : "transparent", color: syncDepth === d ? "#fff" : C.dim,
+                        }}>{d * 10}</button>
+                      ))}
+                      <span style={{ fontSize: 10, color: C.dim }}>posts</span>
+                    </div>
+                  </div>
+                )}
+
+                {syncMsg && <div style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 13, background: syncMsg.t === "ok" ? C.greenDim : C.redDim, color: syncMsg.t === "ok" ? C.green : C.red, border: `1px solid ${syncMsg.t === "ok" ? "rgba(52,211,153,0.2)" : "rgba(248,113,113,0.2)"}` }}>{syncMsg.m}</div>}
+
+                {/* Verified Toggle */}
+                <VerifiedToggle verified={verified} setVerified={setVerified} />
+
+                {/* Stats */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: costMetrics ? 16 : 32 }}>
+                  <MetricCard label="Total Opens" value={num(tot.opens)} sub={`${sRuns.length} run${sRuns.length !== 1 ? "s" : ""}`} color={C.accent} />
+                  <MetricCard label={verified ? "Verified Clicks" : "Total Clicks"} value={num(tot.clicks)} sub="all matching links" color={C.green} />
+                  <MetricCard label="Click-Through Rate" value={pct(tot.ctr)} sub="clicks ÷ opens" color={C.amber} />
+                </div>
+
+                {/* Cost Metrics */}
+                {costMetrics && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
+                    <MetricCard label="Cost Per Run" value={money(costMetrics.costPerRun)} sub={`${money(viewingContract.totalPrice)} ÷ ${viewingContract.totalRuns} runs`} color={C.purple} />
+                    <MetricCard label="CPM" value={money(costMetrics.cpm)} sub="cost per 1,000 opens" color={C.purple} />
+                    <MetricCard label="CPC" value={money(costMetrics.cpc)} sub="cost per click" color={C.purple} />
+                  </div>
+                )}
+
+                {/* Runs */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Campaign Runs</h3>
+                  <Btn onClick={() => { setModal("addRun"); setEditRun(null); }} color={C.green} bg={C.greenDim}>+ Manual Run</Btn>
+                </div>
+
+                {sRuns.length > 0 && (
+                  <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr auto", padding: "12px 20px", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
+                      {["Email", "Opens", verified ? "Verified" : "Clicks", "CTR", ""].map(h => <p key={h} style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, textAlign: h !== "Email" && h !== "" ? "center" : "left" }}>{h}</p>)}
+                    </div>
+                    {sRuns.map((r, i) => {
+                      const clicks = getClicks(r);
+                      const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
+                      return (
+                        <div key={r.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 0.8fr auto", padding: "16px 20px", borderBottom: i < sRuns.length - 1 ? `1px solid ${C.border}` : "none", gap: 12, alignItems: "center" }}>
+                          <div>
+                            {r.webUrl
+                              ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 500, textDecoration: "none", borderBottom: `1px dotted ${C.dim}` }}>{r.emailName}</a>
+                              : <p style={{ fontSize: 14, fontWeight: 500 }}>{r.emailName}</p>
+                            }
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 12, color: C.dim }}>{fmtDate(r.sendDate)}</span>
+                              {r.autoSynced && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.accentDim, color: C.accent, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>API</span>}
+                              {r.contractId
+                                ? <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.purpleDim, color: C.purple, fontWeight: 600, letterSpacing: 0.3 }}>{contracts.find(c => c.id === r.contractId)?.name || "?"}</span>
+                                : sponsorContracts.length > 0 && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.card, color: C.dim, fontWeight: 500 }}>unassigned</span>
+                              }
+                            </div>
+                          </div>
+                          <p style={{ textAlign: "center", fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.accent }}>{num(r.totalOpens)}</p>
+                          <p style={{ textAlign: "center", fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.green }}>{num(clicks)}</p>
+                          <p style={{ textAlign: "center", fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.amber }}>{pct(ctr)}</p>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <Btn onClick={() => { setEditRun(r); setModal("editRun"); }} color={C.accent} bg={C.accentDim} small>Edit</Btn>
+                            <Btn onClick={() => delRun(r.id)} color={C.red} bg={C.redDim} small>×</Btn>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {sRuns.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px 24px", background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                    <p style={{ color: C.dim, fontSize: 14, marginBottom: 16 }}>No runs yet</p>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                      {config.apiKey && getPatterns(sponsor).length > 0 && <Btn onClick={() => syncOne(sponsor.id, syncDepth)} color={C.white} bg={C.accent} disabled={syncing}>{syncing ? "Syncing..." : "⟳ Sync from Beehiiv"}</Btn>}
+                      <Btn onClick={() => { setModal("addRun"); setEditRun(null); }} color={C.green} bg={C.greenDim}>+ Add Manually</Btn>
+                    </div>
+                  </div>
+                )}
+
+                {sRuns.some(r => r.matchedUrls?.length > 0) && (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 12px", color: C.dim, textTransform: "uppercase", letterSpacing: 1 }}>Matched URLs (latest run)</h3>
+                    <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, padding: "4px 16px" }}>
+                      {(sRuns.find(r => r.matchedUrls?.length)?.matchedUrls || []).map((u, i, a) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < a.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                          <p style={{ fontSize: 12, fontFamily: MONO, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "80%" }}>{u.url}</p>
+                          <p style={{ fontSize: 13, fontFamily: MONO, fontWeight: 600, color: C.green }}>{num(verified ? (u.verifiedClicks || 0) : u.clicks)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
+          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} /></Overlay>}
+          {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
+          {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
+          {modal === "editContract" && viewingContract && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={viewingContract} onSave={d => updateContract(viewingContract.id, d)} onCancel={() => setModal(null)} /></Overlay>}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PATTERN MANAGER
+    // ═══════════════════════════════════════════════════════════════
+    function PatternManager({ sponsor, onUpdate }) {
+      const [newPat, setNewPat] = useState("");
+      const patterns = getPatterns(sponsor);
+
+      const add = () => {
+        const val = newPat.trim();
+        if (!val || patterns.includes(val)) return;
+        onUpdate([...patterns, val]);
+        setNewPat("");
+      };
+
+      const remove = (idx) => {
+        onUpdate(patterns.filter((_, i) => i !== idx));
+      };
+
+      return (
+        <div style={{ marginBottom: 20, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 10 }}>URL Patterns</p>
+
+          {/* Existing patterns */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: patterns.length > 0 ? 10 : 0 }}>
+            {patterns.map((p, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px" }}>
+                <span style={{ fontSize: 12, fontFamily: MONO, color: C.text }}>{p}</span>
+                <button onClick={() => remove(i)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14, padding: "0 2px", fontWeight: 700, lineHeight: 1 }}>×</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Add new */}
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              value={newPat}
+              onChange={e => setNewPat(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && add()}
+              placeholder="Add URL pattern (e.g. vpdae, go.themommy.news/kp)"
+              style={{ flex: 1, padding: "8px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: MONO, fontSize: 12, outline: "none", boxSizing: "border-box" }}
+            />
+            <Btn onClick={add} color={C.green} bg={C.greenDim} disabled={!newPat.trim()}>Add</Btn>
+          </div>
+          <p style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>Each pattern matches any click URL containing that text. All matching links across all patterns get summed together.</p>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CONTRACT MANAGER
+    // ═══════════════════════════════════════════════════════════════
+    function ContractManager({ sponsorId, contracts, activeContract, viewingContract, runs, onActivate, onSelect, onClearFilter, onDelete, onSetModal, onEditContract }) {
+      return (
+        <div style={{ marginBottom: 20, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: contracts.length > 0 ? 12 : 0 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted }}>Contracts</p>
+            <div style={{ display: "flex", gap: 6 }}>
+              {viewingContract && <Btn onClick={onClearFilter} color={C.dim} bg="transparent" small style={{ border: `1px solid ${C.border}` }}>Show All Runs</Btn>}
+              <Btn onClick={() => onSetModal("addContract")} color={C.purple} bg={C.purpleDim} small>+ New Contract</Btn>
+            </div>
+          </div>
+
+          {contracts.length === 0 && (
+            <p style={{ fontSize: 12, color: C.dim, padding: "8px 0" }}>No contracts yet. Create one to group runs and track costs.</p>
+          )}
+
+          {contracts.map(ct => {
+            const assigned = runs.filter(r => r.contractId === ct.id).length;
+            const remaining = ct.totalRuns - assigned;
+            const pctVal = ct.totalRuns > 0 ? Math.min((assigned / ct.totalRuns) * 100, 100) : 0;
+            const barColor = remaining <= 0 ? C.red : remaining === 1 ? C.amber : C.green;
+            const isViewing = viewingContract && viewingContract.id === ct.id;
+            return (
+              <div key={ct.id}
+                onClick={() => onSelect(ct.id)}
+                style={{
+                  padding: "12px 14px", borderRadius: 10, marginBottom: 6, cursor: "pointer",
+                  background: isViewing ? C.purpleDim : C.bg,
+                  border: `1px solid ${ct.isActive ? "rgba(167,139,250,0.3)" : C.border}`,
+                  opacity: ct.isActive ? 1 : 0.7,
+                  transition: "all 0.12s",
+                }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: isViewing ? C.purple : C.text }}>{ct.name}</span>
+                    {ct.isActive && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.greenDim, color: C.green, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Active</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                    {!ct.isActive && <Btn onClick={() => onActivate(ct.id)} color={C.green} bg={C.greenDim} small>Activate</Btn>}
+                    <Btn onClick={() => onEditContract(ct)} color={C.accent} bg={C.accentDim} small>Edit</Btn>
+                    <Btn onClick={() => onDelete(ct.id)} color={C.red} bg={C.redDim} small>×</Btn>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: C.dim, marginBottom: 6 }}>
+                  {ct.totalPrice > 0 && <span style={{ fontFamily: MONO }}>{money(ct.totalPrice)}</span>}
+                  <span>{assigned} / {ct.totalRuns} runs</span>
+                  {ct.startDate && <span>{fmtDate(ct.startDate)} — {fmtDate(ct.endDate)}</span>}
+                  {ct.showPricingToSponsor && <span style={{ color: C.purple }}>pricing visible</span>}
+                </div>
+                <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pctVal}%`, background: barColor, borderRadius: 2, transition: "width 0.3s" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SPONSOR VIEW
+    // ═══════════════════════════════════════════════════════════════
+    function SponsorView({ sponsor, runs, totals, contract, costMetrics, getClicks, onBack, onQuickSync }) {
+      useEffect(() => {
+        onQuickSync();
+        const interval = setInterval(onQuickSync, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+      }, []);
+
+      return (
+        <div style={{ minHeight: "100vh" }}>
+          <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
+              <span style={{ fontSize: 11, color: C.dim }}>Live • auto-updates every 5 min</span>
+            </div>
+          </div>
+          <div style={{ maxWidth: 940, margin: "0 auto", padding: "56px 28px" }}>
+            <div style={{ marginBottom: 40 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: C.dim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Campaign Performance Report</p>
+              <h1 style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1 }}>{sponsor.name}</h1>
+            </div>
+
+            {/* Progress bar */}
+            {contract && <ProgressBar current={runs.length} total={contract.totalRuns} />}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: contract && contract.showPricingToSponsor && costMetrics ? 20 : 56 }}>
+              <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
+              <BigStat label="Total Clicks" value={num(totals.clicks)} color={C.green} sub="across all campaign links" />
+              <BigStat label="Click-Through Rate" value={pct(totals.ctr)} color={C.amber} sub="clicks ÷ opens" />
+            </div>
+
+            {/* Cost metrics — only if sponsor pricing is enabled */}
+            {contract && contract.showPricingToSponsor && costMetrics && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20, marginBottom: 56 }}>
+                <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />
+                <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />
+              </div>
+            )}
+            {runs.length > 0 && (
+              <React.Fragment>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: C.muted, margin: "0 0 20px", textTransform: "uppercase", letterSpacing: 1.5 }}>Run-by-Run Breakdown</h2>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {runs.map(r => {
+                    const clicks = getClicks(r);
+                    const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
+                    return (
+                      <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "24px 28px", display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 0.8fr", alignItems: "center", gap: 20 }}>
+                        <div>
+                          {r.webUrl
+                            ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 16, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${C.dim}` }}>{r.emailName}</a>
+                            : <p style={{ fontSize: 16, fontWeight: 600 }}>{r.emailName}</p>
+                          }
+                          <p style={{ fontSize: 13, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}</p>
+                        </div>
+                        <NumDisplay label="Opens" value={num(r.totalOpens)} color={C.accent} />
+                        <NumDisplay label="Clicks" value={num(clicks)} color={C.green} />
+                        <NumDisplay label="CTR" value={pct(ctr)} color={C.amber} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            )}
+            {runs.length === 0 && <div style={{ textAlign: "center", padding: 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
+            <div style={{ marginTop: 72, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+              <p style={{ fontSize: 12, color: C.dim }}>Metrics auto-update every 5 minutes • Synced via Beehiiv API</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SHARED COMPONENTS
+    // ═══════════════════════════════════════════════════════════════
+    function ProgressBar({ current, total }) {
+      const pctVal = total > 0 ? Math.min((current / total) * 100, 100) : 0;
+      const remaining = total - current;
+      const barColor = remaining <= 0 ? C.red : remaining === 1 ? C.amber : C.green;
+      return (
+        <div style={{ marginBottom: 32, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{current} of {total} emails sent</span>
+            <span style={{ fontSize: 12, color: C.dim }}>{remaining > 0 ? `${remaining} remaining` : "Complete"}</span>
+          </div>
+          <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pctVal}%`, background: barColor, borderRadius: 3, transition: "width 0.3s" }} />
+          </div>
+        </div>
+      );
+    }
+
+    function VerifiedToggle({ verified, setVerified }) {
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <button onClick={() => setVerified(!verified)} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+            background: verified ? C.greenDim : C.card, border: `1px solid ${verified ? "rgba(52,211,153,0.3)" : C.border}`,
+            borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+          }}>
+            <div style={{
+              width: 32, height: 18, borderRadius: 9, padding: 2,
+              background: verified ? C.green : C.dim, transition: "background 0.15s",
+              display: "flex", alignItems: "center",
+            }}>
+              <div style={{
+                width: 14, height: 14, borderRadius: 7, background: "#fff",
+                transform: verified ? "translateX(14px)" : "translateX(0)",
+                transition: "transform 0.15s",
+              }} />
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: verified ? C.green : C.dim, fontFamily: FONT }}>
+              {verified ? "Verified Clicks" : "Total Clicks"}
+            </span>
+          </button>
+          {verified && <span style={{ fontSize: 10, color: C.dim }}>Showing verified (bot-filtered) clicks only</span>}
+        </div>
+      );
+    }
+
+    function MetricCard({ label, value, sub, color }) {
+      return (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${color},transparent)` }} />
+          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, marginBottom: 14 }}>{label}</p>
+          <p style={{ fontSize: 34, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -1.5 }}>{value}</p>
+          {sub && <p style={{ fontSize: 12, color: C.dim, marginTop: 8 }}>{sub}</p>}
+        </div>
+      );
+    }
+    function BigStat({ label, value, color, sub }) {
+      return (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 28px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: `linear-gradient(90deg,${color}88,${color},${color}88)` }} />
+          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 16 }}>{label}</p>
+          <p style={{ fontSize: 40, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -2 }}>{value}</p>
+          {sub && <p style={{ fontSize: 12, color: C.dim, marginTop: 10 }}>{sub}</p>}
+        </div>
+      );
+    }
+    function NumDisplay({ label, value, color }) {
+      return (<div style={{ textAlign: "center" }}><p style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, color }}>{value}</p><p style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 4 }}>{label}</p></div>);
+    }
+    function Btn({ children, onClick, color, bg, disabled, small, style: extra = {} }) {
+      return <button onClick={onClick} disabled={disabled} style={{ padding: small ? "6px 10px" : "9px 16px", background: bg, color, border: "none", borderRadius: 8, fontFamily: FONT, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, whiteSpace: "nowrap", transition: "opacity 0.1s", ...extra }}>{children}</button>;
+    }
+    function Overlay({ children, onClose }) {
+      return (<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}><div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 32, width: 460, maxWidth: "92vw", maxHeight: "85vh", overflow: "auto" }}>{children}</div></div>);
+    }
+    function Input({ label, help, ...props }) {
+      return (<div style={{ marginBottom: 16 }}>{label && <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>{label}</label>}<input {...props} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: props.type === "date" || props.type === "password" ? MONO : FONT, fontSize: 14, boxSizing: "border-box", transition: "border-color 0.15s", ...(props.style || {}) }} />{help && <p style={{ fontSize: 11, color: C.dim, margin: "5px 0 0" }}>{help}</p>}</div>);
+    }
+
+    // ─── Forms ───
+    function SettingsForm({ config, onSave, onCancel }) {
+      const [ak, setAk] = useState(config.apiKey || "");
+      const [pi, setPi] = useState(config.pubId || "");
+      const [debugData, setDebugData] = useState(null);
+      const [debugLoading, setDebugLoading] = useState(false);
+      const runDebug = async () => {
+        if (!ak.trim() || !pi.trim()) { alert("Enter API key and Pub ID first"); return; }
+        setDebugLoading(true);
+        try { const res = await fetch("/api/debug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: ak.trim(), pubId: pi.trim() }) }); setDebugData(await res.json()); }
+        catch (e) { setDebugData({ error: e.message }); }
+        finally { setDebugLoading(false); }
+      };
+      return (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Beehiiv API Settings</h3>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Connect your Beehiiv account to auto-sync campaign data.</p>
+          <Input label="API Key" type="password" value={ak} onChange={e => setAk(e.target.value)} placeholder="Your Beehiiv API key" help="Beehiiv → Settings → Integrations → API → Create New API Key" />
+          <Input label="Publication ID" value={pi} onChange={e => setPi(e.target.value)} placeholder="pub_00000000-0000-0000-0000-000000000000" help='The API V2 one starting with "pub_"' />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <Btn onClick={runDebug} color={C.amber} bg={C.amberDim} disabled={debugLoading}>{debugLoading ? "Loading..." : "🔍 Test API"}</Btn>
+            <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+            <Btn onClick={() => onSave({ apiKey: ak.trim(), pubId: pi.trim() })} color={C.white} bg={C.accent}>Save</Btn>
+          </div>
+          {debugData && (
+            <div style={{ marginTop: 16, padding: 12, background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, maxHeight: 300, overflow: "auto" }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: C.amber, marginBottom: 8 }}>API Response ({debugData.total_results || 0} total posts, {debugData.total_pages || 0} pages):</p>
+              {(debugData.posts || []).map((p, i) => (
+                <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{p.title} <span style={{ color: C.dim, fontWeight: 400 }}>({p.status}, {p.platform})</span></p>
+                  <p style={{ fontSize: 11, color: C.muted }}>Opens: {p.email_opens} | Clicks: {p.email_clicks}</p>
+                  {p.click_urls.length > 0 ? p.click_urls.map((u, j) => (
+                    <p key={j} style={{ fontSize: 10, fontFamily: MONO, color: C.dim, margin: "2px 0", wordBreak: "break-all" }}>{u.total_clicks}x → {u.url || u.base_url}</p>
+                  )) : <p style={{ fontSize: 10, color: C.dim }}>No click data</p>}
+                </div>
+              ))}
+              {debugData.error && <p style={{ fontSize: 12, color: C.red }}>{debugData.error}</p>}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function AddSponsorForm({ onSave, onCancel }) {
+      const [name, setName] = useState("");
+      const [patterns, setPatterns] = useState([""]);
+
+      const updatePat = (i, val) => { const p = [...patterns]; p[i] = val; setPatterns(p); };
+      const addPat = () => setPatterns([...patterns, ""]);
+      const removePat = (i) => { if (patterns.length <= 1) return; setPatterns(patterns.filter((_, idx) => idx !== i)); };
+
+      return (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>Add Sponsor</h3>
+          <Input label="Sponsor Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Platoon Kids" />
+
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>URL Patterns</label>
+          {patterns.map((p, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <input value={p} onChange={e => updatePat(i, e.target.value)} placeholder={i === 0 ? "e.g. go.themommy.news/kp" : "another pattern..."} style={{ flex: 1, padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: MONO, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              {patterns.length > 1 && <button onClick={() => removePat(i)} style={{ background: C.redDim, color: C.red, border: "none", borderRadius: 8, padding: "0 10px", cursor: "pointer", fontSize: 16, fontWeight: 700 }}>×</button>}
+            </div>
+          ))}
+          <button onClick={addPat} style={{ background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, color: C.dim, padding: "8px 12px", width: "100%", cursor: "pointer", fontFamily: FONT, fontSize: 12, marginBottom: 8 }}>+ Add Another Pattern</button>
+          <p style={{ fontSize: 10, color: C.dim, marginBottom: 20 }}>Each pattern matches any click URL containing that text. Use multiple patterns when a sponsor has different link formats across campaigns.</p>
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+            <Btn onClick={() => name.trim() && onSave(name.trim(), patterns.filter(p => p.trim()))} color={C.white} bg={C.accent} disabled={!name.trim()}>Add</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    function ContractForm({ sponsorId, contract, onSave, onCancel }) {
+      const [name, setName] = useState(contract?.name || "");
+      const [price, setPrice] = useState(contract?.totalPrice ?? "");
+      const [totalRuns, setTotalRuns] = useState(contract?.totalRuns ?? "");
+      const [startDate, setStartDate] = useState(contract?.startDate || "");
+      const [endDate, setEndDate] = useState(contract?.endDate || "");
+      const [showPricing, setShowPricing] = useState(contract?.showPricingToSponsor || false);
+      return (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{contract ? "Edit Contract" : "New Contract"}</h3>
+          <Input label="Contract Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Q1 2026" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Total Price ($)" type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="2500" />
+            <Input label="Number of Runs" type="number" value={totalRuns} onChange={e => setTotalRuns(e.target.value)} placeholder="5" />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Start Date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Show Pricing to Sponsor</label>
+            <button onClick={() => setShowPricing(!showPricing)} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+              background: showPricing ? C.purpleDim : C.bg, border: `1px solid ${showPricing ? "rgba(167,139,250,0.3)" : C.border}`,
+              borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+            }}>
+              <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: showPricing ? C.purple : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: showPricing ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: showPricing ? C.purple : C.dim, fontFamily: FONT }}>
+                {showPricing ? "CPM & CPC visible" : "Hidden from sponsor"}
+              </span>
+            </button>
+            <p style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>When on, the sponsor view will display CPM and CPC metrics.</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+            <Btn onClick={() => name.trim() && onSave({ sponsorId, name: name.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, showPricingToSponsor: showPricing })} color={C.white} bg={C.purple} disabled={!name.trim()}>{contract ? "Update" : "Create"}</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    function RunForm({ sponsorId, run, contracts, activeContract, onSave, onCancel }) {
+      const [en, setEn] = useState(run?.emailName || "");
+      const [sd, setSd] = useState(run?.sendDate || new Date().toISOString().split("T")[0]);
+      const [op, setOp] = useState(run?.totalOpens ?? "");
+      const [cl, setCl] = useState(run?.totalClicks ?? "");
+      const [ctId, setCtId] = useState(run?.contractId || (activeContract?.id || ""));
+      return (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{run ? "Edit Run" : "Add Manual Run"}</h3>
+          <Input label="Email Name" value={en} onChange={e => setEn(e.target.value)} placeholder="e.g. Shower Curtain Liner Hack" />
+          <Input label="Send Date" type="date" value={sd} onChange={e => setSd(e.target.value)} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Total Opens" type="number" value={op} onChange={e => setOp(e.target.value)} placeholder="25832" />
+            <Input label="Total Clicks" type="number" value={cl} onChange={e => setCl(e.target.value)} placeholder="474" help="Sum all sponsor links" />
+          </div>
+          {contracts && contracts.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Contract</label>
+              <select value={ctId} onChange={e => setCtId(e.target.value)} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box" }}>
+                <option value="">Unassigned</option>
+                {contracts.map(c => <option key={c.id} value={c.id}>{c.name}{c.isActive ? " (Active)" : ""}</option>)}
+              </select>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+            <Btn onClick={() => onSave({ sponsorId, emailName: en.trim() || "Untitled", sendDate: sd, totalOpens: parseInt(op) || 0, totalClicks: parseInt(cl) || 0, contractId: ctId || null, autoSynced: false })} color={C.white} bg={C.green}>{run ? "Update" : "Save"}</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+
+</html>
