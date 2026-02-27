@@ -102,6 +102,41 @@
     const getTerms = (ct) => { const t = []; if (ct.exclusivePlacement) t.push("Exclusive Placement"); if (ct.primaryPlacement) t.push("Primary Placement"); if (ct.categoryExclusivity) t.push("Category Exclusivity"); if (ct.pricingNotes?.trim()) t.push(ct.pricingNotes.trim()); return t; };
     const getRunClicks = (r) => r.useVerified ? (r.verifiedClicks || 0) : (r.totalClicks || 0);
 
+    // ─── Responsive breakpoints & hook ──────────────────────────────
+    const MOBILE = 640;
+    const TABLET = 1024;
+    function useWindowWidth() {
+      const [w, setW] = useState(window.innerWidth);
+      useEffect(() => {
+        let raf;
+        const h = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => setW(window.innerWidth)); };
+        window.addEventListener("resize", h);
+        return () => { window.removeEventListener("resize", h); cancelAnimationFrame(raf); };
+      }, []);
+      return w;
+    }
+
+    // ─── Relative time + sync helpers ───────────────────────────────
+    function timeAgo(iso) {
+      if (!iso) return null;
+      const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+      if (sec < 120) return "just now";
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min} minutes ago`;
+      const hrs = Math.floor(min / 60);
+      if (hrs < 24) return `${hrs} hour${hrs > 1 ? "s" : ""} ago`;
+      const days = Math.floor(hrs / 24);
+      if (days === 1) return "yesterday";
+      if (days <= 7) return `${days} days ago`;
+      return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+    function getLatestSync(runs) {
+      let latest = null;
+      for (const r of runs) { if (r.lastSync && (!latest || r.lastSync > latest)) latest = r.lastSync; }
+      return latest;
+    }
+    function isSyncStale(iso) { return iso ? Date.now() - new Date(iso).getTime() > 24 * 60 * 60 * 1000 : false; }
+
     const C = { bg: "#06090F", surface: "#0C1018", card: "#111722", border: "#1B2233", accent: "#4F8FF7", accentDim: "rgba(79,143,247,0.10)", green: "#34D399", greenDim: "rgba(52,211,153,0.10)", amber: "#FBBF24", amberDim: "rgba(251,191,36,0.10)", red: "#F87171", redDim: "rgba(248,113,113,0.10)", purple: "#A78BFA", purpleDim: "rgba(167,139,250,0.10)", text: "#E2E8F0", muted: "#8494AB", dim: "#4A5A72", white: "#FFFFFF" };
     const FONT = "'Outfit',sans-serif";
     const MONO = "'IBM Plex Mono',monospace";
@@ -184,6 +219,11 @@
       const [contracts, setContracts] = useState(() => store.get(KEYS.contracts) || []);
       const [selContract, setSelContract] = useState(null);
       const [downloading, setDownloading] = useState(false);
+      const width = useWindowWidth();
+      const isMobile = width <= MOBILE;
+      const isTablet = width <= TABLET;
+      const [, setAdminTick] = useState(0);
+      useEffect(() => { const i = setInterval(() => setAdminTick(t => t + 1), 60000); return () => clearInterval(i); }, []);
 
       const saveCfg = (c) => { setConfig(c); store.set(KEYS.config, c); };
       const saveSp = (s) => { setSponsors(s); store.set(KEYS.sponsors, s); };
@@ -352,9 +392,23 @@
       }
 
       return (
-        <div style={{ display: "flex", minHeight: "100vh" }}>
-          {/* Sidebar */}
-          <aside style={{ width: 272, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", background: C.surface, flexShrink: 0 }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: "100vh" }}>
+          {/* Mobile top bar — replaces sidebar on small screens */}
+          {isMobile && (
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, background: C.surface, display: "flex", alignItems: "center", gap: 8 }}>
+              <select value={sel || ""} onChange={e => { const v = e.target.value; if (v) { setSel(v); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); } else setSel(null); }}
+                style={{ flex: 1, padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: FONT, fontSize: 14, minHeight: 44 }}>
+                <option value="">Select sponsor...</option>
+                {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
+              <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
+            </div>
+          )}
+
+          {/* Sidebar — hidden on mobile */}
+          {!isMobile && (
+          <aside style={{ width: isTablet ? 200 : 272, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", background: C.surface, flexShrink: 0 }}>
             <div style={{ padding: "24px 20px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},#8B5CF6)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#fff", fontWeight: 700 }}>S</div>
@@ -376,7 +430,7 @@
                   <div key={s.id} onClick={() => { setSel(s.id); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); }}
                     style={{ padding: "14px 20px", cursor: "pointer", background: sel === s.id ? C.accentDim : "transparent", borderLeft: `3px solid ${sel === s.id ? C.accent : "transparent"}`, transition: "all 0.12s" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <p style={{ fontSize: 14, fontWeight: sel === s.id ? 600 : 400, color: sel === s.id ? C.white : C.text }}>{s.name}</p>
+                      <p style={{ fontSize: 14, fontWeight: sel === s.id ? 600 : 400, color: sel === s.id ? C.white : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</p>
                       {cnt > 0 && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: C.accentDim, color: C.accent, fontWeight: 600 }}>{cnt}</span>}
                     </div>
                     <p style={{ fontSize: 10, color: C.dim, margin: "3px 0 0", fontFamily: MONO }}>{pats.length} pattern{pats.length !== 1 ? "s" : ""}</p>
@@ -386,9 +440,10 @@
               {sponsors.length === 0 && <p style={{ fontSize: 12, color: C.dim, padding: "24px 20px", textAlign: "center" }}>Add a sponsor to get started</p>}
             </div>
           </aside>
+          )}
 
           {/* Main */}
-          <main style={{ flex: 1, padding: 32, overflow: "auto" }}>
+          <main style={{ flex: 1, padding: isMobile ? 16 : 32, overflow: "auto" }}>
             {!sel && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 16 }}>
                 <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📊</div>
@@ -402,7 +457,7 @@
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
                   <div>
-                    <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>{sponsor.name}</h2>
+                    <h2 style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, letterSpacing: -0.5 }}>{sponsor.name}</h2>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {sRuns.length > 0 && <button onClick={async () => { setDownloading(true); try { await downloadReport({ sponsor, contract: viewingContract, runs: sRuns, totals: tot, costMetrics, config }); } catch(e) { console.error(e); } finally { setDownloading(false); } }} disabled={downloading} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: downloading ? C.dim : C.muted, cursor: downloading ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 14px", opacity: downloading ? 0.6 : 1 }}>{downloading ? "Generating..." : "↓ Download Report"}</button>}
@@ -441,10 +496,17 @@
                           background: syncDepth === d ? C.accent : "transparent", color: syncDepth === d ? "#fff" : C.dim,
                         }}>{d * 10}</button>
                       ))}
-                      <span style={{ fontSize: 10, color: C.dim }}>posts</span>
+                      <span style={{ fontSize: isMobile ? 11 : 10, color: C.dim }}>posts</span>
                     </div>
                   </div>
                 )}
+
+                {/* Last synced indicator */}
+                {(() => { const ls = getLatestSync(sRuns); if (!ls) return null; const stale = isSyncStale(ls); return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: stale ? C.amber : C.green, animation: stale ? "none" : "pulse 2s infinite" }} />
+                    <span style={{ fontSize: 12, color: stale ? C.amber : C.dim }}>{stale ? `Data may be outdated · Last synced ${timeAgo(ls)}` : `Last synced ${timeAgo(ls)}`}</span>
+                  </div>); })()}
 
                 {syncMsg && <div style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 20, fontSize: 13, background: syncMsg.t === "ok" ? C.greenDim : C.redDim, color: syncMsg.t === "ok" ? C.green : C.red, border: `1px solid ${syncMsg.t === "ok" ? "rgba(52,211,153,0.2)" : "rgba(248,113,113,0.2)"}` }}>{syncMsg.m}</div>}
 
@@ -452,7 +514,7 @@
                 {sRuns.length > 0 && <ReachSection runs={sRuns} />}
 
                 {/* Stats */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: costMetrics ? 16 : 32 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: isMobile ? 12 : 16, marginBottom: costMetrics ? 16 : 32 }}>
                   <MetricCard label="Total Opens" value={num(tot.opens)} sub={`${sRuns.length} run${sRuns.length !== 1 ? "s" : ""}`} color={C.accent} />
                   <MetricCard label="Total Clicks" value={num(tot.clicks)} sub="all matching links" color={C.green} />
                   <MetricCard label="Click-Through Rate" value={pct(tot.ctr)} sub="clicks ÷ opens" color={C.amber} />
@@ -460,7 +522,7 @@
 
                 {/* Cost Metrics */}
                 {costMetrics && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: viewingContract && getTerms(viewingContract).length > 0 ? 12 : 32 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: isMobile ? 12 : 16, marginBottom: viewingContract && getTerms(viewingContract).length > 0 ? 12 : 32 }}>
                     <MetricCard label="Cost Per Run" value={money(costMetrics.costPerRun)} sub={`${money(viewingContract.totalPrice)} ÷ ${viewingContract.totalRuns} runs`} color={C.purple} />
                     <MetricCard label="CPM" value={money(costMetrics.cpm)} sub="cost per 1,000 opens" color={C.purple} />
                     <MetricCard label="CPC" value={money(costMetrics.cpc)} sub="cost per click" color={C.purple} />
@@ -474,7 +536,66 @@
                   <Btn onClick={() => { setModal("addRun"); setEditRun(null); }} color={C.green} bg={C.greenDim}>+ Manual Run</Btn>
                 </div>
 
-                {sRuns.length > 0 && (
+                {sRuns.length > 0 && (isMobile ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {sRuns.map(r => {
+                      const clicks = getRunClicks(r);
+                      const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
+                      return (
+                        <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              {r.webUrl
+                                ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 500, textDecoration: "none", borderBottom: `1px dotted ${C.dim}`, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.emailName}</a>
+                                : <p style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.emailName}</p>
+                              }
+                              {r.adminNote && <span title={r.adminNote} style={{ cursor: "help", fontSize: 13 }}>📝</span>}
+                              {r.description && <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic", margin: "2px 0 0" }}>{r.description}</p>}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 12, color: C.dim }}>{fmtDate(r.sendDate)}</span>
+                                {r.autoSynced && <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: C.accentDim, color: C.accent, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>API</span>}
+                                {r.contractId
+                                  ? <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: C.purpleDim, color: C.purple, fontWeight: 600, letterSpacing: 0.3 }}>{contracts.find(c => c.id === r.contractId)?.name || "?"}</span>
+                                  : sponsorContracts.length > 0 && <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: C.card, color: C.dim, fontWeight: 500 }}>unassigned</span>
+                                }
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                              <Btn onClick={() => { setEditRun(r); setModal("editRun"); }} color={C.accent} bg={C.accentDim} small>Edit</Btn>
+                              <Btn onClick={() => delRun(r.id)} color={C.red} bg={C.redDim} small>×</Btn>
+                            </div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, background: C.bg, borderRadius: 8, padding: "10px 0" }}>
+                            <div style={{ textAlign: "center" }}>
+                              <p style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.accent }}>{num(r.totalOpens)}</p>
+                              <p style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>Opens</p>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.green }}>{num(clicks)}</span>
+                                {r.useVerified && <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>✓</span>}
+                              </div>
+                              <p style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>Clicks</p>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              <p style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: C.amber }}>{pct(ctr)}</p>
+                              <p style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>CTR</p>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: 8, gap: 6 }}>
+                            <button onClick={() => toggleRunVerified(r.id)} title={r.useVerified ? "Using verified clicks" : "Using total clicks"} style={{
+                              width: 36, height: 22, borderRadius: 11, padding: 3, border: "none", cursor: "pointer",
+                              background: r.useVerified ? C.green : C.dim, display: "flex", alignItems: "center", transition: "background 0.15s",
+                            }}>
+                              <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", transform: r.useVerified ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                            </button>
+                            <span style={{ fontSize: 11, color: C.dim }}>{r.useVerified ? "Verified" : "Total"}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                   <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 0.8fr auto", padding: "12px 20px", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
                       {["Email", "Opens", "Clicks", "CTR", ""].map(h => <p key={h} style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, textAlign: h !== "Email" && h !== "" ? "center" : "left" }}>{h}</p>)}
@@ -522,7 +643,7 @@
                       );
                     })}
                   </div>
-                )}
+                ))}
 
                 {sRuns.length === 0 && (
                   <div style={{ textAlign: "center", padding: "48px 24px", background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}>
@@ -615,6 +736,7 @@
     // CONTRACT MANAGER
     // ═══════════════════════════════════════════════════════════════
     function ContractManager({ sponsorId, contracts, activeContract, viewingContract, runs, onActivate, onSelect, onClearFilter, onDelete, onSetModal, onEditContract }) {
+      const mob = useWindowWidth() <= MOBILE;
       return (
         <div style={{ marginBottom: 20, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: contracts.length > 0 ? 12 : 0 }}>
@@ -648,7 +770,7 @@
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: isViewing ? C.purple : C.text }}>{ct.name}</span>
-                    {ct.isActive && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.greenDim, color: C.green, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Active</span>}
+                    {ct.isActive && <span style={{ fontSize: mob ? 11 : 9, padding: "2px 6px", borderRadius: 4, background: C.greenDim, color: C.green, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Active</span>}
                   </div>
                   <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
                     {!ct.isActive && <Btn onClick={() => onActivate(ct.id)} color={C.green} bg={C.greenDim} small>Activate</Btn>}
@@ -656,7 +778,7 @@
                     <Btn onClick={() => onDelete(ct.id)} color={C.red} bg={C.redDim} small>×</Btn>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: C.dim, marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: mob ? 8 : 12, fontSize: 11, color: C.dim, marginBottom: 6, flexWrap: "wrap" }}>
                   {ct.totalPrice > 0 && <span style={{ fontFamily: MONO }}>{money(ct.totalPrice)}</span>}
                   <span>{assigned} / {ct.totalRuns} runs</span>
                   {ct.startDate && <span>{fmtDate(ct.startDate)} — {fmtDate(ct.endDate)}</span>}
@@ -677,16 +799,22 @@
     // ═══════════════════════════════════════════════════════════════
     function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config }) {
       const [dlPdf, setDlPdf] = useState(false);
+      const width = useWindowWidth();
+      const isMobile = width <= MOBILE;
+      const [, setTick] = useState(0);
       useEffect(() => {
         onQuickSync();
-        const interval = setInterval(onQuickSync, 5 * 60 * 1000);
-        return () => clearInterval(interval);
+        const syncInterval = setInterval(onQuickSync, 5 * 60 * 1000);
+        const tickInterval = setInterval(() => setTick(t => t + 1), 60 * 1000);
+        return () => { clearInterval(syncInterval); clearInterval(tickInterval); };
       }, []);
 
       const showCpm = contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false;
       const showCpc = contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false;
       const hasAnyCost = (showCpm || showCpc) && costMetrics;
       const terms = contract ? getTerms(contract) : [];
+      const latestSync = getLatestSync(runs);
+      const updatedText = latestSync ? `Updated ${timeAgo(latestSync)}` : null;
 
       const handleDownload = async () => {
         setDlPdf(true);
@@ -697,20 +825,20 @@
 
       return (
         <div style={{ minHeight: "100vh" }}>
-          <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ padding: isMobile ? "12px 16px" : "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 0 }}>
+            {!isMobile && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
               {runs.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Generating..." : "↓ Download Report"}</button>}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
-                <span style={{ fontSize: 11, color: C.dim }}>Live • auto-updates every 5 min</span>
+                <span style={{ fontSize: 11, color: C.dim }}>{updatedText ? `Live · ${updatedText}` : "Live · auto-updates every 5 min"}</span>
               </div>
             </div>
           </div>
-          <div style={{ maxWidth: 940, margin: "0 auto", padding: "56px 28px" }}>
-            <div style={{ marginBottom: 40 }}>
+          <div style={{ maxWidth: 940, margin: "0 auto", padding: isMobile ? "24px 16px" : "56px 28px" }}>
+            <div style={{ marginBottom: isMobile ? 24 : 40 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: C.dim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Campaign Performance Report</p>
-              <h1 style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1 }}>{sponsor.name}</h1>
+              <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1 }}>{sponsor.name}</h1>
             </div>
 
             {/* Progress bar */}
@@ -719,7 +847,7 @@
             {/* Cumulative Reach */}
             {runs.length > 0 && <ReachSection runs={runs} />}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, marginBottom: hasAnyCost ? 20 : 56 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: isMobile ? 12 : 20, marginBottom: hasAnyCost ? 20 : (isMobile ? 32 : 56) }}>
               <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
               <BigStat label="Total Clicks" value={num(totals.clicks)} color={C.green} sub="across all campaign links" />
               <BigStat label="Click-Through Rate" value={pct(totals.ctr)} color={C.amber} sub="clicks ÷ opens" />
@@ -727,12 +855,12 @@
 
             {/* Cost metrics — independent CPM/CPC visibility */}
             {hasAnyCost && (
-              <div style={{ display: "grid", gridTemplateColumns: showCpm && showCpc ? "repeat(2,1fr)" : "1fr", gap: 20, marginBottom: terms.length > 0 ? 12 : 56 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (showCpm && showCpc ? "repeat(2,1fr)" : "1fr"), gap: isMobile ? 12 : 20, marginBottom: terms.length > 0 ? 12 : (isMobile ? 32 : 56) }}>
                 {showCpm && <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
                 {showCpc && <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />}
               </div>
             )}
-            {hasAnyCost && <TermsBadges contract={contract} style={{ marginBottom: 56 }} />}
+            {hasAnyCost && <TermsBadges contract={contract} style={{ marginBottom: isMobile ? 32 : 56 }} />}
             {runs.length > 0 && (
               <React.Fragment>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: C.muted, margin: "0 0 20px", textTransform: "uppercase", letterSpacing: 1.5 }}>Run-by-Run Breakdown</h2>
@@ -740,7 +868,23 @@
                   {runs.map(r => {
                     const clicks = getRunClicks(r);
                     const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
-                    return (
+                    return isMobile ? (
+                      <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+                        <div style={{ marginBottom: 12 }}>
+                          {r.webUrl
+                            ? <a href={r.webUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 600, textDecoration: "none", borderBottom: `1px solid ${C.dim}`, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.emailName}</a>
+                            : <p style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.emailName}</p>
+                          }
+                          {r.description && <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic", margin: "4px 0 0" }}>{r.description}</p>}
+                          <p style={{ fontSize: 12, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}</p>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+                          <NumDisplay label="Opens" value={num(r.totalOpens)} color={C.accent} />
+                          <NumDisplay label="Clicks" value={num(clicks)} color={C.green} />
+                          <NumDisplay label="CTR" value={pct(ctr)} color={C.amber} />
+                        </div>
+                      </div>
+                    ) : (
                       <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "24px 28px", display: "grid", gridTemplateColumns: "1.8fr 1fr 1fr 0.8fr", alignItems: "center", gap: 20 }}>
                         <div>
                           {r.webUrl
@@ -759,8 +903,8 @@
                 </div>
               </React.Fragment>
             )}
-            {runs.length === 0 && <div style={{ textAlign: "center", padding: 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
-            <div style={{ marginTop: 72, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+            {runs.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
+            <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
               <p style={{ fontSize: 12, color: C.dim }}>Metrics auto-update every 5 minutes • Synced via Beehiiv API</p>
             </div>
           </div>
@@ -1033,13 +1177,15 @@
 
     function ReachSection({ runs }) {
       const [hoverData, setHoverData] = useState(null);
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
       const chartData = buildChartData(runs);
       const totalOpens = runs.reduce((s, r) => s + (r.totalOpens || 0), 0);
       const displayTotal = hoverData ? hoverData.total : totalOpens;
       return (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 28px", marginBottom: 32, textAlign: "center" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: mob ? "20px 16px" : "32px 28px", marginBottom: mob ? 20 : 32, textAlign: "center" }}>
           <p style={{ fontSize: 13, color: C.dim, marginBottom: 8 }}>Seen by</p>
-          <p style={{ fontSize: 52, fontWeight: 700, fontFamily: MONO, color: C.accent, letterSpacing: -2 }}>{num(displayTotal)}</p>
+          <p style={{ fontSize: mob ? 36 : 52, fontWeight: 700, fontFamily: MONO, color: C.accent, letterSpacing: -2 }}>{num(displayTotal)}</p>
           <p style={{ fontSize: 14, color: C.dim, marginBottom: chartData.length >= 3 ? 24 : 0 }}>
             {hoverData
               ? (hoverData.isSend
@@ -1054,33 +1200,43 @@
     }
 
     function MetricCard({ label, value, sub, color }) {
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
       return (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, position: "relative", overflow: "hidden" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: mob ? 16 : 24, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${color},transparent)` }} />
-          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, marginBottom: 14 }}>{label}</p>
-          <p style={{ fontSize: 34, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -1.5 }}>{value}</p>
+          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, marginBottom: mob ? 8 : 14 }}>{label}</p>
+          <p style={{ fontSize: mob ? 24 : 34, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -1.5 }}>{value}</p>
           {sub && <p style={{ fontSize: 12, color: C.dim, marginTop: 8 }}>{sub}</p>}
         </div>
       );
     }
     function BigStat({ label, value, color, sub }) {
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
       return (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 28px", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: mob ? "20px 16px" : "32px 28px", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: `linear-gradient(90deg,${color}88,${color},${color}88)` }} />
-          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 16 }}>{label}</p>
-          <p style={{ fontSize: 40, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -2 }}>{value}</p>
+          <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: mob ? 10 : 16 }}>{label}</p>
+          <p style={{ fontSize: mob ? 28 : 40, fontWeight: 700, fontFamily: MONO, color, letterSpacing: -2 }}>{value}</p>
           {sub && <p style={{ fontSize: 12, color: C.dim, marginTop: 10 }}>{sub}</p>}
         </div>
       );
     }
     function NumDisplay({ label, value, color }) {
-      return (<div style={{ textAlign: "center" }}><p style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, color }}>{value}</p><p style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 4 }}>{label}</p></div>);
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
+      return (<div style={{ textAlign: "center" }}><p style={{ fontFamily: MONO, fontSize: mob ? 16 : 20, fontWeight: 600, color }}>{value}</p><p style={{ fontSize: mob ? 11 : 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 4 }}>{label}</p></div>);
     }
     function Btn({ children, onClick, color, bg, disabled, small, style: extra = {} }) {
-      return <button onClick={onClick} disabled={disabled} style={{ padding: small ? "6px 10px" : "9px 16px", background: bg, color, border: "none", borderRadius: 8, fontFamily: FONT, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, whiteSpace: "nowrap", transition: "opacity 0.1s", ...extra }}>{children}</button>;
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
+      return <button onClick={onClick} disabled={disabled} style={{ padding: small ? "6px 10px" : "9px 16px", minHeight: (!small && mob) ? 44 : undefined, background: bg, color, border: "none", borderRadius: 8, fontFamily: FONT, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, whiteSpace: "nowrap", transition: "opacity 0.1s", ...extra }}>{children}</button>;
     }
     function Overlay({ children, onClose }) {
-      return (<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}><div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 32, width: 460, maxWidth: "92vw", maxHeight: "85vh", overflow: "auto" }}>{children}</div></div>);
+      const w = useWindowWidth();
+      const mob = w <= MOBILE;
+      return (<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}><div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: mob ? 14 : 18, padding: mob ? 20 : 32, width: 460, maxWidth: "92vw", maxHeight: "85vh", overflow: "auto" }}>{children}</div></div>);
     }
     function Input({ label, help, ...props }) {
       return (<div style={{ marginBottom: 16 }}>{label && <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>{label}</label>}<input {...props} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: props.type === "date" || props.type === "password" ? MONO : FONT, fontSize: 14, boxSizing: "border-box", transition: "border-color 0.15s", ...(props.style || {}) }} />{help && <p style={{ fontSize: 11, color: C.dim, margin: "5px 0 0" }}>{help}</p>}</div>);
