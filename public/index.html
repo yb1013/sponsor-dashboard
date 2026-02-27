@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -182,6 +183,7 @@
       const [syncDepth, setSyncDepth] = useState(5);
       const [contracts, setContracts] = useState(() => store.get(KEYS.contracts) || []);
       const [selContract, setSelContract] = useState(null);
+      const [downloading, setDownloading] = useState(false);
 
       const saveCfg = (c) => { setConfig(c); store.set(KEYS.config, c); };
       const saveSp = (s) => { setSponsors(s); store.set(KEYS.sponsors, s); };
@@ -346,7 +348,7 @@
             cpc: svTot.clicks > 0 ? spent / svTot.clicks : 0,
           };
         })() : null;
-        return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} />;
+        return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} config={config} />;
       }
 
       return (
@@ -403,6 +405,7 @@
                     <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>{sponsor.name}</h2>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {sRuns.length > 0 && <button onClick={async () => { setDownloading(true); try { await downloadReport({ sponsor, contract: viewingContract, runs: sRuns, totals: tot, costMetrics, config }); } catch(e) { console.error(e); } finally { setDownloading(false); } }} disabled={downloading} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: downloading ? C.dim : C.muted, cursor: downloading ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 14px", opacity: downloading ? 0.6 : 1 }}>{downloading ? "Generating..." : "↓ Download Report"}</button>}
                     <Btn onClick={() => setView("sponsor")} color={C.accent} bg={C.accentDim}>Sponsor View</Btn>
                     <Btn onClick={() => delSponsor(sponsor.id)} color={C.red} bg={C.redDim}>Delete</Btn>
                   </div>
@@ -672,7 +675,8 @@
     // ═══════════════════════════════════════════════════════════════
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
-    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync }) {
+    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config }) {
+      const [dlPdf, setDlPdf] = useState(false);
       useEffect(() => {
         onQuickSync();
         const interval = setInterval(onQuickSync, 5 * 60 * 1000);
@@ -684,13 +688,23 @@
       const hasAnyCost = (showCpm || showCpc) && costMetrics;
       const terms = contract ? getTerms(contract) : [];
 
+      const handleDownload = async () => {
+        setDlPdf(true);
+        try { await downloadReport({ sponsor, contract, runs, totals, costMetrics, config }); }
+        catch (e) { console.error(e); }
+        finally { setDlPdf(false); }
+      };
+
       return (
         <div style={{ minHeight: "100vh" }}>
           <div style={{ padding: "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
-              <span style={{ fontSize: 11, color: C.dim }}>Live • auto-updates every 5 min</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {runs.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Generating..." : "↓ Download Report"}</button>}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
+                <span style={{ fontSize: 11, color: C.dim }}>Live • auto-updates every 5 min</span>
+              </div>
             </div>
           </div>
           <div style={{ maxWidth: 940, margin: "0 auto", padding: "56px 28px" }}>
@@ -827,6 +841,136 @@
       return points;
     }
 
+    function buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config }) {
+      const P = { bg: "#FFFFFF", text: "#1A1A2E", muted: "#6B7280", border: "#E5E7EB", card: "#F9FAFB", blue: "#2563EB", green: "#059669", amber: "#D97706", purple: "#7C3AED" };
+      const F = "Arial, Helvetica, sans-serif";
+      const n = (v) => (v || 0).toLocaleString();
+      const p = (v) => (v || 0).toFixed(2) + "%";
+      const m = (v) => "$" + (v || 0).toFixed(2);
+      const fd = (d) => { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+
+      const showCpm = contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false;
+      const showCpc = contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false;
+      const hasAnyCost = (showCpm || showCpc) && costMetrics;
+      const terms = contract ? getTerms(contract) : [];
+
+      // Build static chart SVG
+      let chartSvg = "";
+      const chartData = buildChartData(runs);
+      const totalOpens = runs.reduce((s, r) => s + (r.totalOpens || 0), 0);
+      if (chartData.length >= 3) {
+        const W = 700, H = 180;
+        const pad = { top: 15, right: 15, bottom: 30, left: 15 };
+        const maxVal = Math.max(...chartData.map(d => d.total)) || 1;
+        const minDate = chartData[0].date.getTime();
+        const maxDate = chartData[chartData.length - 1].date.getTime();
+        const dateRange = maxDate - minDate || 1;
+        const pts = chartData.map(d => ({
+          x: pad.left + ((d.date.getTime() - minDate) / dateRange) * (W - pad.left - pad.right),
+          y: pad.top + (1 - d.total / maxVal) * (H - pad.top - pad.bottom),
+          isSend: d.isSend, date: d.date,
+        }));
+        const linePath = pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
+        const areaPath = linePath + ` L ${pts[pts.length-1].x} ${H - pad.bottom} L ${pts[0].x} ${H - pad.bottom} Z`;
+        const sendPts = pts.filter(pt => pt.isSend);
+        const labels = sendPts.map(pt => `<text x="${pt.x}" y="${H - 6}" text-anchor="middle" style="font-size:9px;fill:${P.muted};font-family:${F}">${new Date(pt.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</text>`).join('');
+        const dots = sendPts.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${P.blue}" stroke="${P.bg}" stroke-width="2"/>`).join('');
+        chartSvg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:12px">
+          <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${P.blue}" stop-opacity="0.2"/><stop offset="100%" stop-color="${P.blue}" stop-opacity="0.02"/></linearGradient></defs>
+          <path d="${areaPath}" fill="url(#pg)"/><path d="${linePath}" fill="none" stroke="${P.blue}" stroke-width="2" stroke-linejoin="round"/>${dots}${labels}</svg>`;
+      }
+
+      // Metric card helper
+      const mc = (label, value, color) => `<div style="flex:1;border:1px solid ${P.border};border-radius:10px;padding:16px 12px;text-align:center;background:${P.card}">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:${P.muted};margin-bottom:8px">${label}</div>
+        <div style="font-size:28px;font-weight:700;color:${color};font-family:${F}">${value}</div></div>`;
+
+      // Runs table rows
+      const sortedRuns = [...runs].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate));
+      const rows = sortedRuns.map((r, i) => {
+        const clicks = getRunClicks(r);
+        const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
+        const bg = i % 2 === 0 ? P.bg : P.card;
+        return `<tr style="background:${bg}">
+          <td style="padding:10px 12px;font-size:12px;color:${P.text};border-bottom:1px solid ${P.border}">${r.emailName}${r.description ? `<br><span style="font-size:11px;color:${P.muted};font-style:italic">${r.description}</span>` : ''}</td>
+          <td style="padding:10px 8px;font-size:12px;color:${P.muted};border-bottom:1px solid ${P.border};text-align:center">${fd(r.sendDate)}</td>
+          <td style="padding:10px 8px;font-size:13px;font-weight:600;color:${P.blue};border-bottom:1px solid ${P.border};text-align:center">${n(r.totalOpens)}</td>
+          <td style="padding:10px 8px;font-size:13px;font-weight:600;color:${P.green};border-bottom:1px solid ${P.border};text-align:center">${n(clicks)}</td>
+          <td style="padding:10px 8px;font-size:13px;font-weight:600;color:${P.amber};border-bottom:1px solid ${P.border};text-align:center">${p(ctr)}</td></tr>`;
+      }).join('');
+
+      return `<div style="font-family:${F};color:${P.text};max-width:720px;margin:0 auto;padding:8px 0">
+        ${config.publicationName ? `<div style="font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:${P.text};margin-bottom:4px">${config.publicationName}</div>` : ''}
+        <div style="font-size:13px;color:${P.muted};margin-bottom:16px">Campaign Performance Report</div>
+        <hr style="border:none;border-top:1px solid ${P.border};margin:0 0 20px"/>
+
+        <div style="font-size:28px;font-weight:700;color:${P.text};margin-bottom:4px">${sponsor.name}</div>
+        ${contract ? `<div style="font-size:13px;color:${P.muted};margin-bottom:2px">${fd(contract.startDate)} — ${fd(contract.endDate)}</div>
+        <div style="font-size:13px;color:${P.muted};margin-bottom:16px">${runs.length} of ${contract.totalRuns} emails delivered</div>` : `<div style="font-size:13px;color:${P.muted};margin-bottom:16px">${runs.length} email${runs.length !== 1 ? 's' : ''} sent</div>`}
+
+        <div style="display:flex;gap:12px;margin-bottom:${hasAnyCost ? '12px' : '20px'}">
+          ${mc("Total Opens", n(totals.opens), P.blue)}
+          ${mc("Total Clicks", n(totals.clicks), P.green)}
+          ${mc("Click-Through Rate", p(totals.ctr), P.amber)}
+        </div>
+
+        ${hasAnyCost ? `<div style="display:flex;gap:12px;margin-bottom:${terms.length > 0 ? '12px' : '20px'}">
+          ${showCpm ? mc("CPM", m(costMetrics.cpm), P.purple) : ''}
+          ${showCpc ? mc("CPC", m(costMetrics.cpc), P.purple) : ''}
+        </div>` : ''}
+
+        ${hasAnyCost && terms.length > 0 ? `<div style="margin-bottom:20px;display:flex;gap:6px;flex-wrap:wrap">${terms.map(t => `<span style="padding:5px 12px;border-radius:16px;background:#F3F0FF;border:1px solid #E0D8F8;color:${P.purple};font-size:11px;font-weight:600">✦ ${t}</span>`).join('')}</div>` : ''}
+
+        <div style="text-align:center;padding:20px 0;margin-bottom:12px;background:${P.card};border:1px solid ${P.border};border-radius:12px">
+          <div style="font-size:12px;color:${P.muted};margin-bottom:4px">Seen by</div>
+          <div style="font-size:38px;font-weight:700;color:${P.blue};font-family:${F}">${n(totalOpens)}</div>
+          <div style="font-size:12px;color:${P.muted}">readers</div>
+          ${chartSvg}
+        </div>
+
+        <hr style="border:none;border-top:1px solid ${P.border};margin:0 0 16px"/>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:${P.muted};margin-bottom:12px">Email Breakdown</div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid ${P.border};border-radius:8px;overflow:hidden">
+          <thead><tr style="background:${P.card}">
+            <th style="padding:10px 12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:${P.muted};text-align:left;border-bottom:1px solid ${P.border}">Email</th>
+            <th style="padding:10px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:${P.muted};text-align:center;border-bottom:1px solid ${P.border}">Date</th>
+            <th style="padding:10px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:${P.muted};text-align:center;border-bottom:1px solid ${P.border}">Opens</th>
+            <th style="padding:10px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:${P.muted};text-align:center;border-bottom:1px solid ${P.border}">Clicks</th>
+            <th style="padding:10px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:${P.muted};text-align:center;border-bottom:1px solid ${P.border}">CTR</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <hr style="border:none;border-top:1px solid ${P.border};margin:24px 0 12px"/>
+        <div style="text-align:center;font-size:11px;color:${P.muted};line-height:1.8">
+          Generated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+          ${config.publicationName ? `<br>${config.publicationName}${config.publicationUrl ? ` · ${config.publicationUrl}` : ''}` : ''}
+          <br>Confidential — prepared for ${sponsor.name}
+        </div>
+      </div>`;
+    }
+
+    async function downloadReport({ sponsor, contract, runs, totals, costMetrics, config }) {
+      const html = buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config });
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.background = '#FFFFFF';
+      document.body.appendChild(container);
+      const opt = {
+        margin: [0.4, 0.5, 0.4, 0.5],
+        filename: `${sponsor.name.replace(/\s+/g, '-')}-Report-${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all'] },
+      };
+      await html2pdf().set(opt).from(container).save();
+      document.body.removeChild(container);
+    }
+
     function CumulativeChart({ data, onHover }) {
       const containerRef = React.useRef(null);
       const [hoverX, setHoverX] = React.useState(null);
@@ -943,6 +1087,8 @@
     function SettingsForm({ config, onSave, onCancel }) {
       const [ak, setAk] = useState(config.apiKey || "");
       const [pi, setPi] = useState(config.pubId || "");
+      const [pn, setPn] = useState(config.publicationName || "");
+      const [pu, setPu] = useState(config.publicationUrl || "");
       const [debugData, setDebugData] = useState(null);
       const [debugLoading, setDebugLoading] = useState(false);
       const runDebug = async () => {
@@ -958,10 +1104,15 @@
           <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Connect your Beehiiv account to auto-sync campaign data.</p>
           <Input label="API Key" type="password" value={ak} onChange={e => setAk(e.target.value)} placeholder="Your Beehiiv API key" help="Beehiiv → Settings → Integrations → API → Create New API Key" />
           <Input label="Publication ID" value={pi} onChange={e => setPi(e.target.value)} placeholder="pub_00000000-0000-0000-0000-000000000000" help='The API V2 one starting with "pub_"' />
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+            <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 12 }}>PDF Report Branding</p>
+            <Input label="Publication Name" value={pn} onChange={e => setPn(e.target.value)} placeholder="e.g. The Mommy" help="Used in PDF report header and footer" />
+            <Input label="Publication URL" value={pu} onChange={e => setPu(e.target.value)} placeholder="e.g. themommy.news" help="Used in PDF report footer" />
+          </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={runDebug} color={C.amber} bg={C.amberDim} disabled={debugLoading}>{debugLoading ? "Loading..." : "🔍 Test API"}</Btn>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => onSave({ apiKey: ak.trim(), pubId: pi.trim() })} color={C.white} bg={C.accent}>Save</Btn>
+            <Btn onClick={() => onSave({ apiKey: ak.trim(), pubId: pi.trim(), publicationName: pn.trim(), publicationUrl: pu.trim() })} color={C.white} bg={C.accent}>Save</Btn>
           </div>
           {debugData && (
             <div style={{ marginTop: 16, padding: 12, background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, maxHeight: 300, overflow: "auto" }}>
