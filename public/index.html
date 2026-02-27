@@ -320,11 +320,15 @@
       const tot = { opens: sRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: sRuns.reduce((s, r) => s + getClicks(r), 0) };
       tot.ctr = tot.opens > 0 ? (tot.clicks / tot.opens) * 100 : 0;
 
-      const costMetrics = viewingContract && viewingContract.totalPrice > 0 ? {
-        costPerRun: viewingContract.totalPrice / viewingContract.totalRuns,
-        cpm: tot.opens > 0 ? (viewingContract.totalPrice / tot.opens) * 1000 : 0,
-        cpc: tot.clicks > 0 ? viewingContract.totalPrice / tot.clicks : 0,
-      } : null;
+      const costMetrics = viewingContract && viewingContract.totalPrice > 0 ? (() => {
+        const runsDelivered = sRuns.length;
+        const spent = (runsDelivered / viewingContract.totalRuns) * viewingContract.totalPrice;
+        return {
+          costPerRun: viewingContract.totalPrice / viewingContract.totalRuns,
+          cpm: tot.opens > 0 ? (spent / tot.opens) * 1000 : 0,
+          cpc: tot.clicks > 0 ? spent / tot.clicks : 0,
+        };
+      })() : null;
 
       // Sponsor view — always uses totalClicks, filters to active contract
       if (view === "sponsor" && sponsor) {
@@ -335,10 +339,13 @@
         const svGetClicks = (r) => (r.totalClicks || 0);
         const svTot = { opens: svRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: svRuns.reduce((s, r) => s + svGetClicks(r), 0) };
         svTot.ctr = svTot.opens > 0 ? (svTot.clicks / svTot.opens) * 100 : 0;
-        const svCostMetrics = svContract && svContract.totalPrice > 0 ? {
-          cpm: svTot.opens > 0 ? (svContract.totalPrice / svTot.opens) * 1000 : 0,
-          cpc: svTot.clicks > 0 ? svContract.totalPrice / svTot.clicks : 0,
-        } : null;
+        const svCostMetrics = svContract && svContract.totalPrice > 0 ? (() => {
+          const spent = (svRuns.length / svContract.totalRuns) * svContract.totalPrice;
+          return {
+            cpm: svTot.opens > 0 ? (spent / svTot.opens) * 1000 : 0,
+            cpc: svTot.clicks > 0 ? spent / svTot.clicks : 0,
+          };
+        })() : null;
         return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} getClicks={svGetClicks} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} />;
       }
 
@@ -450,12 +457,19 @@
 
                 {/* Cost Metrics */}
                 {costMetrics && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 32 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: (() => { const t = []; if (viewingContract.exclusivePlacement) t.push("Exclusive Placement"); if (viewingContract.categoryExclusivity) t.push("Category Exclusivity"); if (viewingContract.pricingNotes?.trim()) t.push(viewingContract.pricingNotes.trim()); return t.length > 0 ? 12 : 32; })() }}>
                     <MetricCard label="Cost Per Run" value={money(costMetrics.costPerRun)} sub={`${money(viewingContract.totalPrice)} ÷ ${viewingContract.totalRuns} runs`} color={C.purple} />
                     <MetricCard label="CPM" value={money(costMetrics.cpm)} sub="cost per 1,000 opens" color={C.purple} />
                     <MetricCard label="CPC" value={money(costMetrics.cpc)} sub="cost per click" color={C.purple} />
                   </div>
                 )}
+                {costMetrics && viewingContract && (() => {
+                  const terms = [];
+                  if (viewingContract.exclusivePlacement) terms.push("Exclusive Placement");
+                  if (viewingContract.categoryExclusivity) terms.push("Category Exclusivity");
+                  if (viewingContract.pricingNotes?.trim()) terms.push(viewingContract.pricingNotes.trim());
+                  return terms.length > 0 ? <p style={{ fontSize: 12, color: C.dim, marginBottom: 32 }}>Includes: {terms.join(", ")}</p> : null;
+                })()}
 
                 {/* Runs */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -685,11 +699,18 @@
 
             {/* Cost metrics — only if sponsor pricing is enabled */}
             {contract && contract.showPricingToSponsor && costMetrics && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20, marginBottom: 56 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20, marginBottom: (() => { const t = []; if (contract.exclusivePlacement) t.push(1); if (contract.categoryExclusivity) t.push(1); if (contract.pricingNotes?.trim()) t.push(1); return t.length > 0 ? 12 : 56; })() }}>
                 <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />
                 <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />
               </div>
             )}
+            {contract && contract.showPricingToSponsor && costMetrics && (() => {
+              const terms = [];
+              if (contract.exclusivePlacement) terms.push("Exclusive Placement");
+              if (contract.categoryExclusivity) terms.push("Category Exclusivity");
+              if (contract.pricingNotes?.trim()) terms.push(contract.pricingNotes.trim());
+              return terms.length > 0 ? <p style={{ fontSize: 12, color: C.dim, marginBottom: 56 }}>Includes: {terms.join(", ")}</p> : null;
+            })()}
             {runs.length > 0 && (
               <React.Fragment>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: C.muted, margin: "0 0 20px", textTransform: "uppercase", letterSpacing: 1.5 }}>Run-by-Run Breakdown</h2>
@@ -887,6 +908,9 @@
       const [startDate, setStartDate] = useState(contract?.startDate || "");
       const [endDate, setEndDate] = useState(contract?.endDate || "");
       const [showPricing, setShowPricing] = useState(contract?.showPricingToSponsor || false);
+      const [exclPlace, setExclPlace] = useState(contract?.exclusivePlacement || false);
+      const [catExcl, setCatExcl] = useState(contract?.categoryExclusivity || false);
+      const [pNotes, setPNotes] = useState(contract?.pricingNotes || "");
       return (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{contract ? "Edit Contract" : "New Contract"}</h3>
@@ -915,9 +939,23 @@
             </button>
             <p style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>When on, the sponsor view will display CPM and CPC metrics.</p>
           </div>
+          <div style={{ marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 12 }}>Package Terms</label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 10 }}>
+              <input type="checkbox" checked={exclPlace} onChange={e => setExclPlace(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple, cursor: "pointer" }} />
+              <span style={{ fontSize: 13, color: C.text }}>Exclusive Placement</span>
+              <span style={{ fontSize: 11, color: C.dim }}>— sole sponsor per issue</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
+              <input type="checkbox" checked={catExcl} onChange={e => setCatExcl(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple, cursor: "pointer" }} />
+              <span style={{ fontSize: 13, color: C.text }}>Category Exclusivity</span>
+              <span style={{ fontSize: 11, color: C.dim }}>— no competing brands</span>
+            </label>
+            <Input label="Other Terms" value={pNotes} onChange={e => setPNotes(e.target.value)} placeholder="e.g. Top-of-email hero placement" />
+          </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => name.trim() && onSave({ sponsorId, name: name.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, showPricingToSponsor: showPricing })} color={C.white} bg={C.purple} disabled={!name.trim()}>{contract ? "Update" : "Create"}</Btn>
+            <Btn onClick={() => name.trim() && onSave({ sponsorId, name: name.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, showPricingToSponsor: showPricing, exclusivePlacement: exclPlace, categoryExclusivity: catExcl, pricingNotes: pNotes.trim() })} color={C.white} bg={C.purple} disabled={!name.trim()}>{contract ? "Update" : "Create"}</Btn>
           </div>
         </div>
       );
