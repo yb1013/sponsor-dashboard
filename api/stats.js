@@ -9,20 +9,21 @@ export default async function handler(req, res) {
   const apiKey = process.env.BEEHIIV_API_KEY;
   const pubId = process.env.BEEHIIV_PUB_ID;
 
-  if (!apiKey || !pubId) {
-    return res.status(500).json({ error: "API not configured" });
-  }
+  if (!apiKey) return res.status(500).json({ error: "BEEHIIV_API_KEY not set" });
+  if (!pubId) return res.status(500).json({ error: "BEEHIIV_PUB_ID not set" });
 
   try {
     const headers = { Authorization: `Bearer ${apiKey}` };
 
-    // Fetch publication stats
-    const pubRes = await fetch(`https://api.beehiiv.com/v2/publications/${pubId}`, { headers });
-    const pubData = await pubRes.json();
+    // Fetch publication stats + subscriber count + recent posts in parallel
+    const [pubRes, subsRes, postsRes] = await Promise.all([
+      fetch(`https://api.beehiiv.com/v2/publications/${pubId}`, { headers }),
+      fetch(`https://api.beehiiv.com/v2/publications/${pubId}/subscriptions?status=active&limit=1`, { headers }),
+      fetch(`https://api.beehiiv.com/v2/publications/${pubId}/posts?status=confirmed&limit=20&expand[]=stats&order_by=publish_date&direction=desc`, { headers }),
+    ]);
 
-    // Fetch recent posts for average metrics
-    const postsUrl = `https://api.beehiiv.com/v2/publications/${pubId}/posts?status=confirmed&content_tags[]=newsletter&limit=20&expand[]=stats&order_by=publish_date&direction=desc`;
-    const postsRes = await fetch(postsUrl, { headers });
+    const pubData = await pubRes.json();
+    const subsData = await subsRes.json();
     const postsData = await postsRes.json();
     const posts = postsData.data || [];
 
@@ -44,10 +45,16 @@ export default async function handler(req, res) {
     const avgClicks = postCount > 0 ? Math.round(totalClicks / postCount) : 0;
     const avgCtr = avgOpens > 0 ? parseFloat(((avgClicks / avgOpens) * 100).toFixed(2)) : 0;
 
+    // Try multiple paths for subscriber count
     const activeSubscribers =
-      pubData.data?.stats?.active_subscriptions ||
-      pubData.data?.stats?.total_active_subscribers ||
-      pubData.data?.total_subscribers ||
+      subsData?.total_results ||
+      pubData?.data?.stats?.active_subscriptions ||
+      pubData?.data?.stats?.total_active_subscribers ||
+      pubData?.data?.stats?.active_subscribers ||
+      pubData?.data?.active_subscriptions ||
+      pubData?.data?.total_subscribers ||
+      pubData?.data?.subscriber_count ||
+      pubData?.stats?.active_subscriptions ||
       0;
 
     return res.status(200).json({
@@ -57,6 +64,12 @@ export default async function handler(req, res) {
       avgCtr,
       postsAnalyzed: postCount,
       fetchedAt: new Date().toISOString(),
+      _debug: {
+        pubKeys: pubData?.data ? Object.keys(pubData.data) : [],
+        pubStatsKeys: pubData?.data?.stats ? Object.keys(pubData.data.stats) : [],
+        subsTotal: subsData?.total_results,
+        subsKeys: Object.keys(subsData || {}),
+      },
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });
