@@ -120,7 +120,7 @@
           <div style={{ maxWidth: 860, margin: "0 auto" }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
             <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Reach {(config.engagedReaders || 31000).toLocaleString()} Moms Who{isMobile ? " " : <br />}Actually Open, Read, and Click
+              Reach {(config.engagedReaders || 31000).toLocaleString()} Moms Who{isMobile ? " " : <br />}Open, Read, and Buy
             </h1>
             <div style={{
               display: "grid",
@@ -207,20 +207,6 @@
       );
     }
 
-    // ─── Brand Categories ─────────────────────────────────────────
-    function BrandCategories() {
-      return (
-        <section className="section" style={{ padding: "96px 24px", background: C.bg }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto", textAlign: "center" }}>
-            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, color: C.text, marginBottom: 20 }}>Built for Brands That Moms Love</h2>
-            <p style={{ fontSize: 15, color: C.textSecondary, maxWidth: 700, margin: "0 auto", lineHeight: 1.65 }}>
-              Baby & toddler gear &middot; Health & wellness &middot; Family services &middot; Food & nutrition &middot; Education &middot; Home organization &middot; Self-care &middot; Financial products &middot; Subscription boxes &middot; Family travel
-            </p>
-          </div>
-        </section>
-      );
-    }
-
     // ─── Demographics ─────────────────────────────────────────────
     function Demographics({ config, isMobile }) {
       const stats = [
@@ -243,19 +229,25 @@
               </div>
             ))}
           </div>
+          <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginBottom: 32 }}>
+            3&times; per week &middot; 156 newsletters per year
+          </p>
           <div style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
             <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 8 }}>
               100% moms, aged 22-45
             </p>
-            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 20 }}>
+            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 0 }}>
               94% in the USA &middot; 6% in Canada, Australia, and the UK
             </p>
-            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.65, marginBottom: 24 }}>
-              Baby/toddler gear &middot; Health & wellness &middot; Family finances &middot; Education &middot; Food & nutrition &middot; Home organization &middot; Self-care
-            </p>
-            <p style={{ fontSize: 14, color: C.muted }}>
-              3&times; per week &middot; 156 newsletters per year &middot; Your brand in front of moms consistently
-            </p>
+            <div style={{ marginTop: 24, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 8 }}>
+                Built for brands in
+              </div>
+              <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.8 }}>
+                Baby &amp; toddler gear &middot; Health &amp; wellness &middot; Family services &middot; Food &amp; nutrition<br />
+                Education &middot; Home organization &middot; Self-care &middot; Financial products &middot; Family travel
+              </div>
+            </div>
           </div>
         </Section>
       );
@@ -299,7 +291,7 @@
               }}>&lsaquo;</button>
             )}
             {!isMobile && <div style={{ position: "absolute", left: 56, top: 0, bottom: 0, width: 40, background: "linear-gradient(to right, #FAF9F7, transparent)", zIndex: 3, pointerEvents: "none" }} />}
-            <div ref={trackRef} style={{
+            <div ref={trackRef} className="carousel-track" style={{
               display: "flex", gap: 24, overflowX: "auto", scrollSnapType: "x mandatory",
               scrollBehavior: "smooth", padding: "16px 0",
               scrollbarWidth: "none", msOverflowStyle: "none",
@@ -309,7 +301,7 @@
               {testimonials.map((t, i) => (
                 <div key={i} style={{
                   background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16,
-                  padding: 32, minWidth: cardWidth, maxWidth: isMobile ? cardWidth : 360, minHeight: 200,
+                  padding: 32, width: cardWidth, minWidth: cardWidth, maxWidth: isMobile ? cardWidth : 360, minHeight: 200,
                   flexShrink: 0, scrollSnapAlign: "start",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 }}>
@@ -450,7 +442,7 @@
                     border: `${isRec ? 2.5 : 1}px solid ${isRec ? C.accent : C.border}`,
                     background: C.bg, overflow: "visible", position: "relative",
                     boxShadow: isHovered ? "0 8px 24px rgba(0,0,0,0.08)" : (isRec ? "0 8px 30px rgba(232,144,156,0.15)" : "0 1px 3px rgba(0,0,0,0.04)"),
-                    transform: isHovered ? "translateY(-4px) scale(1.04)" : (isRec ? "scale(1.04)" : "none"),
+                    transform: isHovered ? "translateY(-4px) scale(1.04)" : (isRec && !isMobile ? "scale(1.04)" : "none"),
                     transition: "transform 0.2s, box-shadow 0.2s",
                     zIndex: isRec ? 2 : 0,
                   }}>
@@ -498,8 +490,8 @@
                       </div>
                     )}
 
-                    {/* Features */}
-                    <div style={{ marginBottom: 16 }}>
+                    {/* Features — flex: 1 to fill remaining space for equal-height cards */}
+                    <div style={{ marginBottom: 16, flex: 1 }}>
                       {(tier.features || []).map((f, i) => (
                         <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.5 }}>
                           <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>
@@ -507,6 +499,9 @@
                         </div>
                       ))}
                     </div>
+
+                    {/* Card footer — pushed to bottom */}
+                    <div style={{ marginTop: "auto" }}>
 
                     {/* Collapsible Value Stack */}
                     {(tier.valueStack || []).length > 0 && (
@@ -556,6 +551,8 @@
                         )}
                       </div>
                     )}
+
+                    </div>{/* end card footer */}
                   </div>
                 </div>
               );
@@ -672,12 +669,12 @@
                   </div>
                 </div>
               </div>
-              <div style={{ flex: 1, maxWidth: 440 }}>
+              <div style={{ flex: 1, maxWidth: 420 }}>
                 {callouts.map((c, i) => (
                   <div key={i} style={{ marginBottom: 48, paddingLeft: 24, borderLeft: `3px solid ${currentTP === i ? C.accent : "transparent"}`, opacity: currentTP === i ? 1 : 0.3, transition: "opacity 0.4s, border-color 0.4s", cursor: "pointer" }} onClick={() => setCurrentTP(i)}>
                     <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.accent, marginBottom: 8 }}>{c.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 10, color: C.text }}>{c.title}</div>
-                    <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.65, maxWidth: 380 }}>{c.desc}</div>
+                    <div style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.6, maxWidth: 380 }}>{c.desc}</div>
                   </div>
                 ))}
               </div>
@@ -703,33 +700,6 @@
       );
     }
 
-    // ─── Why Newsletter Sponsorship (Simple Math) ─────────────────
-    function WhyNewsletter({ config, stats, isMobile }) {
-      const growth = config.tiers?.growth;
-      const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
-      const cpm = growth && avgOpens > 0 ? ((growth.price / (avgOpens * growth.placements)) * 1000).toFixed(0) : "~24";
-
-      return (
-        <Section bg={C.bgSubtle}>
-          <SectionTitle>Why Newsletter Sponsorship?</SectionTitle>
-          <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
-            <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: C.text, marginBottom: 16, lineHeight: 1.4 }}>
-              $7,500 &divide; 250,000+ impressions = $0.03 per engaged reader
-            </p>
-            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 40 }}>
-              That's a mom who opens, reads, and trusts what she sees — not a thumb scrolling past an algorithm.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-              <p style={{ fontSize: 14, color: C.muted }}>Instagram Ads $6-10 CPM &middot; Algorithmic, skippable</p>
-              <p style={{ fontSize: 14, color: C.muted }}>Facebook Ads $7-12 CPM &middot; Algorithmic, skippable</p>
-              <p style={{ fontSize: 14, color: C.muted }}>Display Ads $5-15 CPM &middot; Banner blindness, ad blockers</p>
-              <p style={{ fontSize: 14, color: C.accent, fontWeight: 600 }}>The Mommy ~${cpm} CPM &middot; {config.uniqueOpenRate}% open rate, direct inbox, trusted voice</p>
-            </div>
-          </div>
-        </Section>
-      );
-    }
-
     // ─── Lock-In Messaging ────────────────────────────────────────
     function LockIn({ config, stats, isMobile }) {
       const subs = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders || 31000);
@@ -741,6 +711,12 @@
         <Section bg={C.bg}>
           <SectionTitle>Lock In Today's Rates</SectionTitle>
           <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+            <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: C.text, marginBottom: 8, lineHeight: 1.4 }}>
+              $7,500 &divide; 250,000+ impressions = $0.03 per engaged reader
+            </p>
+            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 32 }}>
+              That's a mom who opens, reads, and trusts what she sees.
+            </p>
             <p style={{ fontSize: 16, color: C.text, marginBottom: 4 }}>
               Current rates based on {num(subs)} subscribers.
             </p>
@@ -1017,13 +993,11 @@
         <div>
           <Hero stats={stats} config={cfg} isMobile={isMobile} />
           <BrandTicker config={cfg} isMobile={isMobile} />
-          <BrandCategories />
           <Demographics config={cfg} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
           <HowItWorks config={cfg} isMobile={isMobile} />
-          <WhyNewsletter config={cfg} stats={stats} isMobile={isMobile} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} />
           <Guarantee config={cfg} />
           <InquiryForm config={cfg} isMobile={isMobile} />
