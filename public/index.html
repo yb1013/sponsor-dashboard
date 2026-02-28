@@ -140,7 +140,10 @@
     function getRoute() {
       const path = window.location.pathname;
       const m = path.match(/^\/s\/([A-Za-z0-9]+)$/);
-      if (m) return { mode: "sponsor", shareToken: m[1] };
+      if (m) {
+        if (m[1] === "demo") return { mode: "demo" };
+        return { mode: "sponsor", shareToken: m[1] };
+      }
       return { mode: "admin" };
     }
 
@@ -1082,7 +1085,7 @@
     // ═══════════════════════════════════════════════════════════════
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
-    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns }) {
+    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns, isDemo }) {
       const [showPdfModal, setShowPdfModal] = useState(false);
       const [pdfIncludeCpm, setPdfIncludeCpm] = useState(true);
       const [pdfIncludeCpc, setPdfIncludeCpc] = useState(true);
@@ -1096,6 +1099,7 @@
       const [lastChecked, setLastChecked] = useState(new Date().toISOString());
       const [, setTick] = useState(0);
       useEffect(() => {
+        if (isDemo) return;
         const doCheck = () => { onQuickSync(); setLastChecked(new Date().toISOString()); };
         doCheck();
         const syncInterval = setInterval(doCheck, 5 * 60 * 1000);
@@ -1195,10 +1199,10 @@
           <div style={{ padding: isMobile ? "12px 16px" : "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 0 }}>
             {!isMobile && onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-              {vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px" }}>↓ Download Report</button>}
+              {!isDemo && vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px" }}>↓ Download Report</button>}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
-                <span style={{ fontSize: 11, color: C.dim }}>{updatedText ? `Live · ${updatedText}` : "Live · auto-updates every 5 min"}</span>
+                <span style={{ fontSize: 11, color: C.dim }}>{isDemo ? "Updated in real-time during your campaign" : (updatedText ? `Live · ${updatedText}` : "Live · auto-updates every 5 min")}</span>
               </div>
             </div>
           </div>
@@ -1276,7 +1280,7 @@
             )}
             {vRuns.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
             <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
-              {vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
+              {!isDemo && vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
               {config.campaignUrl && (
                 <div style={{ textAlign: "center", marginTop: 24 }}>
                   <p style={{ fontSize: 14, color: C.muted }}>Want to do more with {config.publicationName || "us"}?</p>
@@ -1799,6 +1803,47 @@
       );
     }
 
+    // ─── Demo Sponsor Page ──────────────────────────────────────
+    const DEMO_RUNS = [
+      { id: "d1", emailName: "Back-to-School Essentials Guide", sendDate: "2025-09-08", totalOpens: 27420, totalClicks: 356, description: "Hero feature with product carousel", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d2", emailName: "Fall Family Activities Roundup", sendDate: "2025-09-22", totalOpens: 26890, totalClicks: 312, description: "Primary placement with seasonal tie-in", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d3", emailName: "Halloween Costume Hacks", sendDate: "2025-10-13", totalOpens: 28100, totalClicks: 389, description: "Themed placement with contest CTA", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d4", emailName: "Holiday Gift Guide Preview", sendDate: "2025-11-03", totalOpens: 29340, totalClicks: 421, description: "Gift guide integration", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d5", emailName: "Thanksgiving Travel Tips", sendDate: "2025-11-17", totalOpens: 27650, totalClicks: 345, description: "Travel essentials feature", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d6", emailName: "Stocking Stuffer Ideas", sendDate: "2025-12-01", totalOpens: 30200, totalClicks: 438, description: "Holiday shopping guide placement", sponsorId: "demo", contractId: "demo-contract" },
+      { id: "d7", emailName: "New Year Family Goals", sendDate: "2026-01-06", totalOpens: 28900, totalClicks: 362, description: "New year wellness tie-in", sponsorId: "demo", contractId: "demo-contract" },
+    ];
+
+    const DEMO_CONTRACT = {
+      id: "demo-contract", name: "Growth Partnership · 12 Issues", sponsorId: "demo",
+      startDate: "2025-09-01", endDate: "2026-03-01", totalRuns: 12, isActive: true,
+      showCpmToSponsor: true, showCpcToSponsor: false,
+      exclusivePlacement: false, primaryPlacement: true, categoryExclusivity: true,
+      pricingNotes: "",
+      runs: DEMO_RUNS,
+      costMetrics: { cpm: 22.04 },
+    };
+
+    function DemoSponsorPage() {
+      const sponsor = { id: "demo", name: "Sample Partner", patterns: [], showCostToSponsor: true, oneOffShowCpm: false, oneOffShowCpc: false };
+      const config = { publicationName: "The Mommy", publicationUrl: "themommy.news", campaignUrl: "" };
+      const contract = DEMO_CONTRACT;
+      const runs = DEMO_RUNS;
+      const totals = { opens: 198500, clicks: 2623, ctr: 1.32 };
+      const costMetrics = contract.costMetrics;
+      const allContracts = [contract];
+      const allRuns = [...runs];
+
+      return (
+        <div>
+          <div style={{ background: "#EFF6FF", borderBottom: "1px solid #BFDBFE", padding: "10px 24px", textAlign: "center", fontSize: 13, color: "#1E40AF", fontFamily: FONT }}>
+            📊 Dashboard Demo — This is a sample view of what your live dashboard looks like
+          </div>
+          <SponsorView sponsor={sponsor} runs={runs} totals={totals} contract={contract} costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config} allContracts={allContracts} allRuns={allRuns} isDemo={true} />
+        </div>
+      );
+    }
+
     // ─── Public Sponsor Page ────────────────────────────────────
     function PublicSponsorPage({ shareToken }) {
       const [data, setData] = useState(null);
@@ -1888,6 +1933,7 @@
     // ─── Root (route-based entry) ─────────────────────────────────
     function Root() {
       const route = getRoute();
+      if (route.mode === "demo") return <DemoSponsorPage />;
       if (route.mode === "sponsor") return <PublicSponsorPage shareToken={route.shareToken} />;
       return <App />;
     }

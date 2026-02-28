@@ -214,6 +214,104 @@
       );
     }
 
+    // ─── Dashboard Preview ─────────────────────────────────────────
+    function DashboardPreview({ isMobile }) {
+      const width = useWindowWidth();
+      const isSmall = width <= 480;
+      return (
+        <Section bg={C.bg}>
+          <SectionTitle sub="Every partner gets a live performance dashboard — updated automatically, accessible anytime, from any device. No waiting for end-of-campaign reports. No spreadsheets. No guessing.">
+            Real-Time Campaign Tracking
+          </SectionTitle>
+          <div style={{
+            background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 20 : 40,
+            maxWidth: 900, margin: "0 auto",
+            color: "#E2E8F0", position: "relative", overflow: "hidden",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            fontFamily: FONT,
+          }}>
+            {/* Header */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#4A5A72", marginBottom: 4 }}>Campaign Performance Report</div>
+              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff" }}>Sample Partner</div>
+            </div>
+
+            {/* Big number */}
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 13, color: "#4A5A72" }}>Seen by</div>
+              <div style={{ fontSize: isMobile ? 36 : 48, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
+              <div style={{ fontSize: 13, color: "#4A5A72" }}>readers</div>
+            </div>
+
+            {/* Mini chart */}
+            <div style={{ marginBottom: 20, textAlign: "center" }}>
+              <svg width="100%" height={isMobile ? 60 : 80} viewBox="0 0 400 80" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#4F8FF7" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <polygon points="0,70 60,62 120,55 180,42 240,33 300,20 360,8 360,80 0,80" fill="url(#chartGrad)" />
+                <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+
+            {/* Three stat cards */}
+            <div style={{ display: "flex", flexDirection: isSmall ? "column" : "row", gap: 12, marginBottom: 16 }}>
+              {[
+                { label: "Total Opens", value: "198,500", color: "#F97316" },
+                { label: "Total Clicks", value: "2,623", color: "#22C55E" },
+                { label: "Click-Through Rate", value: "1.32%", color: "#EAB308" },
+              ].map((s, i) => (
+                <div key={i} style={{
+                  flex: 1, background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10,
+                  padding: isMobile ? "12px 14px" : "16px", borderTop: `2px solid ${s.color}`,
+                }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#4A5A72" }}>{s.label}</div>
+                  <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: s.color, fontFamily: MONO }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: "#4A5A72" }}>Campaign Progress</span>
+                <span style={{ fontSize: 12, color: "#E2E8F0" }}>7 of 12 emails sent</span>
+              </div>
+              <div style={{ background: "#1E2A3A", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ background: "linear-gradient(90deg, #4F8FF7, #22C55E)", width: "58%", height: "100%", borderRadius: 6 }} />
+              </div>
+            </div>
+
+            {/* Premium badges */}
+            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>✦ Primary Placement</span>
+              <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>✦ Category Exclusivity</span>
+            </div>
+          </div>
+
+          {/* CTA button */}
+          <div style={{ textAlign: "center", marginTop: 32 }}>
+            <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "14px 28px", background: "transparent",
+              border: `2px solid ${C.accent}`, color: C.accent,
+              borderRadius: 12, fontSize: 15, fontWeight: 700,
+              textDecoration: "none", transition: "all 0.2s",
+              minHeight: 52,
+            }}>
+              Explore the Live Demo →
+            </a>
+            <p style={{ fontSize: 14, color: C.muted, marginTop: 14 }}>
+              Every sponsor gets their own private dashboard link — updated automatically after each newsletter send.
+            </p>
+          </div>
+        </Section>
+      );
+    }
+
     // ─── Pricing Tiers ────────────────────────────────────────────
     function PricingSection({ config, stats, isMobile, onSelectTier }) {
       const [takeoverState, setTakeoverState] = useState({});
@@ -743,6 +841,7 @@
           <BrandPartners config={cfg} isMobile={isMobile} />
           <Demographics config={cfg} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
+          <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
           <HowItWorks config={cfg} isMobile={isMobile} />
           <CpmComparison config={cfg} stats={stats} isMobile={isMobile} />
