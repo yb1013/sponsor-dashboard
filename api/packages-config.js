@@ -111,11 +111,10 @@ function getDefaults() {
       },
     },
     pricingMilestones: [
-      { subscribers: 30000, adjustment: 0 },
-      { subscribers: 35000, adjustment: 100 },
-      { subscribers: 40000, adjustment: 200 },
-      { subscribers: 45000, adjustment: 300 },
-      { subscribers: 50000, adjustment: 400 },
+      { subscribers: 40000, adjustment: 0 },
+      { subscribers: 45000, adjustment: 100 },
+      { subscribers: 50000, adjustment: 200 },
+      { subscribers: 55000, adjustment: 300 },
     ],
     cancellationPolicy: "Cancel with 30 days' notice. Unused placements are refunded on a prorated basis. No penalties, no fine print.",
     guaranteeMultiplier: 0.6,
@@ -126,7 +125,7 @@ function getDefaults() {
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -153,6 +152,19 @@ export default async function handler(req, res) {
     try {
       await redis.set(KV_KEY, JSON.stringify(req.body));
       return res.status(200).json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!(await verifyToken(token))) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      await redis.del(KV_KEY);
+      return res.status(200).json({ ok: true, defaults: getDefaults() });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

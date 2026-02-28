@@ -149,9 +149,10 @@
             {(config.brandPartners || []).map((b, i) => (
               <span key={i} style={{
                 display: "inline-flex", alignItems: "center",
-                padding: "10px 20px", borderRadius: 8,
-                border: `1px solid ${C.border}`, background: C.bg,
-                fontSize: 15, fontWeight: 600, color: "#333",
+                padding: "12px 24px", borderRadius: 10,
+                border: `1.5px solid #E0E0E0`, background: C.bg,
+                fontSize: 16, fontWeight: 700, color: "#333",
+                letterSpacing: 0.5, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               }}>{b}</span>
             ))}
           </div>
@@ -224,8 +225,8 @@
             Real-Time Campaign Tracking
           </SectionTitle>
           <div style={{
-            background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 20 : 40,
-            maxWidth: 900, margin: "0 auto",
+            background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 24 : 48,
+            maxWidth: 960, margin: "0 auto",
             color: "#E2E8F0", position: "relative", overflow: "hidden",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
             fontFamily: FONT,
@@ -239,13 +240,13 @@
             {/* Big number */}
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 13, color: "#4A5A72" }}>Seen by</div>
-              <div style={{ fontSize: isMobile ? 36 : 48, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
+              <div style={{ fontSize: isMobile ? 40 : 52, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
               <div style={{ fontSize: 13, color: "#4A5A72" }}>readers</div>
             </div>
 
             {/* Mini chart */}
             <div style={{ marginBottom: 20, textAlign: "center" }}>
-              <svg width="100%" height={isMobile ? 60 : 80} viewBox="0 0 400 80" preserveAspectRatio="none">
+              <svg width="100%" height={isMobile ? 70 : 100} viewBox="0 0 400 80" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" />
@@ -296,16 +297,15 @@
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
               display: "inline-flex", alignItems: "center", gap: 8,
-              padding: "14px 28px", background: "transparent",
-              border: `2px solid ${C.accent}`, color: C.accent,
-              borderRadius: 12, fontSize: 15, fontWeight: 700,
+              padding: "16px 32px", background: C.accent, color: "#fff",
+              border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700,
               textDecoration: "none", transition: "all 0.2s",
-              minHeight: 52,
+              minHeight: 52, boxShadow: "0 4px 14px rgba(232,144,156,0.3)",
             }}>
               Explore the Live Demo →
             </a>
             <p style={{ fontSize: 14, color: C.muted, marginTop: 14 }}>
-              Every sponsor gets their own private dashboard link — updated automatically after each newsletter send.
+              Every partner gets their own private dashboard — updated automatically after each send.
             </p>
           </div>
         </Section>
@@ -322,7 +322,7 @@
       const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
 
       return (
-        <Section id="pricing" bg={C.bg}>
+        <Section id="pricing" bg={C.card}>
           <SectionTitle>Partnership Packages</SectionTitle>
           {nextMs && (
             <div style={{ textAlign: "center", padding: "16px 24px", borderRadius: 12, background: C.amberDim, border: `1px solid #FDE68A`, marginBottom: 48, fontSize: 15, color: "#92400E" }}>
@@ -382,12 +382,12 @@
                       <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 16 }}>
                         <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.dim, marginBottom: 12 }}>Value Breakdown</p>
                         {tier.valueStack.map((v, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted, marginBottom: 6, lineHeight: 1.6 }}>
-                            <span>{v.label}</span>
-                            <span style={{ fontFamily: MONO, fontWeight: 500 }}>{money(v.value)}</span>
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 13, color: C.muted, borderBottom: i < tier.valueStack.length - 1 ? `1px dotted ${C.border}` : "none" }}>
+                            <span style={{ flex: 1 }}>{v.label}</span>
+                            <span style={{ fontFamily: MONO, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>{money(v.value)}</span>
                           </div>
                         ))}
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: C.dim, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#9CA3AF", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
                           <span>Total Value</span>
                           <span style={{ fontFamily: MONO }}>{money(valueTotal)}</span>
                         </div>
@@ -395,13 +395,12 @@
                     )}
 
                     {/* Price */}
-                    <div style={{ textAlign: "center", padding: "20px 0", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : C.card, flex: "none" }}>
-                      <div style={{ fontSize: 14, color: C.dim, textDecoration: "line-through", marginBottom: 4 }}>{money(valueTotal)}</div>
-                      <div style={{ fontSize: 34, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
+                    <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : C.card, flex: "none" }}>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
                       {valueTotal > displayPrice && (
                         <div style={{
-                          display: "inline-block", marginTop: 8, padding: "4px 14px", borderRadius: 20,
-                          background: C.greenDim, color: C.greenDark, fontSize: 13, fontWeight: 700,
+                          display: "inline-block", marginTop: 10, padding: "4px 12px", borderRadius: 20,
+                          background: "#DCFCE7", color: "#16A34A", fontSize: 13, fontWeight: 600,
                         }}>
                           Save {money(valueTotal - displayPrice)}
                         </div>
@@ -492,6 +491,13 @@
               </div>
             )}
           </div>
+          {example && (
+            <div style={{ marginTop: 32, padding: 24, background: C.blueDim, borderRadius: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>See a real sponsorship in action</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>{example.title} in "iPad Holder + Car Organizer" — result: {example.cpc || "$1.53 per click"}</div>
+              <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example →</a>
+            </div>
+          )}
         </Section>
       );
     }
@@ -702,7 +708,7 @@
 
     // ─── Footer ───────────────────────────────────────────────────
     function Footer({ config }) {
-      const contactEmail = config.contactEmail || "partner@themommy.news";
+      const contactEmail = config.contactEmail || "hello@themommy.news";
       return (
         <section style={{ padding: "72px 24px 48px", textAlign: "center", background: C.bg, borderTop: `1px solid ${C.border}` }}>
           <p style={{ fontSize: 18, color: C.text, fontWeight: 600, marginBottom: 8 }}>Managing multiple brands or need something different?</p>
@@ -816,13 +822,12 @@
           },
         },
         pricingMilestones: [
-          { subscribers: 30000, adjustment: 0 }, { subscribers: 35000, adjustment: 100 },
-          { subscribers: 40000, adjustment: 200 }, { subscribers: 45000, adjustment: 300 },
-          { subscribers: 50000, adjustment: 400 },
+          { subscribers: 40000, adjustment: 0 }, { subscribers: 45000, adjustment: 100 },
+          { subscribers: 50000, adjustment: 200 }, { subscribers: 55000, adjustment: 300 },
         ],
         cancellationPolicy: "Cancel with 30 days' notice. Unused placements are refunded on a prorated basis. No penalties, no fine print.",
         guaranteeMultiplier: 0.6,
-        contactEmail: "partner@themommy.news", calendlyUrl: "",
+        contactEmail: "hello@themommy.news", calendlyUrl: "",
       };
 
       if (loading && !config) {
