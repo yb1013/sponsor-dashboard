@@ -20,6 +20,8 @@
     .section { opacity: 1; transform: translateY(0); }
     .section.animate-ready { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
     .section.animate-ready.visible { opacity: 1; transform: translateY(0); }
+    .live-dot { display: inline-block; width: 6px; height: 6px; background: #22C55E; border-radius: 50%; margin-left: 8px; vertical-align: middle; animation: live-pulse 2s ease-in-out infinite; }
+    @keyframes live-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); } }
     ::selection { background: #E8909C33; }
     input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
   </style>
@@ -27,7 +29,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useLayoutEffect, useCallback, useRef } = React;
 
     // ═══════════════════════════════════════════════════════════════
     // CONSTANTS
@@ -289,22 +291,58 @@
     }
 
     // ─── Demographics ─────────────────────────────────────────────
-    function Demographics({ config, isMobile }) {
-      const stats = [
-        { label: "Engaged Moms", value: num(config.engagedReaders) },
+    function Demographics({ config, isMobile, configIsLive }) {
+      const numRef = useRef(null);
+      const prevRef = useRef(config.engagedReaders);
+      const [showLive, setShowLive] = useState(false);
+
+      useLayoutEffect(() => {
+        if (!configIsLive || !numRef.current) return;
+        const from = prevRef.current;
+        const to = config.engagedReaders;
+        prevRef.current = to;
+        if (from === to) { setShowLive(true); return; }
+        numRef.current.textContent = from.toLocaleString();
+        const start = performance.now();
+        const duration = 800;
+        function update(now) {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          const current = Math.round(from + (to - from) * eased);
+          numRef.current.textContent = current.toLocaleString();
+          if (progress < 1) requestAnimationFrame(update);
+          else setShowLive(true);
+        }
+        requestAnimationFrame(update);
+      }, [configIsLive, config.engagedReaders]);
+
+      const otherStats = [
         { label: "Unique Open Rate", value: config.uniqueOpenRate + "%+" },
         { label: "Total Open Rate", value: config.totalOpenRate },
       ];
+      const cardStyle = {
+        textAlign: "center", padding: "32px 24px", borderRadius: 16,
+        border: `1px solid ${C.border}`, background: C.bg,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      };
       return (
         <Section bg={C.bgSubtle}>
-          <SectionTitle sub="The moms brands want to reach">Who You're Reaching</SectionTitle>
+          <SectionTitle sub={`We send our 3\u00D7 weekly newsletter to the ${num(config.engagedReaders)} most engaged \u2014 not the full list`}>Who You're Reaching</SectionTitle>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto 48px" }}>
-            {stats.map((s, i) => (
-              <div key={i} style={{
-                textAlign: "center", padding: "32px 24px", borderRadius: 16,
-                border: `1px solid ${C.border}`, background: C.bg,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: 40, fontWeight: 700, color: C.text, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>
+                <span ref={numRef}>{num(config.engagedReaders)}</span>
+                {showLive && (
+                  <span style={{ marginLeft: 10, fontSize: 10, color: C.muted, fontWeight: 500, verticalAlign: "middle" }}>
+                    <span className="live-dot"></span> Live
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Engaged Moms</div>
+            </div>
+            {otherStats.map((s, i) => (
+              <div key={i} style={cardStyle}>
                 <div style={{ fontSize: 40, fontWeight: 700, color: C.text, marginBottom: 8 }}>{s.value}</div>
                 <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</div>
               </div>
@@ -985,6 +1023,7 @@
     function PackagesPage() {
       const [stats, setStats] = useState(null);
       const [config, setConfig] = useState(null);
+      const [configIsLive, setConfigIsLive] = useState(false);
       const [loading, setLoading] = useState(true);
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
@@ -1012,6 +1051,7 @@
           if (configRes.status === "fulfilled" && configRes.value) {
             const cfg = typeof configRes.value === "string" ? JSON.parse(configRes.value) : configRes.value;
             setConfig(cfg);
+            setConfigIsLive(true);
           }
           setLoading(false);
         }
@@ -1084,7 +1124,7 @@
         <div>
           <Hero stats={stats} config={cfg} isMobile={isMobile} />
           <BrandTicker config={cfg} isMobile={isMobile} />
-          <Demographics config={cfg} isMobile={isMobile} />
+          <Demographics config={cfg} isMobile={isMobile} configIsLive={configIsLive} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
