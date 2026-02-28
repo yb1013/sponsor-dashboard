@@ -400,16 +400,17 @@
             if (sCpm) cm.cpm = tO > 0 ? (spent / tO) * 1000 : 0;
             if (sCpc) cm.cpc = tC > 0 ? spent / tC : 0;
           }
-          return { id: c.id, name: c.name, totalRuns: c.totalRuns, startDate: c.startDate, endDate: c.endDate,
+          const totalSpent = c.totalPrice > 0 ? (cRuns.length / c.totalRuns) * c.totalPrice : 0;
+          return { id: c.id, name: c.name, totalRuns: c.totalRuns, totalSpent, startDate: c.startDate, endDate: c.endDate,
             isActive: !!c.isActive, showCpmToSponsor: sCpm, showCpcToSponsor: sCpc,
             exclusivePlacement: c.exclusivePlacement, primaryPlacement: c.primaryPlacement,
             categoryExclusivity: c.categoryExclusivity, pricingNotes: c.pricingNotes,
             runs: cRuns, costMetrics: cm };
         });
         const assignedIds = new Set(spContracts.map(c => c.id));
-        const unassignedRuns = [...spRuns.filter(r => !r.contractId || !assignedIds.has(r.contractId))].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(cleanRun);
+        const unassignedRuns = [...spRuns.filter(r => !r.contractId || !assignedIds.has(r.contractId))].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(r => ({ ...cleanRun(r), price: r.price || 0 }));
         const pubData = {
-          sponsorName: sp.name, contracts: pubContracts, unassignedRuns,
+          sponsorName: sp.name, showCostToSponsor: !!sp.showCostToSponsor, contracts: pubContracts, unassignedRuns,
           publishedAt: new Date().toISOString(), publicationName: config.publicationName || "",
         };
         try {
@@ -606,6 +607,21 @@
                     <span style={{ fontSize: 11, color: C.dim }}>Share this link with your sponsor</span>
                   </div>
                 )}
+
+                {/* Sponsor Cost Visibility */}
+                <div style={{ marginBottom: 16 }}>
+                  <button onClick={() => updateSponsor(sponsor.id, { showCostToSponsor: !sponsor.showCostToSponsor })} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                    background: sponsor.showCostToSponsor ? C.purpleDim : C.bg, border: `1px solid ${sponsor.showCostToSponsor ? "rgba(167,139,250,0.3)" : C.border}`,
+                    borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+                  }}>
+                    <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: sponsor.showCostToSponsor ? C.purple : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                      <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: sponsor.showCostToSponsor ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: sponsor.showCostToSponsor ? C.purple : C.dim, fontFamily: FONT }}>{sponsor.showCostToSponsor ? "Cost metrics visible to sponsor" : "Cost metrics hidden from sponsor"}</span>
+                  </button>
+                  <p style={{ fontSize: 10, color: C.dim, marginTop: 4, marginLeft: 2 }}>Master toggle — controls whether CPM/CPC appear in sponsor view for any view</p>
+                </div>
 
                 {/* Pattern Management */}
                 <PatternManager sponsor={sponsor} onUpdate={(patterns) => updateSponsor(sponsor.id, { urlPatterns: patterns })} />
@@ -961,12 +977,32 @@
           const ct = contracts.find(c => c.id === r.contractId);
           return { ...r, _contractName: ct ? ct.name : null };
         });
-        return { runs: labeled, contract: null, showProgress: false, showCost: false, showTerms: false };
+        return { runs: labeled, contract: null, showProgress: false, showCost: true, showTerms: false };
       }
-      if (selectedId === "__unassigned__") return { runs: unassignedRuns, contract: null, showProgress: false, showCost: false, showTerms: false };
+      if (selectedId === "__unassigned__") return { runs: unassignedRuns, contract: null, showProgress: false, showCost: true, showTerms: false };
       const ct = contracts.find(c => c.id === selectedId);
-      if (!ct) return { runs: allRuns, contract: null, showProgress: false, showCost: false, showTerms: false };
+      if (!ct) return { runs: allRuns, contract: null, showProgress: false, showCost: true, showTerms: false };
       return { runs: ct.runs || [], contract: ct, showProgress: true, showCost: true, showTerms: true };
+    }
+
+    function calcAggregateCost(viewId, contracts, unassignedRuns, viewRuns, wantCpm, wantCpc) {
+      let totalSpent = 0;
+      if (viewId === "__all__") {
+        for (const c of contracts) {
+          if (c.totalSpent > 0) totalSpent += c.totalSpent; // pre-calculated (public page)
+          else if (c.totalPrice > 0) totalSpent += ((c.runs || []).length / c.totalRuns) * c.totalPrice; // raw (admin)
+        }
+        for (const r of unassignedRuns) totalSpent += (r.price || 0);
+      } else if (viewId === "__unassigned__") {
+        for (const r of unassignedRuns) totalSpent += (r.price || 0);
+      }
+      if (totalSpent <= 0) return null;
+      const tO = viewRuns.reduce((s, r) => s + (r.totalOpens || 0), 0);
+      const tC = viewRuns.reduce((s, r) => s + (getRunClicks(r) || r.totalClicks || 0), 0);
+      const cm = {};
+      if (wantCpm) cm.cpm = tO > 0 ? (totalSpent / tO) * 1000 : 0;
+      if (wantCpc) cm.cpc = tC > 0 ? totalSpent / tC : 0;
+      return cm;
     }
 
     function ViewSelector({ options, selected, onChange }) {
@@ -1041,21 +1077,33 @@
         const c = vRuns.reduce((s, r) => s + (getRunClicks(r) || r.totalClicks || 0), 0);
         return { opens: o, clicks: c, ctr: o > 0 ? (c / o) * 100 : 0 };
       })() : totals;
-      const vCostMetrics = viewData && viewData.showCost && vContract ? (vContract.costMetrics || costMetrics) : (viewData ? null : costMetrics);
       const vShowProgress = viewData ? viewData.showProgress : true;
       const vShowCost = viewData ? viewData.showCost : true;
       const vShowTerms = viewData ? viewData.showTerms : true;
       const isAllTime = selectedView === "__all__";
+      const isOneOff = selectedView === "__unassigned__";
 
-      const showCpm = vContract ? (vContract.showCpmToSponsor ?? vContract.showPricingToSponsor ?? false) : false;
-      const showCpc = vContract ? (vContract.showCpcToSponsor ?? vContract.showPricingToSponsor ?? false) : false;
-      const hasAnyCost = vShowCost && (showCpm || showCpc) && vCostMetrics;
+      // ─── Cost metric visibility (sponsor-level master + per-contract flags) ──
+      const sponsorCostEnabled = sponsor.showCostToSponsor ?? false;
+      let showCpm, showCpc, activeCostMetrics;
+      if (vContract) {
+        showCpm = sponsorCostEnabled && (vContract.showCpmToSponsor ?? vContract.showPricingToSponsor ?? false);
+        showCpc = sponsorCostEnabled && (vContract.showCpcToSponsor ?? vContract.showPricingToSponsor ?? false);
+        activeCostMetrics = vContract.costMetrics || costMetrics;
+      } else if (allContracts && sponsorCostEnabled && (isAllTime || isOneOff)) {
+        showCpm = allContracts.some(c => c.showCpmToSponsor ?? c.showPricingToSponsor ?? false);
+        showCpc = allContracts.some(c => c.showCpcToSponsor ?? c.showPricingToSponsor ?? false);
+        activeCostMetrics = calcAggregateCost(selectedView, allContracts, unassigned, vRuns, showCpm, showCpc);
+      } else {
+        showCpm = false; showCpc = false; activeCostMetrics = null;
+      }
+      const hasAnyCost = vShowCost && (showCpm || showCpc) && activeCostMetrics;
       const terms = vShowTerms && vContract ? getTerms(vContract) : [];
       const updatedText = `Updated ${timeAgo(lastChecked)}`;
 
       const handleDownload = async () => {
         setDlPdf(true);
-        try { await downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: vCostMetrics, config }); }
+        try { await downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: activeCostMetrics, config }); }
         catch (e) { console.error(e); }
         finally { setDlPdf(false); }
       };
@@ -1096,8 +1144,8 @@
             {/* Cost metrics — independent CPM/CPC visibility */}
             {hasAnyCost && (
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (showCpm && showCpc ? "repeat(2,1fr)" : "1fr"), gap: isMobile ? 12 : 20, marginBottom: terms.length > 0 ? 12 : (isMobile ? 32 : 56) }}>
-                {showCpm && <BigStat label="CPM" value={money(vCostMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
-                {showCpc && <BigStat label="CPC" value={money(vCostMetrics.cpc)} color={C.purple} sub="cost per click" />}
+                {showCpm && <BigStat label="CPM" value={money(activeCostMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
+                {showCpc && <BigStat label="CPC" value={money(activeCostMetrics.cpc)} color={C.purple} sub="cost per click" />}
               </div>
             )}
             {terms.length > 0 && <TermsBadges contract={vContract} style={{ marginBottom: isMobile ? 32 : 56 }} />}
@@ -1642,6 +1690,7 @@
       const [desc, setDesc] = useState(run?.description || "");
       const [note, setNote] = useState(run?.adminNote || "");
       const [useV, setUseV] = useState(run?.useVerified || false);
+      const [price, setPrice] = useState(run?.price ?? "");
       return (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>{run ? "Edit Run" : "Add Manual Run"}</h3>
@@ -1661,6 +1710,7 @@
               </select>
             </div>
           )}
+          {!ctId && <Input label="Run Price" type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" help="Cost for this one-off placement (admin only — not shown to sponsor)" />}
           <div style={{ marginBottom: 16 }}>
             <button onClick={() => setUseV(!useV)} style={{
               display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
@@ -1681,7 +1731,7 @@
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => onSave({ sponsorId, emailName: en.trim() || "Untitled", sendDate: sd, totalOpens: parseInt(op) || 0, totalClicks: parseInt(cl) || 0, contractId: ctId || null, description: desc.trim(), adminNote: note.trim(), useVerified: useV, autoSynced: false })} color={C.white} bg={C.green}>{run ? "Update" : "Save"}</Btn>
+            <Btn onClick={() => onSave({ sponsorId, emailName: en.trim() || "Untitled", sendDate: sd, totalOpens: parseInt(op) || 0, totalClicks: parseInt(cl) || 0, contractId: ctId || null, description: desc.trim(), adminNote: note.trim(), useVerified: useV, autoSynced: false, price: ctId ? null : (parseFloat(price) || 0) })} color={C.white} bg={C.green}>{run ? "Update" : "Save"}</Btn>
           </div>
         </div>
       );
@@ -1733,7 +1783,7 @@
         </div>
       );
 
-      const sponsor = { id: "public", name: data.sponsorName, patterns: [] };
+      const sponsor = { id: "public", name: data.sponsorName, patterns: [], showCostToSponsor: data.showCostToSponsor ?? false };
       const config = { publicationName: data.publicationName || "" };
 
       // New multi-contract format
