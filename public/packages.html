@@ -14,6 +14,9 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.4s ease-out both; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes pulseGlow { 0%,100% { opacity: 1; box-shadow: 0 0 4px #22C55E; } 50% { opacity: 0.6; box-shadow: 0 0 8px #22C55E, 0 0 16px #22C55E44; } }
+    @keyframes chartGlow { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
     ::selection { background: #E8909C33; }
     input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
   </style>
@@ -50,6 +53,25 @@
     const num = (v) => (v || 0).toLocaleString();
     const money = (v) => "$" + (v || 0).toLocaleString();
 
+    function useCountUp(target, duration = 1500) {
+      const [value, setValue] = useState(0);
+      useEffect(() => {
+        if (!target) return;
+        const n = typeof target === "string" ? parseInt(target.replace(/[^0-9]/g, ""), 10) : target;
+        if (!n || isNaN(n)) return;
+        const start = performance.now();
+        function update(now) {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          setValue(Math.round(n * eased));
+          if (progress < 1) requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+      }, [target]);
+      return value;
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // PRICING HELPERS
     // ═══════════════════════════════════════════════════════════════
@@ -79,7 +101,7 @@
 
     function Section({ children, id, bg, style }) {
       return (
-        <section id={id} style={{ padding: "90px 24px", background: bg || "transparent", ...style }}>
+        <section id={id} className="fade-section" style={{ padding: "90px 24px", background: bg || "transparent", ...style }}>
           <div style={{ maxWidth: 1100, margin: "0 auto" }}>{children}</div>
         </section>
       );
@@ -88,7 +110,7 @@
     function SectionTitle({ children, sub }) {
       return (
         <div style={{ textAlign: "center", marginBottom: 56 }}>
-          <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.5, marginBottom: sub ? 14 : 0, color: C.text }}>{children}</h2>
+          <h2 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -0.5, marginBottom: sub ? 14 : 0, color: C.text }}>{children}</h2>
           {sub && <p style={{ fontSize: 17, color: C.muted, maxWidth: 600, margin: "0 auto", lineHeight: 1.6 }}>{sub}</p>}
         </div>
       );
@@ -97,12 +119,17 @@
     // ─── Hero ─────────────────────────────────────────────────────
     function Hero({ stats, config, isMobile }) {
       const subs = stats?.activeSubscribers;
-      const subsDisplay = subs && subs > 0 ? (Math.floor(subs / 1000) * 1000).toLocaleString() + "+" : "110,000+";
+      const subsRaw = subs && subs > 0 ? Math.floor(subs / 1000) * 1000 : 110000;
+      const subsAnimated = useCountUp(subsRaw);
+      const readersAnimated = useCountUp(config.engagedReaders);
+      const openRateAnimated = useCountUp(config.uniqueOpenRate);
+      const rebookAnimated = useCountUp(config.pavedRebookRate);
+
       const heroStats = [
-        { label: "Subscribers", value: subsDisplay, live: subs > 0 },
-        { label: "Engaged Readers", value: num(config.engagedReaders) },
-        { label: "Unique Open Rate", value: config.uniqueOpenRate + "%" },
-        { label: "Sponsors Rebook", value: config.pavedRebookRate + "%" },
+        { label: "Subscribers", display: subsAnimated.toLocaleString() + "+", live: subs > 0 },
+        { label: "Engaged Readers", display: readersAnimated.toLocaleString() },
+        { label: "Unique Open Rate", display: openRateAnimated + "%" },
+        { label: "Sponsors Rebook", display: rebookAnimated + "%" },
       ];
       return (
         <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg }}>
@@ -115,14 +142,13 @@
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
               gap: isMobile ? 16 : 32,
-              marginBottom: 48,
               maxWidth: 720, margin: "0 auto 48px",
             }}>
               {heroStats.map((s, i) => (
                 <div key={i} style={{ textAlign: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 800, color: C.text }}>{s.value}</span>
-                    {s.live && <span style={{ width: 8, height: 8, borderRadius: 4, background: C.green, display: "inline-block", animation: "pulse 2s infinite" }} />}
+                    <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 800, color: C.text }}>{s.display}</span>
+                    {s.live && <span style={{ width: 8, height: 8, borderRadius: 4, background: C.green, display: "inline-block", animation: "pulseGlow 2s infinite" }} />}
                   </div>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
                 </div>
@@ -149,9 +175,9 @@
             {(config.brandPartners || []).map((b, i) => (
               <span key={i} style={{
                 display: "inline-flex", alignItems: "center",
-                padding: "12px 24px", borderRadius: 10,
+                padding: "14px 28px", borderRadius: 10,
                 border: `1.5px solid #E0E0E0`, background: C.bg,
-                fontSize: 16, fontWeight: 700, color: "#333",
+                fontSize: 17, fontWeight: 800, color: "#333",
                 letterSpacing: 0.5, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               }}>{b}</span>
             ))}
@@ -196,21 +222,46 @@
 
     // ─── Testimonials ─────────────────────────────────────────────
     function Testimonials({ config, isMobile }) {
+      const [showAll, setShowAll] = useState(false);
+      const all = config.testimonials || [];
+      const featured = all.filter(t => t.featured !== false).slice(0, 3);
+      const expanded = all.filter(t => t.featured === false);
+
+      const TestimonialCard = ({ t, i }) => (
+        <div key={i} style={{
+          flex: 1, minWidth: isMobile ? "auto" : 280, padding: 32, borderRadius: 16, background: C.bg,
+          border: `1px solid ${C.border}`, position: "relative",
+        }}>
+          <div style={{ fontSize: 48, lineHeight: 1, color: C.accent, opacity: 0.3, marginBottom: 8, fontFamily: "Georgia, serif" }}>"</div>
+          <p style={{ fontSize: 15, color: C.text, lineHeight: 1.7, marginBottom: 20 }}>{t.quote}</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>— {t.name}</p>
+        </div>
+      );
+
       return (
         <Section bg={C.card}>
           <SectionTitle>What Our Readers Say</SectionTitle>
           <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20 }}>
-            {(config.testimonials || []).map((t, i) => (
-              <div key={i} style={{
-                flex: 1, padding: 32, borderRadius: 16, background: C.bg,
-                border: `1px solid ${C.border}`, position: "relative",
-              }}>
-                <div style={{ fontSize: 48, lineHeight: 1, color: C.accent, opacity: 0.3, marginBottom: 8, fontFamily: "Georgia, serif" }}>"</div>
-                <p style={{ fontSize: 15, color: C.text, lineHeight: 1.7, marginBottom: 20 }}>{t.quote}</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: C.text }}>— {t.name}</p>
-              </div>
-            ))}
+            {featured.map((t, i) => <TestimonialCard key={i} t={t} i={i} />)}
           </div>
+          {expanded.length > 0 && (
+            <>
+              <div style={{ overflow: "hidden", maxHeight: showAll ? 2000 : 0, transition: "max-height 0.5s ease", marginTop: showAll ? 20 : 0 }}>
+                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20, flexWrap: "wrap" }}>
+                  {expanded.map((t, i) => <TestimonialCard key={i + 3} t={t} i={i + 3} />)}
+                </div>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 28 }}>
+                <button onClick={() => setShowAll(!showAll)} style={{
+                  background: "none", border: `1px solid ${C.border}`, borderRadius: 10,
+                  padding: "12px 28px", fontSize: 15, fontWeight: 600, color: C.muted,
+                  cursor: "pointer", fontFamily: FONT, transition: "all 0.15s",
+                }}>
+                  {showAll ? "Show less \u25B4" : "Read more from our community \u25BE"}
+                </button>
+              </div>
+            </>
+          )}
         </Section>
       );
     }
@@ -231,6 +282,10 @@
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
             fontFamily: FONT,
           }}>
+            {/* Shimmer overlay */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)", animation: "shimmer 5s ease-in-out infinite" }} />
+            </div>
             {/* Header */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#4A5A72", marginBottom: 4 }}>Campaign Performance Report</div>
@@ -254,7 +309,7 @@
                   </linearGradient>
                 </defs>
                 <polygon points="0,70 60,62 120,55 180,42 240,33 300,20 360,8 360,80 0,80" fill="url(#chartGrad)" />
-                <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "chartGlow 3s ease-in-out infinite" }} />
               </svg>
             </div>
 
@@ -362,9 +417,12 @@
                     <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 16 }}>{tier.placements} Newsletter Placements</p>
 
                     {guarantee > 0 && (
-                      <div style={{ padding: "10px 14px", borderRadius: 10, background: C.greenDim, marginBottom: 16, fontSize: 13, color: C.greenDark }}>
-                        <strong>Guaranteed {num(guarantee)}+ impressions</strong>
-                        <span style={{ display: "block", fontSize: 12, marginTop: 2, opacity: 0.8 }}>or we keep running free</span>
+                      <div style={{ padding: "12px 14px", borderRadius: 10, background: C.greenDim, marginBottom: 16, fontSize: 13, color: C.greenDark, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 18, lineHeight: 1 }}>🛡️</span>
+                        <div>
+                          <strong>Guaranteed {num(guarantee)}+ reader impressions</strong>
+                          <span style={{ display: "block", fontSize: 12, marginTop: 2, opacity: 0.8 }}>If we don't hit it, we keep running free.</span>
+                        </div>
                       </div>
                     )}
 
@@ -396,6 +454,7 @@
 
                     {/* Price */}
                     <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : C.card, flex: "none" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: C.dim, marginBottom: 6 }}>Your Investment</div>
                       <div style={{ fontSize: 32, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
                       {valueTotal > displayPrice && (
                         <div style={{
@@ -451,50 +510,65 @@
 
     // ─── How It Works ─────────────────────────────────────────────
     function HowItWorks({ config, isMobile }) {
-      const placements = [
-        { title: "Featured Banner", desc: "Your logo prominently displayed at the top of each email — \"Together with [Brand]\" — creating immediate brand association." },
-        { title: "Promotional Intro Line", desc: "One natural line woven into the newsletter opening, positioning your brand as part of the conversation — not an interruption." },
-        { title: "Main Ad Placement", desc: "Headline, image, ~100 words of copy, CTA button, and multiple links — the centerpiece of your sponsorship." },
-      ];
+      const mockupStyle = { background: "#0A0E1A", borderRadius: 12, padding: isMobile ? 20 : 24, minHeight: isMobile ? 140 : 160, display: "flex", flexDirection: "column", justifyContent: "center" };
       const example = (config.liveExamples || [])[0];
       return (
         <Section bg={C.card}>
           <SectionTitle sub="Three touchpoints in every sponsored issue">What Your Sponsorship Looks Like</SectionTitle>
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 32 }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 24, marginBottom: 36 }}>
+            {/* Card 1: Featured Banner */}
             <div style={{ flex: 1 }}>
-              {placements.map((p, i) => (
-                <div key={i} style={{ marginBottom: 28 }}>
-                  <h4 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6, color: C.text }}>{p.title}</h4>
-                  <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.65 }}>{p.desc}</p>
+              <div style={mockupStyle}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 6, background: "#1E2A3A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#4A5A72" }}>TM</div>
+                  <span style={{ fontSize: 13, color: "#4A5A72" }}>The Mommy</span>
                 </div>
-              ))}
-            </div>
-            {example && (
-              <div style={{
-                flex: isMobile ? "auto" : "0 0 320px", padding: 28, borderRadius: 16, background: C.bg,
-                border: `1px solid ${C.border}`, alignSelf: "flex-start",
-              }}>
-                <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, marginBottom: 16 }}>Live Example</p>
-                <p style={{ fontSize: 16, fontWeight: 600, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>
-                  "iPad Holder + Car Organizer" featuring {example.title}
-                </p>
-                <a href={example.url} target="_blank" rel="noopener noreferrer" style={{
-                  display: "inline-block", fontSize: 15, color: C.accent, fontWeight: 700, textDecoration: "none", marginBottom: 16,
-                }}>
-                  See it live →
-                </a>
-                {example.cpc && (
-                  <div style={{ padding: "10px 14px", borderRadius: 10, background: C.greenDim, fontSize: 14, color: C.greenDark, fontWeight: 600 }}>
-                    This sponsor's result: {example.cpc}
-                  </div>
-                )}
+                <div style={{ padding: "10px 14px", background: "#111827", borderRadius: 8, border: "1px solid #1E2A3A" }}>
+                  <span style={{ fontSize: 12, color: "#6B7280" }}>Together with </span>
+                  <span style={{ fontSize: 12, color: "#4F8FF7", fontWeight: 700 }}>Your Brand</span>
+                </div>
               </div>
-            )}
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 16, marginBottom: 4 }}>Featured Banner</h4>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>Your logo at the top of every email</p>
+            </div>
+
+            {/* Card 2: Promotional Intro */}
+            <div style={{ flex: 1 }}>
+              <div style={mockupStyle}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ height: 8, background: "#1E2A3A", borderRadius: 4, width: "90%" }} />
+                  <div style={{ height: 8, background: "#1E2A3A", borderRadius: 4, width: "75%" }} />
+                  <div style={{ height: 8, background: "rgba(79,143,247,0.2)", borderRadius: 4, width: "85%", border: "1px solid rgba(79,143,247,0.15)" }} />
+                  <div style={{ height: 8, background: "#1E2A3A", borderRadius: 4, width: "70%" }} />
+                  <div style={{ height: 8, background: "#1E2A3A", borderRadius: 4, width: "80%" }} />
+                </div>
+              </div>
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 16, marginBottom: 4 }}>Promotional Intro</h4>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>A natural mention woven into the opening</p>
+            </div>
+
+            {/* Card 3: Main Ad Placement */}
+            <div style={{ flex: 1 }}>
+              <div style={mockupStyle}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#E2E8F0", marginBottom: 8 }}>Your Headline Here</div>
+                <div style={{ height: 48, background: "#1E2A3A", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 10, color: "#4A5A72" }}>Image</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                  <div style={{ height: 6, background: "#1E2A3A", borderRadius: 3, width: "95%" }} />
+                  <div style={{ height: 6, background: "#1E2A3A", borderRadius: 3, width: "80%" }} />
+                </div>
+                <div style={{ alignSelf: "flex-start", padding: "5px 14px", background: "#4F8FF7", borderRadius: 4, fontSize: 10, fontWeight: 700, color: "#fff" }}>Learn More</div>
+              </div>
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 16, marginBottom: 4 }}>Main Ad Placement</h4>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>Headline, image, 100 words, and call-to-action</p>
+            </div>
           </div>
+
           {example && (
-            <div style={{ marginTop: 32, padding: 24, background: C.blueDim, borderRadius: 12, textAlign: "center" }}>
+            <div style={{ padding: 24, background: C.blueDim, borderRadius: 12, textAlign: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>See a real sponsorship in action</div>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>{example.title} in "iPad Holder + Car Organizer" — result: {example.cpc || "$1.53 per click"}</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>{example.title} × The Mommy — result: {example.cpc || "$1.53 per click"}</div>
               <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example →</a>
             </div>
           )}
@@ -509,33 +583,32 @@
       const cpm = growth && avgOpens > 0 ? ((growth.price / (avgOpens * growth.placements)) * 1000).toFixed(0) : "~24";
 
       const channels = [
-        { name: "Instagram Ads", cpm: "$6-10", note: "Algorithmic, skippable" },
-        { name: "Facebook Ads", cpm: "$7-12", note: "Algorithmic, skippable" },
+        { name: "Instagram Ads", cpm: "$6-10", note: "Algorithmic, easily skipped" },
+        { name: "Facebook Ads", cpm: "$7-12", note: "Algorithmic, easily skipped" },
         { name: "Display Ads", cpm: "$5-15", note: "Banner blindness, ad blockers" },
-        { name: "The Mommy", cpm: `~$${cpm}`, note: `Direct inbox, ${config.uniqueOpenRate}% open rate, trusted voice`, highlight: true },
+        { name: "The Mommy Newsletter", cpm: `~$${cpm}`, note: `${config.uniqueOpenRate}% open rate · Direct inbox · Trusted voice`, highlight: true },
       ];
 
       return (
         <Section bg={C.bg}>
           <SectionTitle sub="Premium placement, premium results">How We Compare</SectionTitle>
-          <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 16, maxWidth: 900, margin: "0 auto" }}>
             {channels.map((ch, i) => (
               <div key={i} style={{
-                display: "flex", flexDirection: isMobile ? "column" : "row",
-                justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center",
-                padding: isMobile ? "16px" : "18px 24px", borderRadius: 12, marginBottom: 10,
+                padding: 24, borderRadius: 16, textAlign: "center",
                 background: ch.highlight ? C.accentLight : C.card,
                 border: `${ch.highlight ? 2 : 1}px solid ${ch.highlight ? C.accent : C.border}`,
+                boxShadow: ch.highlight ? "0 8px 24px rgba(232,144,156,0.15)" : "0 2px 8px rgba(0,0,0,0.03)",
+                transform: ch.highlight ? "scale(1.02)" : "none",
               }}>
-                <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: isMobile ? 6 : 0 }}>
-                  <span style={{ fontSize: 15, fontWeight: ch.highlight ? 700 : 500, color: ch.highlight ? C.accentDark : C.text, minWidth: isMobile ? "auto" : 180 }}>{ch.name}</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, fontFamily: MONO, color: ch.highlight ? C.accentDark : C.text }}>{ch.cpm} CPM</span>
-                </div>
-                <span style={{ fontSize: 13, color: ch.highlight ? C.accentDark : C.muted }}>{ch.note}</span>
+                <div style={{ fontSize: 15, fontWeight: ch.highlight ? 700 : 600, color: ch.highlight ? C.accentDark : C.text, marginBottom: 12 }}>{ch.name}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, fontFamily: MONO, color: ch.highlight ? C.accentDark : C.text, marginBottom: 12 }}>{ch.cpm}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: ch.highlight ? C.accentDark : C.dim, marginBottom: 12 }}>CPM</div>
+                <div style={{ fontSize: 13, color: ch.highlight ? C.accentDark : C.muted, lineHeight: 1.5 }}>{ch.note}</div>
               </div>
             ))}
-            <p style={{ fontSize: 13, color: C.dim, textAlign: "center", marginTop: 20 }}>Based on Growth tier pricing · Rates vary by package</p>
           </div>
+          <p style={{ fontSize: 13, color: C.dim, textAlign: "center", marginTop: 24 }}>Based on Growth tier pricing · Rates vary by package</p>
         </Section>
       );
     }
@@ -545,43 +618,37 @@
       const subs = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders || 31000);
       const milestones = config.pricingMilestones || [];
       const nextMs = getNextMilestone(subs, milestones);
+      const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
 
       return (
         <Section bg={C.card}>
           <SectionTitle>Lock In Today's Rates</SectionTitle>
-          <div style={{ maxWidth: 680, margin: "0 auto", textAlign: "center" }}>
-            <p style={{ fontSize: 17, color: C.text, lineHeight: 1.7, marginBottom: 36 }}>
-              The Mommy is growing. Rates are based on our current audience of <strong>{num(subs)}</strong> subscribers.
-              Sponsors who commit today lock in current rates — even as our audience (and rates) grow.
-            </p>
-            {/* Milestone visualization */}
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, marginBottom: 28 }}>
-              {milestones.map((m, i) => {
-                const isPast = subs >= m.subscribers;
-                const isCurrent = isPast && (!milestones[i + 1] || subs < milestones[i + 1].subscribers);
-                return (
-                  <div key={i} style={{
-                    padding: "12px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                    background: isCurrent ? C.accent : isPast ? C.accentLight : C.bg,
-                    color: isCurrent ? "#fff" : isPast ? C.accentDark : C.dim,
-                    border: `1px solid ${isCurrent ? C.accent : isPast ? C.accent + "44" : C.border}`,
-                    transition: "all 0.15s",
-                  }}>
-                    <div style={{ fontWeight: 700 }}>{num(m.subscribers)}</div>
-                    <div style={{ fontSize: 11, fontWeight: 500, marginTop: 2, opacity: 0.8 }}>{m.adjustment === 0 ? "Current rate" : `+$${m.adjustment}/email`}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {nextMs && (
-              <div style={{
-                display: "inline-block", padding: "12px 24px", borderRadius: 10,
-                background: C.amberDim, border: "1px solid #FDE68A",
-                fontSize: 15, color: "#92400E", fontWeight: 600,
-              }}>
-                Next rate increase at {num(nextMs.subscribers)} subscribers (+${nextMs.adjustment}/placement)
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            <div style={{ padding: isMobile ? 24 : 36, borderRadius: 16, background: C.amberDim, border: "1px solid #FDE68A" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <span style={{ fontSize: 22 }}>📈</span>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#92400E" }}>Current rates based on {num(subs)} subscribers</div>
+                  {nextMs && <div style={{ fontSize: 14, color: "#B45309" }}>Lock in today — next increase at {num(nextMs.subscribers)}</div>}
+                </div>
               </div>
-            )}
+
+              {nextMs && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ background: "#FDE68A", borderRadius: 8, height: 12, overflow: "hidden", position: "relative" }}>
+                    <div style={{ background: "linear-gradient(90deg, #F59E0B, #D97706)", width: `${progressPct}%`, height: "100%", borderRadius: 8, transition: "width 1s ease" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12, color: "#92400E", fontWeight: 600 }}>
+                    <span>{num(subs)}</span>
+                    <span>{num(nextMs.subscribers)}</span>
+                  </div>
+                </div>
+              )}
+
+              <p style={{ fontSize: 14, color: "#92400E", lineHeight: 1.6 }}>
+                Sponsors who commit now keep today's rates even as our audience (and rates) grow.
+              </p>
+            </div>
           </div>
         </Section>
       );
@@ -701,6 +768,9 @@
                 boxShadow: "0 4px 14px rgba(232,144,156,0.25)",
               }}>{sending ? "Sending..." : "Send Inquiry →"}</button>
             </div>
+            <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 20 }}>
+              Or email us directly: <a href="mailto:hello@themommy.news" style={{ color: C.accent, fontWeight: 600, textDecoration: "none" }}>hello@themommy.news</a>
+            </p>
           </form>
         </Section>
       );
@@ -785,9 +855,15 @@
         ],
         pavedRebookRate: 92, brandPartners: ["Netflix", "Instacart", "Canva", "Betterment", "UPPAbaby", "BabyBjörn", "Nanit", "Evenflo", "Blinkist", "Mockingbird", "ResortPass"],
         testimonials: [
-          { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well.", name: "Amy Ballou" },
-          { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them.", name: "Sarah Snyder" },
-          { quote: "I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler" },
+          { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well. Thank you for making my life better all around with your newsletters.", name: "Amy Ballou", featured: true },
+          { quote: "I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler", featured: true },
+          { quote: "It is one of few emails I am excited to open and read.", name: "Alicia Lunsford", featured: true },
+          { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them. You're doing an amazing job.", name: "Sarah Snyder", featured: false },
+          { quote: "I love the newsletter. I have recommended it to two of my sisters with little ones. I love checking out the recipes!", name: "Erin Turcott", featured: false },
+          { quote: "I absolutely love and look forward to reading your newsletter. I enjoy the polls and the recipes the most, but it's all great content! Thank you for providing this to myself and countless other mommas.", name: "Erica Schwarz", featured: false },
+          { quote: "I absolutely look forward to all the emails from The Mommy! I love it all!", name: "Stefani Nixon", featured: false },
+          { quote: "Thank you for all you do. I have been through the thick of it with postpartum and I look forward to your newsletters. Thank you!", name: "Jordan Grube", featured: false },
+          { quote: "I'm new to being a mom, but it's so refreshing to see encouragement with the polls! Thank you so much for putting together something that makes it feel like I'm not alone in navigating such a big change.", name: "Jennifer Robinson", featured: false },
         ],
         liveExamples: [{ title: "ResortPass", url: "https://newsletter.themommy.news/p/ipad-holder-car-organizer-tidy-travel", cpc: "$1.53/click" }],
         baseRatePerPlacement: 750, takeoverPremiumPerPlacement: 200,
@@ -859,6 +935,24 @@
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<PackagesPage />);
+
+    // Scroll fade-in observer
+    requestAnimationFrame(() => {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            e.target.style.opacity = '1';
+            e.target.style.transform = 'translateY(0)';
+          }
+        });
+      }, { threshold: 0.1 });
+      document.querySelectorAll('.fade-section').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(el);
+      });
+    });
   </script>
 </body>
 </html>

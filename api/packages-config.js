@@ -24,9 +24,15 @@ function getDefaults() {
       "BabyBjörn", "Nanit", "Evenflo", "Blinkist", "Mockingbird", "ResortPass",
     ],
     testimonials: [
-      { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well.", name: "Amy Ballou" },
-      { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them.", name: "Sarah Snyder" },
-      { quote: "I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler" },
+      { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well. Thank you for making my life better all around with your newsletters.", name: "Amy Ballou", featured: true },
+      { quote: "I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler", featured: true },
+      { quote: "It is one of few emails I am excited to open and read.", name: "Alicia Lunsford", featured: true },
+      { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them. You're doing an amazing job.", name: "Sarah Snyder", featured: false },
+      { quote: "I love the newsletter. I have recommended it to two of my sisters with little ones. I love checking out the recipes!", name: "Erin Turcott", featured: false },
+      { quote: "I absolutely love and look forward to reading your newsletter. I enjoy the polls and the recipes the most, but it's all great content! Thank you for providing this to myself and countless other mommas.", name: "Erica Schwarz", featured: false },
+      { quote: "I absolutely look forward to all the emails from The Mommy! I love it all!", name: "Stefani Nixon", featured: false },
+      { quote: "Thank you for all you do. I have been through the thick of it with postpartum and I look forward to your newsletters. Thank you!", name: "Jordan Grube", featured: false },
+      { quote: "I'm new to being a mom, but it's so refreshing to see encouragement with the polls! Thank you so much for putting together something that makes it feel like I'm not alone in navigating such a big change.", name: "Jennifer Robinson", featured: false },
     ],
     liveExamples: [
       { title: "ResortPass", url: "https://newsletter.themommy.news/p/ipad-holder-car-organizer-tidy-travel", cpc: "$1.53/click" },
