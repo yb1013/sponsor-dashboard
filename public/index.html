@@ -1014,10 +1014,12 @@
       const [dlPdf, setDlPdf] = useState(false);
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
+      const [lastChecked, setLastChecked] = useState(new Date().toISOString());
       const [, setTick] = useState(0);
       useEffect(() => {
-        onQuickSync();
-        const syncInterval = setInterval(onQuickSync, 5 * 60 * 1000);
+        const doCheck = () => { onQuickSync(); setLastChecked(new Date().toISOString()); };
+        doCheck();
+        const syncInterval = setInterval(doCheck, 5 * 60 * 1000);
         const tickInterval = setInterval(() => setTick(t => t + 1), 60 * 1000);
         return () => { clearInterval(syncInterval); clearInterval(tickInterval); };
       }, []);
@@ -1049,8 +1051,7 @@
       const showCpc = vContract ? (vContract.showCpcToSponsor ?? vContract.showPricingToSponsor ?? false) : false;
       const hasAnyCost = vShowCost && (showCpm || showCpc) && vCostMetrics;
       const terms = vShowTerms && vContract ? getTerms(vContract) : [];
-      const latestSync = getLatestSync(vRuns);
-      const updatedText = latestSync ? `Updated ${timeAgo(latestSync)}` : null;
+      const updatedText = `Updated ${timeAgo(lastChecked)}`;
 
       const handleDownload = async () => {
         setDlPdf(true);
