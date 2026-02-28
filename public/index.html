@@ -1083,7 +1083,14 @@
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
     function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns }) {
-      const [dlPdf, setDlPdf] = useState(false);
+      const [showPdfModal, setShowPdfModal] = useState(false);
+      const [pdfIncludeCpm, setPdfIncludeCpm] = useState(true);
+      const [pdfIncludeCpc, setPdfIncludeCpc] = useState(true);
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === "Escape") setShowPdfModal(false); };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+      }, []);
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
       const [lastChecked, setLastChecked] = useState(new Date().toISOString());
@@ -1141,19 +1148,54 @@
       const terms = vShowTerms && vContract ? getTerms(vContract) : [];
       const updatedText = `Updated ${timeAgo(lastChecked)}`;
 
-      const handleDownload = () => {
-        setDlPdf(true);
-        try { downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: activeCostMetrics, config }); }
-        catch (e) { console.error(e); }
-        setTimeout(() => setDlPdf(false), 1000);
+      const handleDownloadClick = () => {
+        const hasCpm = showCpm && activeCostMetrics?.cpm;
+        const hasCpc = showCpc && activeCostMetrics?.cpc;
+        if (hasCpm || hasCpc) {
+          setPdfIncludeCpm(true);
+          setPdfIncludeCpc(true);
+          setShowPdfModal(true);
+        } else {
+          downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: activeCostMetrics, config, includeCpm: false, includeCpc: false });
+        }
       };
+      const handleDownloadConfirm = () => {
+        setShowPdfModal(false);
+        downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: activeCostMetrics, config, includeCpm: pdfIncludeCpm, includeCpc: pdfIncludeCpc });
+      };
+
+      const m$ = (v) => "$" + (v || 0).toFixed(2);
 
       return (
         <div style={{ minHeight: "100vh" }}>
+          {showPdfModal && (
+            <div onClick={() => setShowPdfModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+              <div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: isMobile ? 14 : 18, padding: isMobile ? 20 : 32, width: 360, maxWidth: "92vw" }}>
+                <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>Download Report</p>
+                {showCpm && activeCostMetrics?.cpm != null && (
+                  <label onClick={() => setPdfIncludeCpm(!pdfIncludeCpm)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, cursor: "pointer", marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${pdfIncludeCpm ? C.accent : C.dim}`, background: pdfIncludeCpm ? C.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                      {pdfIncludeCpm && <span style={{ color: "#fff", fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 14 }}>Include CPM <span style={{ color: C.muted, fontFamily: MONO }}>({m$(activeCostMetrics.cpm)})</span></span>
+                  </label>
+                )}
+                {showCpc && activeCostMetrics?.cpc != null && (
+                  <label onClick={() => setPdfIncludeCpc(!pdfIncludeCpc)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, cursor: "pointer", marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${pdfIncludeCpc ? C.accent : C.dim}`, background: pdfIncludeCpc ? C.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                      {pdfIncludeCpc && <span style={{ color: "#fff", fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 14 }}>Include CPC <span style={{ color: C.muted, fontFamily: MONO }}>({m$(activeCostMetrics.cpc)})</span></span>
+                  </label>
+                )}
+                <button onClick={handleDownloadConfirm} style={{ width: "100%", marginTop: 16, padding: "12px 0", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Download PDF</button>
+              </div>
+            </div>
+          )}
           <div style={{ padding: isMobile ? "12px 16px" : "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 0 }}>
             {!isMobile && onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-              {vRuns.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Opening..." : "↓ Download Report"}</button>}
+              {vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px" }}>↓ Download Report</button>}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
                 <span style={{ fontSize: 11, color: C.dim }}>{updatedText ? `Live · ${updatedText}` : "Live · auto-updates every 5 min"}</span>
@@ -1234,7 +1276,7 @@
             )}
             {vRuns.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
             <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
-              {vRuns.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: dlPdf ? C.dim : C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: dlPdf ? "not-allowed" : "pointer", opacity: dlPdf ? 0.6 : 1, transition: "border-color 0.15s" }}>{dlPdf ? "Opening..." : "📄 Download Full Report (PDF)"}</button>}
+              {vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
               {config.campaignUrl && (
                 <div style={{ textAlign: "center", marginTop: 24 }}>
                   <p style={{ fontSize: 14, color: C.muted }}>Want to do more with {config.publicationName || "us"}?</p>
@@ -1324,7 +1366,7 @@
       return points;
     }
 
-    function buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config }) {
+    function buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config, includeCpm = true, includeCpc = true }) {
       const P = { bg: "#FFFFFF", text: "#1A1A2E", muted: "#6B7280", border: "#E5E7EB", card: "#F9FAFB", blue: "#2563EB", green: "#059669", amber: "#D97706", purple: "#7C3AED" };
       const F = "Arial, Helvetica, sans-serif";
       const n = (v) => (v || 0).toLocaleString();
@@ -1332,8 +1374,8 @@
       const m = (v) => "$" + (v || 0).toFixed(2);
       const fd = (d) => { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
 
-      const showCpm = contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false;
-      const showCpc = contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false;
+      const showCpm = includeCpm && (contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false);
+      const showCpc = includeCpc && (contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false);
       const hasAnyCost = (showCpm || showCpc) && costMetrics;
       const terms = contract ? getTerms(contract) : [];
 
@@ -1408,8 +1450,8 @@
       </div>`;
     }
 
-    function downloadReport({ sponsor, contract, runs, totals, costMetrics, config }) {
-      const html = buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config });
+    function downloadReport({ sponsor, contract, runs, totals, costMetrics, config, includeCpm = true, includeCpc = true }) {
+      const html = buildReportHTML({ sponsor, contract, runs, totals, costMetrics, config, includeCpm, includeCpc });
       const printWindow = window.open('', '_blank', 'width=850,height=1100');
       printWindow.document.write(`<!DOCTYPE html><html><head>
         <title>${sponsor.name} - Campaign Report</title>
