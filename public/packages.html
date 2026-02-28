@@ -16,6 +16,7 @@
     .fade-in { animation: fadeIn 0.4s ease-out both; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
     @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
     .section { opacity: 1; transform: translateY(0); }
     .section.animate-ready { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
     .section.animate-ready.visible { opacity: 1; transform: translateY(0); }
@@ -58,25 +59,6 @@
 
     const num = (v) => (v || 0).toLocaleString();
     const money = (v) => "$" + (v || 0).toLocaleString();
-
-    function useCountUp(target, duration = 1500) {
-      const [value, setValue] = useState(0);
-      useEffect(() => {
-        if (!target) return;
-        const n = typeof target === "string" ? parseInt(target.replace(/[^0-9]/g, ""), 10) : target;
-        if (!n || isNaN(n)) return;
-        const start = performance.now();
-        function update(now) {
-          const elapsed = now - start;
-          const progress = Math.min(elapsed / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 3);
-          setValue(Math.round(n * eased));
-          if (progress < 1) requestAnimationFrame(update);
-        }
-        requestAnimationFrame(update);
-      }, [target]);
-      return value;
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // PRICING HELPERS
@@ -130,15 +112,15 @@
       const heroStats = [
         { label: "Subscribers", display: subsRaw.toLocaleString() + "+", live: subs > 0 },
         { label: "Engaged Readers", display: (config.engagedReaders || 0).toLocaleString() },
-        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%" },
+        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
         { label: "Sponsors Rebook", display: config.pavedRebookRate + "%" },
       ];
       return (
         <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg }}>
           <div style={{ maxWidth: 860, margin: "0 auto" }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
-            <h1 style={{ fontSize: isMobile ? 30 : 42, fontWeight: 800, lineHeight: 1.12, letterSpacing: -0.5, marginBottom: 40, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Partner with the #1 Family{isMobile ? " " : <br />}Newsletter on Paved
+            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
+              Reach {(config.engagedReaders || 31000).toLocaleString()} Moms Who{isMobile ? " " : <br />}Actually Open, Read, and Click
             </h1>
             <div style={{
               display: "grid",
@@ -149,7 +131,7 @@
               {heroStats.map((s, i) => (
                 <div key={i} style={{ textAlign: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text }}>{s.display}</span>
+                    <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{s.display}</span>
                     {s.live && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                         <span style={{ width: 6, height: 6, borderRadius: 3, background: C.success, display: "inline-block", animation: "pulse 2s infinite" }} />
@@ -173,26 +155,69 @@
       );
     }
 
-    // ─── Brand Partners ───────────────────────────────────────────
-    function BrandPartners({ config, isMobile }) {
+    // ─── Brand Ticker ─────────────────────────────────────────────
+    function BrandTicker({ config, isMobile }) {
+      const brands = config.brandPartners || [];
+      const brandStyles = {
+        "Netflix": { fontWeight: 900, textTransform: "uppercase", letterSpacing: 4, fontSize: isMobile ? 14 : 18 },
+        "Instacart": { fontWeight: 700, fontSize: isMobile ? 17 : 22 },
+        "Canva": { fontStyle: "italic", fontWeight: 700, fontSize: isMobile ? 17 : 22 },
+        "Betterment": { fontWeight: 600, fontSize: isMobile ? 15 : 19 },
+        "UPPAbaby": { fontWeight: 800, letterSpacing: 1, fontSize: isMobile ? 14 : 18 },
+        "BabyBjörn": { fontWeight: 600, fontSize: isMobile ? 16 : 21, letterSpacing: 0.5 },
+        "Nanit": { fontWeight: 700, fontSize: isMobile ? 16 : 20 },
+        "Evenflo": { fontWeight: 600, fontStyle: "italic", fontSize: isMobile ? 16 : 20 },
+        "Blinkist": { fontWeight: 700, fontSize: isMobile ? 15 : 19 },
+        "Mockingbird": { fontWeight: 600, letterSpacing: 1, fontSize: isMobile ? 15 : 19 },
+        "ResortPass": { fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, fontSize: isMobile ? 12 : 16 },
+      };
+      const defaultStyle = { fontWeight: 600, fontSize: isMobile ? 16 : 20 };
+
+      const renderBrands = () => brands.map((b, i) => (
+        <span key={i} style={{
+          display: "inline-flex", alignItems: "center",
+          padding: "0 40px", color: C.text, whiteSpace: "nowrap", opacity: 0.7,
+          ...(brandStyles[b] || defaultStyle),
+        }}>{b}</span>
+      ));
+
       return (
-        <Section bg={C.bgSubtle} style={{ padding: "64px 24px" }}>
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, marginBottom: 10, color: C.text }}>Trusted by Leading Brands</h2>
-            <p style={{ fontSize: 16, color: C.muted }}>Brands that trust The Mommy to reach their audience</p>
+        <section style={{ padding: "32px 0", background: C.accentLight, overflow: "hidden" }}>
+          <p style={{ textAlign: "center", fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 20 }}>
+            These Brands Already Reach Our Readers
+          </p>
+          <div style={{
+            width: "100%", overflow: "hidden",
+            maskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
+            WebkitMaskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
+          }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center",
+              animation: "ticker-scroll 45s linear infinite",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={e => e.currentTarget.style.animationPlayState = "paused"}
+            onMouseLeave={e => e.currentTarget.style.animationPlayState = "running"}
+            >
+              {renderBrands()}
+              {renderBrands()}
+            </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
-            {(config.brandPartners || []).map((b, i) => (
-              <span key={i} style={{
-                display: "inline-flex", alignItems: "center",
-                padding: "14px 28px", borderRadius: 12,
-                border: `1.5px solid ${C.border}`, background: C.bg,
-                fontSize: 16, fontWeight: 700, color: C.text,
-                letterSpacing: 0.3, boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-              }}>{b}</span>
-            ))}
+        </section>
+      );
+    }
+
+    // ─── Brand Categories ─────────────────────────────────────────
+    function BrandCategories() {
+      return (
+        <section className="section" style={{ padding: "48px 24px", background: C.bg }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto", textAlign: "center" }}>
+            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, color: C.text, marginBottom: 20 }}>Built for Brands That Moms Love</h2>
+            <p style={{ fontSize: 15, color: C.textSecondary, maxWidth: 700, margin: "0 auto", lineHeight: 1.65 }}>
+              Baby & toddler gear &middot; Health & wellness &middot; Family services &middot; Food & nutrition &middot; Education &middot; Home organization &middot; Self-care &middot; Financial products &middot; Subscription boxes &middot; Family travel
+            </p>
           </div>
-        </Section>
+        </section>
       );
     }
 
@@ -205,8 +230,8 @@
       ];
       return (
         <Section bg={C.bg}>
-          <SectionTitle sub="Who reads The Mommy">Your Audience</SectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, marginBottom: 48, maxWidth: 800, margin: "0 auto 48px" }}>
+          <SectionTitle sub="31,000 moms who open every email">Who You're Reaching</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto 48px" }}>
             {stats.map((s, i) => (
               <div key={i} style={{
                 textAlign: "center", padding: "32px 24px", borderRadius: 16,
@@ -222,59 +247,85 @@
             <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 8 }}>
               100% moms, aged 22-45
             </p>
-            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 12 }}>
+            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 20 }}>
               94% in the USA &middot; 6% in Canada, Australia, and the UK
             </p>
-            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.65 }}>
+            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.65, marginBottom: 24 }}>
               Baby/toddler gear &middot; Health & wellness &middot; Family finances &middot; Education &middot; Food & nutrition &middot; Home organization &middot; Self-care
+            </p>
+            <p style={{ fontSize: 14, color: C.muted }}>
+              3&times; per week &middot; 156 newsletters per year &middot; Your brand in front of moms consistently
             </p>
           </div>
         </Section>
       );
     }
 
-    // ─── Testimonials ─────────────────────────────────────────────
+    // ─── Testimonials Carousel ────────────────────────────────────
     function Testimonials({ config, isMobile }) {
-      const [showAll, setShowAll] = useState(false);
-      const all = config.testimonials || [];
-      const featured = all.filter(t => t.featured !== false).slice(0, 3);
-      const expanded = all.filter(t => t.featured === false);
+      const trackRef = useRef(null);
+      const testimonials = [
+        { quote: "I've enjoyed each email like a little check in. I also love how there's no pressure to be trying everything... I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler" },
+        { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well. Thank you for making my life better all around with your newsletters.", name: "Amy Ballou" },
+        { quote: "Thanks for The Mommy! I appreciate all the hard work, time, and effort that goes into it. I often read them when I'm breastfeeding my daughter. It is one of few emails I am excited to open and read.", name: "Alicia Lunsford" },
+        { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them. You're doing an amazing job.", name: "Sarah Snyder" },
+        { quote: "I'm new to being a mom, but it's so refreshing to see encouragement with the polls! Thank you so much for putting together something that makes it feel like I'm not alone in navigating such a big change.", name: "Jennifer Robinson" },
+        { quote: "I absolutely love and look forward to reading your newsletter. I enjoy the polls and the recipes the most, but it's all great content! Thank you for providing this to myself and countless other mommas.", name: "Erica Schwarz" },
+        { quote: "Thank you for all you do. I have been through the thick of it with postpartum and I look forward to your newsletters. Thank you!", name: "Jordan Grube" },
+        { quote: "I love the newsletter. I have recommended it to two of my sisters with little ones. I love checking out the recipes!", name: "Erin Turcott" },
+        { quote: "I absolutely look forward to all the emails from The Mommy! I love it all!", name: "Stefani Nixon" },
+      ];
 
-      const TestimonialCard = ({ t, i }) => (
-        <div key={i} style={{
-          flex: 1, minWidth: isMobile ? "auto" : 280, padding: 32, borderRadius: 16, background: C.bg,
-          border: `1px solid ${C.border}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        }}>
-          <div style={{ fontSize: 64, lineHeight: 1, color: C.accentLight, marginBottom: 4, fontFamily: "Georgia, serif" }}>&ldquo;</div>
-          <p style={{ fontSize: 15, color: C.text, lineHeight: 1.7, marginBottom: 20 }}>{t.quote}</p>
-          <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.text }}>{t.name}</p>
-        </div>
-      );
+      const scrollCarousel = (dir) => {
+        if (!trackRef.current) return;
+        trackRef.current.scrollBy({ left: dir * 384, behavior: "smooth" });
+      };
+
+      const cardWidth = isMobile ? "calc(100vw - 64px)" : "340px";
 
       return (
         <Section bg={C.bgSubtle}>
-          <SectionTitle>What Our Readers Say</SectionTitle>
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20 }}>
-            {featured.map((t, i) => <TestimonialCard key={i} t={t} i={i} />)}
-          </div>
-          {expanded.length > 0 && (
-            <>
-              <div style={{ overflow: "hidden", maxHeight: showAll ? 2000 : 0, transition: "max-height 0.5s ease", marginTop: showAll ? 20 : 0 }}>
-                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20, flexWrap: "wrap" }}>
-                  {expanded.map((t, i) => <TestimonialCard key={i + 3} t={t} i={i + 3} />)}
-                </div>
-              </div>
-              <div style={{ textAlign: "center", marginTop: 28 }}>
-                <button onClick={() => setShowAll(!showAll)} style={{
-                  background: "none", border: "none", padding: "8px 0",
-                  fontSize: 14, fontWeight: 600, color: C.accent,
-                  cursor: "pointer", fontFamily: FONT,
+          <SectionTitle sub="Loved by thousands of moms">Our Readers Don't Just Read — They Act</SectionTitle>
+          <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: isMobile ? "0 16px" : "0 48px" }}>
+            {!isMobile && (
+              <button onClick={() => scrollCarousel(-1)} style={{
+                position: "absolute", top: "50%", left: 0, transform: "translateY(-50%)",
+                width: 40, height: 40, borderRadius: "50%", border: `1.5px solid ${C.border}`,
+                background: C.bg, color: C.text, fontSize: 20, cursor: "pointer", zIndex: 3,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "border-color 0.2s",
+              }}>&lsaquo;</button>
+            )}
+            <div ref={trackRef} style={{
+              display: "flex", gap: 24, overflowX: "auto", scrollSnapType: "x mandatory",
+              scrollBehavior: "smooth", padding: "16px 0",
+              scrollbarWidth: "none", msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch",
+            }}>
+              <style>{`.carousel-track::-webkit-scrollbar { display: none; }`}</style>
+              {testimonials.map((t, i) => (
+                <div key={i} style={{
+                  background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16,
+                  padding: 32, minWidth: cardWidth, maxWidth: isMobile ? cardWidth : 360,
+                  flexShrink: 0, scrollSnapAlign: "center",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 }}>
-                  {showAll ? "Show less \u25B4" : "Read more from our community \u25BE"}
-                </button>
-              </div>
-            </>
-          )}
+                  <div style={{ fontSize: 48, fontFamily: "Georgia, serif", color: C.accentLight, lineHeight: 0, display: "block", marginBottom: 16 }}>&ldquo;</div>
+                  <p style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.65, marginBottom: 16, fontStyle: "italic" }}>{t.quote}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.text }}>{t.name}</p>
+                </div>
+              ))}
+            </div>
+            {!isMobile && (
+              <button onClick={() => scrollCarousel(1)} style={{
+                position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)",
+                width: 40, height: 40, borderRadius: "50%", border: `1.5px solid ${C.border}`,
+                background: C.bg, color: C.text, fontSize: 20, cursor: "pointer", zIndex: 3,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "border-color 0.2s",
+              }}>&rsaquo;</button>
+            )}
+          </div>
         </Section>
       );
     }
@@ -292,58 +343,39 @@
             background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 24 : 48,
             maxWidth: 960, margin: "0 auto",
             color: "#E2E8F0", position: "relative", overflow: "hidden",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-            fontFamily: FONT,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT,
           }}>
-            {/* Shimmer overlay */}
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)", animation: "shimmer 8s ease-in-out infinite" }} />
             </div>
-            {/* Header */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#4A5A72", marginBottom: 4 }}>Campaign Performance Report</div>
               <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff" }}>Sample Partner</div>
             </div>
-
-            {/* Big number */}
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 13, color: "#4A5A72" }}>Seen by</div>
               <div style={{ fontSize: isMobile ? 40 : 52, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
               <div style={{ fontSize: 13, color: "#4A5A72" }}>readers</div>
             </div>
-
-            {/* Mini chart */}
             <div style={{ marginBottom: 20, textAlign: "center" }}>
               <svg width="100%" height={isMobile ? 70 : 100} viewBox="0 0 400 80" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#4F8FF7" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
+                <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" /><stop offset="100%" stopColor="#4F8FF7" stopOpacity="0" /></linearGradient></defs>
                 <polygon points="0,70 60,62 120,55 180,42 240,33 300,20 360,8 360,80 0,80" fill="url(#chartGrad)" />
                 <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-
-            {/* Three stat cards */}
             <div style={{ display: "flex", flexDirection: isSmall ? "column" : "row", gap: 12, marginBottom: 16 }}>
               {[
                 { label: "Total Opens", value: "198,500", color: "#F97316" },
                 { label: "Total Clicks", value: "2,623", color: "#22C55E" },
                 { label: "Click-Through Rate", value: "1.32%", color: "#EAB308" },
               ].map((s, i) => (
-                <div key={i} style={{
-                  flex: 1, background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10,
-                  padding: isMobile ? "12px 14px" : "16px", borderTop: `2px solid ${s.color}`,
-                }}>
+                <div key={i} style={{ flex: 1, background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : "16px", borderTop: `2px solid ${s.color}` }}>
                   <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#4A5A72" }}>{s.label}</div>
                   <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: s.color, fontFamily: MONO }}>{s.value}</div>
                 </div>
               ))}
             </div>
-
-            {/* Progress bar */}
             <div style={{ background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: "#4A5A72" }}>Campaign Progress</span>
@@ -353,15 +385,11 @@
                 <div style={{ background: "linear-gradient(90deg, #4F8FF7, #22C55E)", width: "58%", height: "100%", borderRadius: 6 }} />
               </div>
             </div>
-
-            {/* Premium badges */}
             <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Primary Placement</span>
               <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Category Exclusivity</span>
             </div>
           </div>
-
-          {/* CTA button */}
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
               display: "inline-flex", alignItems: "center", gap: 8,
@@ -371,7 +399,10 @@
             }}>
               Explore the Live Demo
             </a>
-            <p style={{ fontSize: 14, color: C.muted, marginTop: 14 }}>
+            <p style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 16 }}>
+              Average sponsor CTR: 1.15% — 3&times; the newsletter industry average
+            </p>
+            <p style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
               Every partner gets their own private dashboard — updated automatically after each send.
             </p>
           </div>
@@ -380,11 +411,12 @@
     }
 
     // ─── Pricing Tiers ────────────────────────────────────────────
-    function PricingSection({ config, stats, isMobile, onSelectTier }) {
+    function PricingSection({ config, stats, isMobile }) {
       const [takeoverState, setTakeoverState] = useState({});
+      const [valueStackOpen, setValueStackOpen] = useState({});
+      const [hoveredCard, setHoveredCard] = useState(null);
       const subscriberCount = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders || 31000);
       const adj = getPriceAdjustment(subscriberCount, config.pricingMilestones);
-      const nextMs = getNextMilestone(subscriberCount, config.pricingMilestones);
       const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
       const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
 
@@ -402,41 +434,68 @@
               const displayPrice = isTakeover ? takeoverTotal : basePrice;
               const valueTotal = (tier.valueStack || []).reduce((s, v) => s + v.value, 0);
               const guarantee = calcGuarantee(avgOpens, tier.placements, config.guaranteeMultiplier);
+              const isVSOpen = valueStackOpen[key] || false;
+              const isHovered = hoveredCard === key;
 
               return (
-                <div key={key} style={{
-                  flex: 1, borderRadius: 20, display: "flex", flexDirection: "column",
-                  border: `${isRec ? 2 : 1}px solid ${isRec ? C.accent : C.border}`,
-                  background: C.bg, overflow: "visible", position: "relative",
-                  boxShadow: isRec ? "0 8px 30px rgba(232,144,156,0.12)" : "0 1px 3px rgba(0,0,0,0.04)",
-                  zIndex: isRec ? 1 : 0,
-                  marginTop: isRec && !isMobile ? 0 : 0,
-                }}>
+                <div key={key}
+                  onMouseEnter={() => setHoveredCard(key)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                  style={{
+                    flex: 1, borderRadius: 20, display: "flex", flexDirection: "column",
+                    border: `${isRec ? 2 : 1}px solid ${isRec ? C.accent : C.border}`,
+                    background: C.bg, overflow: "visible", position: "relative",
+                    boxShadow: isHovered ? "0 8px 24px rgba(0,0,0,0.08)" : (isRec ? "0 8px 30px rgba(232,144,156,0.12)" : "0 1px 3px rgba(0,0,0,0.04)"),
+                    transform: isHovered ? "translateY(-4px)" : "none",
+                    transition: "transform 0.2s, box-shadow 0.2s",
+                    zIndex: isRec ? 1 : 0,
+                  }}>
                   {isRec && (
                     <div style={{
                       position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
                       background: C.accent, color: "#fff", padding: "6px 20px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase",
-                      whiteSpace: "nowrap",
-                    }}>
-                      Most Popular
-                    </div>
+                      fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap",
+                    }}>Most Popular</div>
                   )}
                   <div style={{ padding: 28, paddingTop: isRec ? 36 : 28, display: "flex", flexDirection: "column", flex: 1 }}>
                     <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: C.text }}>{tier.name}</h3>
-                    <p style={{ fontSize: 14, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>{tier.tagline}</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 16 }}>{tier.placements} Newsletter Placements</p>
+                    <p style={{ fontSize: 14, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>{tier.tagline}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 20 }}>{tier.placements} Newsletter Placements</p>
 
-                    {guarantee > 0 && (
-                      <div style={{ padding: "12px 14px", borderRadius: 10, background: C.successLight, marginBottom: 16, fontSize: 13, color: C.success, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <div>
-                          <strong>Guaranteed {num(guarantee)}+ reader impressions</strong>
-                          <span style={{ display: "block", fontSize: 12, marginTop: 2, opacity: 0.8 }}>If we don't hit it, we keep running free.</span>
+                    {/* Price — moved UP */}
+                    <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : C.muted, marginBottom: 6 }}>Your Investment</div>
+                      <div style={{ fontSize: 36, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
+                      {valueTotal > displayPrice && (
+                        <div style={{ display: "inline-block", marginTop: 10, padding: "4px 14px", borderRadius: 20, background: C.successLight, color: C.success, fontSize: 12, fontWeight: 600 }}>
+                          Save {money(valueTotal - displayPrice)}
                         </div>
+                      )}
+                    </div>
+
+                    {/* Get Started — moved UP */}
+                    <a href="#inquiry" onClick={() => { window.__selectedTier = key; window.__selectedTakeover = isTakeover; }} style={{
+                      display: "block", textAlign: "center", padding: "14px 0", borderRadius: 10, marginBottom: 20,
+                      background: isRec ? C.accent : "transparent", color: isRec ? "#fff" : C.text,
+                      border: isRec ? "none" : `1.5px solid ${C.border}`, fontSize: 15, fontWeight: 600,
+                      textDecoration: "none", transition: "all 0.15s",
+                    }}>
+                      Get Started
+                    </a>
+
+                    {/* Divider */}
+                    <div style={{ height: 1, background: C.border, marginBottom: 20 }} />
+
+                    {/* Guarantee */}
+                    {guarantee > 0 && (
+                      <div style={{ padding: "12px 14px", borderRadius: 10, background: C.successLight, marginBottom: 16, fontSize: 13, color: C.success }}>
+                        <strong>Guaranteed {num(guarantee)}+ reader impressions</strong>
+                        <span style={{ display: "block", fontSize: 12, marginTop: 2, opacity: 0.8 }}>If we don't hit it, we keep running free.</span>
                       </div>
                     )}
 
-                    <div style={{ marginBottom: 20 }}>
+                    {/* Features */}
+                    <div style={{ marginBottom: 16 }}>
                       {(tier.features || []).map((f, i) => (
                         <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.5 }}>
                           <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>
@@ -445,41 +504,37 @@
                       ))}
                     </div>
 
-                    {/* Value Stack */}
+                    {/* Collapsible Value Stack */}
                     {(tier.valueStack || []).length > 0 && (
-                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 16 }}>
-                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 12 }}>Value Breakdown</p>
-                        {tier.valueStack.map((v, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 14, color: C.textSecondary, borderBottom: i < tier.valueStack.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
-                            <span style={{ flex: 1 }}>{v.label}</span>
-                            <span style={{ fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{money(v.value)}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.muted, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
-                          <span>Total Value</span>
-                          <span>{money(valueTotal)}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Price */}
-                    <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB", flex: "none" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : C.muted, marginBottom: 6 }}>Your Investment</div>
-                      <div style={{ fontSize: 36, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
-                      {valueTotal > displayPrice && (
-                        <div style={{
-                          display: "inline-block", marginTop: 10, padding: "4px 14px", borderRadius: 20,
-                          background: C.successLight, color: C.success, fontSize: 12, fontWeight: 600,
+                      <>
+                        <button onClick={() => setValueStackOpen(s => ({ ...s, [key]: !s[key] }))} style={{
+                          background: "none", border: "none", padding: "8px 0", fontSize: 13, fontWeight: 600,
+                          color: C.accent, cursor: "pointer", fontFamily: FONT, textAlign: "left", marginBottom: 8,
                         }}>
-                          Save {money(valueTotal - displayPrice)}
+                          {isVSOpen ? "Hide value breakdown \u25B4" : "See value breakdown \u25BE"}
+                        </button>
+                        <div style={{ maxHeight: isVSOpen ? 400 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
+                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginBottom: 12 }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 10 }}>Value Breakdown</p>
+                            {tier.valueStack.map((v, i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: C.textSecondary, borderBottom: i < tier.valueStack.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
+                                <span>{v.label}</span>
+                                <span style={{ fontWeight: 600, color: C.text }}>{money(v.value)}</span>
+                              </div>
+                            ))}
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
+                              <span>Total Value</span>
+                              <span>{money(valueTotal)}</span>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </>
+                    )}
 
                     {/* Takeover Toggle */}
                     {tier.includeTakeoverOption && tier.takeoverPrice && (
                       <div style={{
-                        padding: "14px 16px", borderRadius: 12, marginBottom: 16, cursor: "pointer", transition: "all 0.15s",
+                        padding: "14px 16px", borderRadius: 12, marginTop: 8, cursor: "pointer", transition: "all 0.15s",
                         border: `1px solid ${isTakeover ? C.accent : C.border}`,
                         background: isTakeover ? C.accentLight : "transparent",
                       }} onClick={() => setTakeoverState(s => ({ ...s, [key]: !s[key] }))}>
@@ -497,22 +552,14 @@
                         )}
                       </div>
                     )}
-
-                    <div style={{ marginTop: "auto" }}>
-                      <a href="#inquiry" onClick={() => { window.__selectedTier = key; window.__selectedTakeover = isTakeover; }} style={{
-                        display: "block", textAlign: "center", padding: "14px 0", borderRadius: 10,
-                        background: isRec ? C.accent : "transparent", color: isRec ? "#fff" : C.text,
-                        border: isRec ? "none" : `1.5px solid ${C.border}`, fontSize: 15, fontWeight: 600,
-                        textDecoration: "none", transition: "all 0.15s",
-                      }}>
-                        Get Started
-                      </a>
-                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
+          <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 32 }}>
+            #1 Popular Family Newsletter on Paved &middot; #2 Most Reviewed &middot; 92% of advertisers rebook
+          </p>
         </Section>
       );
     }
@@ -533,7 +580,6 @@
       }, [isTabletOrBelow]);
 
       const scrollPositions = [0, 200, 380];
-
       const tpBorderColor = (i) => currentTP === i ? C.accent : "transparent";
       const tpBg = (i, defaultBg) => currentTP === i ? C.accentLight : defaultBg;
 
@@ -546,30 +592,16 @@
       return (
         <Section bg={C.bg}>
           <SectionTitle sub="Three touchpoints in every sponsored issue">What Your Sponsorship Looks Like</SectionTitle>
-
           {!isTabletOrBelow ? (
-            <div style={{ display: "flex", gap: 64, alignItems: "center", maxWidth: 1000, margin: "0 auto" }}>
-              {/* Phone Frame */}
-              <div style={{ flexShrink: 0, width: 300 }}>
+            <div style={{ display: "flex", gap: 80, alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
+              <div style={{ flexShrink: 0, width: 320 }}>
                 <div style={{
                   border: "6px solid #1A1A2E", borderRadius: 40, overflow: "hidden",
-                  height: 600, position: "relative", background: "#1A1A2E",
+                  height: 640, position: "relative", background: "#1A1A2E",
                   boxShadow: "0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.2)",
                 }}>
-                  {/* Dynamic Island */}
-                  <div style={{
-                    position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
-                    width: 90, height: 22, background: "#1A1A2E",
-                    borderRadius: 12, zIndex: 10,
-                  }} />
-
-                  {/* Status Bar */}
-                  <div style={{
-                    position: "absolute", top: 0, left: 0, right: 0, height: 44,
-                    background: "#FFFFFF", zIndex: 5,
-                    display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-                    padding: "0 20px 4px", fontSize: 9, fontWeight: 600, color: "#1A1A2E",
-                  }}>
+                  <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: 90, height: 22, background: "#1A1A2E", borderRadius: 12, zIndex: 10 }} />
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, background: "#FFFFFF", zIndex: 5, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "0 20px 4px", fontSize: 9, fontWeight: 600, color: "#1A1A2E" }}>
                     <span>9:41</span>
                     <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
                       <span style={{ fontSize: 8 }}>&#9679;&#9679;&#9679;&#9679;</span>
@@ -577,108 +609,46 @@
                       <span style={{ fontSize: 8 }}>&#128267;</span>
                     </span>
                   </div>
-
-                  {/* Home Indicator */}
-                  <div style={{
-                    position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
-                    width: 100, height: 4, background: "#1A1A2E", borderRadius: 2, zIndex: 10,
-                  }} />
-
-                  {/* Scrolling content area */}
+                  <div style={{ position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)", width: 100, height: 4, background: "#1A1A2E", borderRadius: 2, zIndex: 10 }} />
                   <div style={{ position: "absolute", top: 44, bottom: 20, left: 0, right: 0, overflow: "hidden", background: "#FFFFFF" }}>
-                    <div style={{
-                      position: "absolute", top: 0, left: 0, right: 0,
-                      transition: "transform 0.8s ease-in-out",
-                      transform: `translateY(-${scrollPositions[currentTP]}px)`,
-                      padding: 0, background: "#FFFFFF",
-                    }}>
-                      {/* Logo Header */}
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, transition: "transform 0.8s ease-in-out", transform: `translateY(-${scrollPositions[currentTP]}px)`, background: "#FFFFFF" }}>
                       <div style={{ textAlign: "center", padding: "16px 16px 8px" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ width: 24, height: 24, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>M</span>
-                          </div>
+                          <div style={{ width: 24, height: 24, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>M</span></div>
                           <span style={{ fontFamily: "Georgia, serif", fontSize: 14, fontWeight: 700, color: "#1A1A2E" }}>The Mommy</span>
                         </div>
                       </div>
-
-                      {/* Touchpoint 1: Sponsor Banner */}
-                      <div style={{
-                        margin: "8px 16px", padding: 10, background: tpBg(0, "#FAF9F7"),
-                        borderRadius: 8, textAlign: "center",
-                        border: `2px solid ${tpBorderColor(0)}`, transition: "border-color 0.4s, background 0.4s",
-                      }}>
+                      <div style={{ margin: "8px 16px", padding: 10, background: tpBg(0, "#FAF9F7"), borderRadius: 8, textAlign: "center", border: `2px solid ${tpBorderColor(0)}`, transition: "border-color 0.4s, background 0.4s" }}>
                         <div style={{ fontSize: 9, color: "#888", marginBottom: 4 }}>Together with</div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>Your Brand</div>
                       </div>
-
-                      {/* Quote */}
                       <div style={{ padding: "8px 16px", textAlign: "center" }}>
-                        <div style={{ fontStyle: "italic", fontSize: 9, color: "#666", lineHeight: 1.4 }}>
-                          "All endings are also beginnings. We just don't know it at the time."
-                        </div>
+                        <div style={{ fontStyle: "italic", fontSize: 9, color: "#666", lineHeight: 1.4 }}>"All endings are also beginnings. We just don't know it at the time."</div>
                         <div style={{ fontSize: 8, color: "#999", marginTop: 2 }}>- Mitch Albom</div>
                       </div>
-
-                      {/* Greeting + Today's Scoop */}
                       <div style={{ padding: "8px 16px" }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>TGIF, Mama!</div>
-                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>
-                          Time to kick back (just kidding, we're moms). Today, we're sprucing up the kitchen and getting crafty!
-                        </div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>Time to kick back (just kidding, we're moms). Today, we're sprucing up the kitchen and getting crafty!</div>
                         <div style={{ fontSize: 9, color: "#333", marginBottom: 2 }}>Today's Mommy scoop:</div>
-                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.6, paddingLeft: 4 }}>
-                          &#129529; Microwave Makeover<br />
-                          &#129382; Healthy Mashed Potatoes<br />
-                          &#127912; Rainbow Fish Craft
-                        </div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.6, paddingLeft: 4 }}>&#129529; Microwave Makeover<br />&#129382; Healthy Mashed Potatoes<br />&#127912; Rainbow Fish Craft</div>
                       </div>
-
-                      {/* Touchpoint 2: Promotional Intro */}
-                      <div style={{
-                        margin: "6px 16px", padding: "8px 12px",
-                        background: tpBg(1, C.accentLight), borderRadius: 6,
-                        border: `2px solid ${tpBorderColor(1)}`, transition: "border-color 0.4s, background 0.4s",
-                      }}>
-                        <div style={{ fontSize: 9, color: "#333", lineHeight: 1.4 }}>
-                          Ok this kids' card is smart. <span style={{ color: C.accent, textDecoration: "underline", fontWeight: 600, fontSize: 9 }}>Allowance doesn't hit until the chores are done.</span>
-                        </div>
+                      <div style={{ margin: "6px 16px", padding: "8px 12px", background: tpBg(1, C.accentLight), borderRadius: 6, border: `2px solid ${tpBorderColor(1)}`, transition: "border-color 0.4s, background 0.4s" }}>
+                        <div style={{ fontSize: 9, color: "#333", lineHeight: 1.4 }}>Ok this kids' card is smart. <span style={{ color: C.accent, textDecoration: "underline", fontWeight: 600, fontSize: 9 }}>Allowance doesn't hit until the chores are done.</span></div>
                       </div>
-
-                      {/* Mom Hack Section */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom Hack</div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Freshen Your Microwave with Vinegar</div>
                         <div style={{ background: "#F5F5F5", borderRadius: 6, height: 60, marginBottom: 6 }} />
-                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.4 }}>
-                          Microwave smelling a little "leftover fish"? Here's a quick reset that makes cleanup so much easier...
-                        </div>
+                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.4 }}>Microwave smelling a little "leftover fish"? Here's a quick reset...</div>
                       </div>
-
-                      {/* Touchpoint 3: Main Ad Placement */}
-                      <div style={{
-                        margin: "6px 16px", padding: 12, borderRadius: 8,
-                        border: `2px solid ${tpBorderColor(2)}`, transition: "border-color 0.4s, background 0.4s",
-                        background: tpBg(2, "transparent"),
-                      }}>
+                      <div style={{ margin: "6px 16px", padding: 12, borderRadius: 8, border: `2px solid ${tpBorderColor(2)}`, transition: "border-color 0.4s, background 0.4s", background: tpBg(2, "transparent") }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Together with Your Brand</div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Your Phone Buzzes Every Time They Swipe</div>
-                        <div style={{ background: "#F0F0F0", borderRadius: 6, height: 70, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-                          <span style={{ fontSize: 9, color: "#AAA" }}>Your Image</span>
-                        </div>
-                        <div style={{ fontSize: 8, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>
-                          That's the feature parents talk about most. It's a debit card and app made for kids and teens. They get their own card. You see every transaction...
-                        </div>
-                        <div style={{ fontSize: 8, color: "#555", marginBottom: 8 }}>
-                          <strong>6.5 million families.</strong> <strong>4.8 stars.</strong> 440k+ reviews.
-                        </div>
-                        <div style={{
-                          background: C.accent, color: "white", textAlign: "center",
-                          padding: 6, borderRadius: 5, fontSize: 9, fontWeight: 600,
-                        }}>See how it works</div>
+                        <div style={{ background: "#F0F0F0", borderRadius: 6, height: 70, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}><span style={{ fontSize: 9, color: "#AAA" }}>Your Image</span></div>
+                        <div style={{ fontSize: 8, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>That's the feature parents talk about most. It's a debit card and app made for kids and teens...</div>
+                        <div style={{ fontSize: 8, color: "#555", marginBottom: 8 }}><strong>6.5 million families.</strong> <strong>4.8 stars.</strong> 440k+ reviews.</div>
+                        <div style={{ background: C.accent, color: "white", textAlign: "center", padding: 6, borderRadius: 5, fontSize: 9, fontWeight: 600 }}>See how it works</div>
                       </div>
-
-                      {/* Poll Section */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Mic &#127908;</div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Where do you shop for kids' clothes?</div>
@@ -688,36 +658,19 @@
                           <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Second-hand stores</div>
                         </div>
                       </div>
-
-                      {/* Recipe Section */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Menu</div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#129382; Healthy Mashed Potatoes with Broccoli</div>
                         <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
-                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.3 }}>
-                          Mix up your side dish game with this nutritious, delicious, and super easy way to get your kids to eat their veggies!
-                        </div>
                       </div>
-
-                      {/* DIY Section */}
-                      <div style={{ padding: "12px 16px" }}>
-                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Daily DIY</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#127912; Rainbow Fish</div>
-                        <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
-                        <div style={{ fontSize: 8, color: "#777" }}>Bring the beloved Rainbow Fish story to life...</div>
-                      </div>
-
-                      {/* Bottom padding for scroll room */}
                       <div style={{ height: 200 }} />
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* Callouts */}
               <div style={{ flex: 1 }}>
                 {callouts.map((c, i) => (
-                  <div key={i} style={{ marginBottom: 40, opacity: currentTP === i ? 1 : 0.3, transition: "opacity 0.4s", cursor: "pointer" }} onClick={() => setCurrentTP(i)}>
+                  <div key={i} style={{ marginBottom: 48, opacity: currentTP === i ? 1 : 0.3, transition: "opacity 0.4s", cursor: "pointer" }} onClick={() => setCurrentTP(i)}>
                     <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.accent, marginBottom: 8 }}>{c.label}</div>
                     <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: C.text }}>{c.title}</div>
                     <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.6 }}>{c.desc}</div>
@@ -726,7 +679,6 @@
               </div>
             </div>
           ) : (
-            /* Mobile: stacked callouts, no phone */
             <div style={{ maxWidth: 500, margin: "0 auto" }}>
               {callouts.map((c, i) => (
                 <div key={i} style={{ marginBottom: 32, padding: 24, borderRadius: 16, border: `1px solid ${C.border}`, background: C.bg }}>
@@ -737,12 +689,9 @@
               ))}
             </div>
           )}
-
           {example && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
-              <p style={{ fontSize: 15, color: C.textSecondary, marginBottom: 8 }}>
-                See a real sponsorship: {example.title} &times; The Mommy — {example.cpc || "$1.53 per click"}
-              </p>
+              <p style={{ fontSize: 15, color: C.textSecondary, marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy — {example.cpc || "$1.53 per click"}</p>
               <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example &rarr;</a>
             </div>
           )}
@@ -750,38 +699,29 @@
       );
     }
 
-    // ─── CPM Comparison ───────────────────────────────────────────
-    function CpmComparison({ config, stats, isMobile }) {
+    // ─── Why Newsletter Sponsorship (Simple Math) ─────────────────
+    function WhyNewsletter({ config, stats, isMobile }) {
       const growth = config.tiers?.growth;
       const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
       const cpm = growth && avgOpens > 0 ? ((growth.price / (avgOpens * growth.placements)) * 1000).toFixed(0) : "~24";
 
-      const channels = [
-        { name: "Instagram Ads", cpm: "$6-10", note: "Algorithmic, easily skipped" },
-        { name: "Facebook Ads", cpm: "$7-12", note: "Algorithmic, easily skipped" },
-        { name: "Display Ads", cpm: "$5-15", note: "Ad blockers, banner blindness" },
-        { name: "The Mommy Newsletter", cpm: `~$${cpm}`, note: `${config.uniqueOpenRate}% open rate · Direct inbox · Trusted voice`, highlight: true },
-      ];
-
       return (
         <Section bg={C.bgSubtle}>
-          <SectionTitle sub="Premium placement, premium results">How We Compare</SectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 16, maxWidth: 900, margin: "0 auto" }}>
-            {channels.map((ch, i) => (
-              <div key={i} style={{
-                padding: 24, borderRadius: 16, textAlign: "center",
-                background: ch.highlight ? C.accentLight : C.bg,
-                border: `${ch.highlight ? 2 : 1}px solid ${ch.highlight ? C.accent : C.border}`,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}>
-                <div style={{ fontSize: 15, fontWeight: ch.highlight ? 700 : 600, color: ch.highlight ? C.accentDark : C.text, marginBottom: 12 }}>{ch.name}</div>
-                <div style={{ fontSize: 24, fontWeight: 800, fontFamily: MONO, color: ch.highlight ? C.accentDark : C.text, marginBottom: 12 }}>{ch.cpm}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, color: ch.highlight ? C.accentDark : C.muted, marginBottom: 12 }}>CPM</div>
-                <div style={{ fontSize: 13, color: ch.highlight ? C.accentDark : C.muted, lineHeight: 1.5 }}>{ch.note}</div>
-              </div>
-            ))}
+          <SectionTitle>Why Newsletter Sponsorship?</SectionTitle>
+          <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
+            <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: C.text, marginBottom: 16, lineHeight: 1.4 }}>
+              $7,500 &divide; 250,000+ impressions = $0.03 per engaged reader
+            </p>
+            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 40 }}>
+              That's a mom who opens, reads, and trusts what she sees — not a thumb scrolling past an algorithm.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+              <p style={{ fontSize: 14, color: C.muted }}>Instagram Ads $6-10 CPM &middot; Algorithmic, skippable</p>
+              <p style={{ fontSize: 14, color: C.muted }}>Facebook Ads $7-12 CPM &middot; Algorithmic, skippable</p>
+              <p style={{ fontSize: 14, color: C.muted }}>Display Ads $5-15 CPM &middot; Banner blindness, ad blockers</p>
+              <p style={{ fontSize: 14, color: C.accent, fontWeight: 600 }}>The Mommy ~${cpm} CPM &middot; {config.uniqueOpenRate}% open rate, direct inbox, trusted voice</p>
+            </div>
           </div>
-          <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 24 }}>Higher CPM, higher impact. Every dollar works harder in a trusted inbox.</p>
         </Section>
       );
     }
@@ -797,17 +737,24 @@
         <Section bg={C.bgSubtle}>
           <SectionTitle>Lock In Today's Rates</SectionTitle>
           <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
-            <p style={{ fontSize: 16, color: C.text, fontWeight: 600, marginBottom: 8 }}>
+            <p style={{ fontSize: 16, color: C.text, marginBottom: 4 }}>
               Current rates based on {num(subs)} subscribers.
-              {nextMs && <span> Next rate increase at {num(nextMs.subscribers)}.</span>}
             </p>
+            {nextMs && (
+              <p style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 24 }}>
+                Next rate increase at {num(nextMs.subscribers)}.
+              </p>
+            )}
 
             {nextMs && (
-              <div style={{ marginTop: 24, marginBottom: 24 }}>
-                <div style={{ background: C.border, borderRadius: 8, height: 10, overflow: "hidden" }}>
-                  <div style={{ background: C.accent, width: `${progressPct}%`, height: "100%", borderRadius: 8, transition: "width 1s ease" }} />
+              <div style={{ maxWidth: 500, margin: "0 auto 24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "hidden" }}>
+                    <div style={{ background: C.accent, width: `${progressPct}%`, height: "100%", borderRadius: 8, transition: "width 1s ease" }} />
+                  </div>
+                  <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, flexShrink: 0 }}>{progressPct}%</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 13, color: C.muted, fontWeight: 500 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, color: C.muted }}>
                   <span>{num(subs)}</span>
                   <span>{num(nextMs.subscribers)}</span>
                 </div>
@@ -828,8 +775,11 @@
         <Section bg={C.bg}>
           <div style={{ maxWidth: 620, margin: "0 auto", textAlign: "center" }}>
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Our Guarantee</p>
-            <p style={{ fontSize: 20, fontWeight: 600, color: C.text, lineHeight: 1.6, marginBottom: 40 }}>
+            <p style={{ fontSize: 20, fontWeight: 600, color: C.text, lineHeight: 1.6, marginBottom: 16 }}>
               If we don't hit your guaranteed reader impressions, we keep running until we do — at no extra cost.
+            </p>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 40 }}>
+              Starter: 60,000+ &middot; Growth: 120,000+ &middot; Partner: 240,000+
             </p>
             <div style={{ width: 48, height: 1, background: C.border, margin: "0 auto 40px" }} />
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Flexible Cancellation</p>
@@ -851,7 +801,6 @@
       const [sent, setSent] = useState(false);
       const formRef = useRef(null);
 
-      // Pick up tier from "Get Started" button click
       useEffect(() => {
         const checkTier = () => {
           if (window.__selectedTier) {
@@ -905,9 +854,8 @@
 
       return (
         <Section id="inquiry" bg={C.bgSubtle}>
-          <SectionTitle sub="Tell us about your brand and we'll follow up with a custom proposal">Let's Get Started</SectionTitle>
+          <SectionTitle sub="Tell us about your brand. We'll send a custom proposal within 24 hours.">Let's Get Started</SectionTitle>
           <form onSubmit={handleSubmit} ref={formRef} style={{ maxWidth: 520, margin: "0 auto" }}>
-            {/* Tier selector */}
             <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap", justifyContent: "center" }}>
               {tierKeys.map(k => {
                 const t = tiers[k];
@@ -932,10 +880,10 @@
                 width: "100%", padding: "18px 0", borderRadius: 10, border: "none", background: C.accent, color: "#fff",
                 fontSize: 15, fontWeight: 600, fontFamily: FONT, cursor: sending ? "not-allowed" : "pointer",
                 opacity: sending ? 0.6 : 1, transition: "opacity 0.15s", minHeight: 56,
-              }}>{sending ? "Sending..." : "Send Inquiry"}</button>
+              }}>{sending ? "Sending..." : "Request Your Proposal \u2192"}</button>
             </div>
             <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 20 }}>
-              Or email us directly: <a href="mailto:hello@themommy.news" style={{ color: C.accent, fontWeight: 600, textDecoration: "none" }}>hello@themommy.news</a>
+              Prefer email? <a href="mailto:partner@themommy.news" style={{ color: C.accent, fontWeight: 600, textDecoration: "none" }}>partner@themommy.news</a>
             </p>
           </form>
         </Section>
@@ -972,46 +920,34 @@
 
       useEffect(() => {
         let mounted = true;
-
         async function loadData() {
-          // Try cached stats first
           const cached = sessionStorage.getItem("pkg-stats");
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
               const age = Date.now() - new Date(parsed.fetchedAt).getTime();
-              if (age < 3600000) {
-                if (mounted) setStats(parsed);
-              }
+              if (age < 3600000) { if (mounted) setStats(parsed); }
             } catch {}
           }
-
-          // Fetch both in parallel
           const [statsRes, configRes] = await Promise.allSettled([
             fetch("/api/stats").then(r => r.ok ? r.json() : null),
             fetch("/api/packages-config").then(r => r.ok ? r.json() : null),
           ]);
-
           if (!mounted) return;
-
           if (statsRes.status === "fulfilled" && statsRes.value) {
             setStats(statsRes.value);
             sessionStorage.setItem("pkg-stats", JSON.stringify(statsRes.value));
           }
-
           if (configRes.status === "fulfilled" && configRes.value) {
             const cfg = typeof configRes.value === "string" ? JSON.parse(configRes.value) : configRes.value;
             setConfig(cfg);
           }
-
           setLoading(false);
         }
-
         loadData();
         return () => { mounted = false; };
       }, []);
 
-      // Fallback defaults
       const cfg = config || {
         engagedReaders: 31000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
         instagramFollowers: 6081, facebookFollowers: 14000,
@@ -1021,17 +957,7 @@
           "Interests: Baby/toddler gear, health & wellness, family finances, education, food & nutrition, home organization, and self-care",
         ],
         pavedRebookRate: 92, brandPartners: ["Netflix", "Instacart", "Canva", "Betterment", "UPPAbaby", "BabyBjörn", "Nanit", "Evenflo", "Blinkist", "Mockingbird", "ResortPass"],
-        testimonials: [
-          { quote: "I love the content and am obsessed with it all. It gives me inspiration for the future.. not only for my marriage, my kids, but my career as well. Thank you for making my life better all around with your newsletters.", name: "Amy Ballou", featured: true },
-          { quote: "I feel like I'm talking to another Mom who's saying, 'have you heard about this? Isn't it cool?'", name: "Mary Hoerchler", featured: true },
-          { quote: "It is one of few emails I am excited to open and read.", name: "Alicia Lunsford", featured: true },
-          { quote: "I absolutely love the newsletter. I love all the sections and have them saved in a folder on my email so I can go back and read them. You're doing an amazing job.", name: "Sarah Snyder", featured: false },
-          { quote: "I love the newsletter. I have recommended it to two of my sisters with little ones. I love checking out the recipes!", name: "Erin Turcott", featured: false },
-          { quote: "I absolutely love and look forward to reading your newsletter. I enjoy the polls and the recipes the most, but it's all great content! Thank you for providing this to myself and countless other mommas.", name: "Erica Schwarz", featured: false },
-          { quote: "I absolutely look forward to all the emails from The Mommy! I love it all!", name: "Stefani Nixon", featured: false },
-          { quote: "Thank you for all you do. I have been through the thick of it with postpartum and I look forward to your newsletters. Thank you!", name: "Jordan Grube", featured: false },
-          { quote: "I'm new to being a mom, but it's so refreshing to see encouragement with the polls! Thank you so much for putting together something that makes it feel like I'm not alone in navigating such a big change.", name: "Jennifer Robinson", featured: false },
-        ],
+        testimonials: [],
         liveExamples: [{ title: "ResortPass", url: "https://newsletter.themommy.news/p/ipad-holder-car-organizer-tidy-travel", cpc: "$1.53/click" }],
         baseRatePerPlacement: 750, takeoverPremiumPerPlacement: 200,
         tiers: {
@@ -1086,13 +1012,14 @@
       return (
         <div>
           <Hero stats={stats} config={cfg} isMobile={isMobile} />
-          <BrandPartners config={cfg} isMobile={isMobile} />
+          <BrandTicker config={cfg} isMobile={isMobile} />
+          <BrandCategories />
           <Demographics config={cfg} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
           <HowItWorks config={cfg} isMobile={isMobile} />
-          <CpmComparison config={cfg} stats={stats} isMobile={isMobile} />
+          <WhyNewsletter config={cfg} stats={stats} isMobile={isMobile} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} />
           <Guarantee config={cfg} />
           <InquiryForm config={cfg} isMobile={isMobile} />
