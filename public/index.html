@@ -384,30 +384,33 @@
       const publishSponsor = async (sponsorId, currentRuns) => {
         const sp = sponsors.find(s => s.id === sponsorId);
         if (!sp || !sp.shareToken || !authToken) return;
-        const ac = contracts.find(c => c.sponsorId === sponsorId && c.isActive);
+        const spContracts = contracts.filter(c => c.sponsorId === sponsorId);
         const spRuns = (currentRuns || runs).filter(r => r.sponsorId === sponsorId);
-        const cRuns = ac ? spRuns.filter(r => r.contractId === ac.id) : spRuns;
-        const pubRuns = [...cRuns].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(r => ({
-          id: r.id, emailName: r.emailName, sendDate: r.sendDate, totalOpens: r.totalOpens,
-          totalClicks: getRunClicks(r), webUrl: r.webUrl || null, description: r.description || null,
-        }));
-        const tot = { opens: pubRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: pubRuns.reduce((s, r) => s + (r.totalClicks || 0), 0) };
-        tot.ctr = tot.opens > 0 ? (tot.clicks / tot.opens) * 100 : 0;
-        const showCpm = ac ? (ac.showCpmToSponsor ?? ac.showPricingToSponsor ?? false) : false;
-        const showCpc = ac ? (ac.showCpcToSponsor ?? ac.showPricingToSponsor ?? false) : false;
-        let cm = null;
-        if (ac && ac.totalPrice > 0 && (showCpm || showCpc)) {
-          const spent = (pubRuns.length / ac.totalRuns) * ac.totalPrice;
-          cm = {};
-          if (showCpm) cm.cpm = tot.opens > 0 ? (spent / tot.opens) * 1000 : 0;
-          if (showCpc) cm.cpc = tot.clicks > 0 ? spent / tot.clicks : 0;
-        }
+        const cleanRun = (r) => ({ id: r.id, emailName: r.emailName, sendDate: r.sendDate, totalOpens: r.totalOpens, totalClicks: getRunClicks(r), webUrl: r.webUrl || null, description: r.description || null });
+        const pubContracts = spContracts.map(c => {
+          const cRuns = [...spRuns.filter(r => r.contractId === c.id)].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(cleanRun);
+          const sCpm = c.showCpmToSponsor ?? c.showPricingToSponsor ?? false;
+          const sCpc = c.showCpcToSponsor ?? c.showPricingToSponsor ?? false;
+          let cm = null;
+          if (c.totalPrice > 0 && (sCpm || sCpc)) {
+            const tO = cRuns.reduce((s, r) => s + (r.totalOpens || 0), 0);
+            const tC = cRuns.reduce((s, r) => s + (r.totalClicks || 0), 0);
+            const spent = (cRuns.length / c.totalRuns) * c.totalPrice;
+            cm = {};
+            if (sCpm) cm.cpm = tO > 0 ? (spent / tO) * 1000 : 0;
+            if (sCpc) cm.cpc = tC > 0 ? spent / tC : 0;
+          }
+          return { id: c.id, name: c.name, totalRuns: c.totalRuns, startDate: c.startDate, endDate: c.endDate,
+            isActive: !!c.isActive, showCpmToSponsor: sCpm, showCpcToSponsor: sCpc,
+            exclusivePlacement: c.exclusivePlacement, primaryPlacement: c.primaryPlacement,
+            categoryExclusivity: c.categoryExclusivity, pricingNotes: c.pricingNotes,
+            runs: cRuns, costMetrics: cm };
+        });
+        const assignedIds = new Set(spContracts.map(c => c.id));
+        const unassignedRuns = [...spRuns.filter(r => !r.contractId || !assignedIds.has(r.contractId))].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(cleanRun);
         const pubData = {
-          sponsorName: sp.name, runs: pubRuns, totals: tot,
-          contract: ac ? { name: ac.name, totalRuns: ac.totalRuns, startDate: ac.startDate, endDate: ac.endDate,
-            showCpmToSponsor: showCpm, showCpcToSponsor: showCpc, exclusivePlacement: ac.exclusivePlacement,
-            primaryPlacement: ac.primaryPlacement, categoryExclusivity: ac.categoryExclusivity, pricingNotes: ac.pricingNotes } : null,
-          costMetrics: cm, publishedAt: new Date().toISOString(), publicationName: config.publicationName || "",
+          sponsorName: sp.name, contracts: pubContracts, unassignedRuns,
+          publishedAt: new Date().toISOString(), publicationName: config.publicationName || "",
         };
         try {
           const res = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` }, body: JSON.stringify({ shareToken: sp.shareToken, data: pubData }) });
@@ -494,7 +497,23 @@
             cpc: svTot.clicks > 0 ? spent / svTot.clicks : 0,
           };
         })() : null;
-        return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} config={config} />;
+        // Enrich all contracts with runs + cost metrics for the view selector
+        const enrichedContracts = sponsorContracts.map(c => {
+          const cRuns = allSponsorRuns.filter(r => r.contractId === c.id);
+          const sCpm = c.showCpmToSponsor ?? c.showPricingToSponsor ?? false;
+          const sCpc = c.showCpcToSponsor ?? c.showPricingToSponsor ?? false;
+          let cm = null;
+          if (c.totalPrice > 0 && (sCpm || sCpc)) {
+            const sp = (cRuns.length / c.totalRuns) * c.totalPrice;
+            const tO = cRuns.reduce((s, r) => s + (r.totalOpens || 0), 0);
+            const tC = cRuns.reduce((s, r) => s + getRunClicks(r), 0);
+            cm = {};
+            if (sCpm) cm.cpm = tO > 0 ? (sp / tO) * 1000 : 0;
+            if (sCpc) cm.cpc = tC > 0 ? sp / tC : 0;
+          }
+          return { ...c, runs: cRuns, costMetrics: cm };
+        });
+        return <SponsorView sponsor={sponsor} runs={svRuns} totals={svTot} contract={svContract} costMetrics={svCostMetrics} onBack={() => setView("admin")} onQuickSync={() => doQuickSync([sel], true)} config={config} allContracts={enrichedContracts} allRuns={allSponsorRuns} />;
       }
 
       return (
@@ -917,9 +936,81 @@
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // VIEW SELECTOR (sponsor-only contract/history switcher)
+    // ═══════════════════════════════════════════════════════════════
+    function buildViewOptions(contracts, unassignedRuns, allRuns) {
+      const options = [];
+      const active = contracts.find(c => c.isActive);
+      if (active) options.push({ id: active.id, type: "contract", label: active.name, dateRange: `${fmtDate(active.startDate)} – ${fmtDate(active.endDate)}`, runCount: (active.runs || []).length, isActive: true });
+      const past = contracts.filter(c => !c.isActive).sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0));
+      for (const c of past) options.push({ id: c.id, type: "contract", label: c.name, dateRange: `${fmtDate(c.startDate)} – ${fmtDate(c.endDate)}`, runCount: (c.runs || []).length, isCompleted: true });
+      if (unassignedRuns.length > 0) {
+        const dates = unassignedRuns.map(r => new Date(r.sendDate)).sort((a, b) => a - b);
+        options.push({ id: "__unassigned__", type: "unassigned", label: "One-Off Placements", dateRange: `${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])}`, runCount: unassignedRuns.length });
+      }
+      if (options.length > 1) {
+        const allDates = allRuns.map(r => new Date(r.sendDate)).sort((a, b) => a - b);
+        options.push({ id: "__all__", type: "all", label: "All Time", dateRange: allDates.length > 0 ? `${fmtDate(allDates[0])} – Present` : "", runCount: allRuns.length });
+      }
+      return options;
+    }
+
+    function getViewData(selectedId, contracts, unassignedRuns, allRuns) {
+      if (selectedId === "__all__") {
+        const labeled = allRuns.map(r => {
+          const ct = contracts.find(c => c.id === r.contractId);
+          return { ...r, _contractName: ct ? ct.name : null };
+        });
+        return { runs: labeled, contract: null, showProgress: false, showCost: false, showTerms: false };
+      }
+      if (selectedId === "__unassigned__") return { runs: unassignedRuns, contract: null, showProgress: false, showCost: false, showTerms: false };
+      const ct = contracts.find(c => c.id === selectedId);
+      if (!ct) return { runs: allRuns, contract: null, showProgress: false, showCost: false, showTerms: false };
+      return { runs: ct.runs || [], contract: ct, showProgress: true, showCost: true, showTerms: true };
+    }
+
+    function ViewSelector({ options, selected, onChange }) {
+      const [open, setOpen] = useState(false);
+      const ref = React.useRef(null);
+      const width = useWindowWidth();
+      const isMobile = width <= MOBILE;
+      useEffect(() => {
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+      }, []);
+      const sel = options.find(o => o.id === selected);
+      return (
+        <div ref={ref} style={{ position: "relative", maxWidth: 500, margin: "0 auto 24px" }}>
+          <button onClick={() => setOpen(!open)} style={{ width: "100%", padding: isMobile ? "14px 16px" : "12px 16px", background: C.card, border: `1px solid ${open ? C.accent : C.border}`, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center", color: C.text, fontFamily: FONT, fontSize: isMobile ? 14 : 15, cursor: "pointer", transition: "border-color 0.15s" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {sel?.label}{sel?.isActive && <span style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: 0.5 }}>● ACTIVE</span>}
+            </span>
+            <span style={{ color: C.dim, fontSize: 12, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+          </button>
+          {open && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
+              {options.map((opt, i) => (
+                <button key={opt.id} onClick={() => { onChange(opt.id); setOpen(false); }} style={{ width: "100%", padding: isMobile ? "14px 16px" : "12px 16px", textAlign: "left", background: opt.id === selected ? C.accentDim : "transparent", border: "none", borderBottom: i < options.length - 1 ? `1px solid ${C.border}` : "none", color: C.text, fontFamily: FONT, fontSize: 14, cursor: "pointer", minHeight: isMobile ? 44 : "auto" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: opt.id === selected ? 600 : 400 }}>{opt.label}</span>
+                    {opt.isActive && <span style={{ fontSize: 10, color: C.green, fontWeight: 700 }}>ACTIVE</span>}
+                    {opt.isCompleted && <span style={{ fontSize: 10, color: C.dim, fontWeight: 600 }}>COMPLETED</span>}
+                  </div>
+                  {opt.dateRange && <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{opt.dateRange}</div>}
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 1 }}>{opt.runCount} email{opt.runCount !== 1 ? "s" : ""}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
-    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config }) {
+    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns }) {
       const [dlPdf, setDlPdf] = useState(false);
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
@@ -931,16 +1022,39 @@
         return () => { clearInterval(syncInterval); clearInterval(tickInterval); };
       }, []);
 
-      const showCpm = contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false;
-      const showCpc = contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false;
-      const hasAnyCost = (showCpm || showCpc) && costMetrics;
-      const terms = contract ? getTerms(contract) : [];
-      const latestSync = getLatestSync(runs);
+      // ─── View selector logic ────────────────────────────────────
+      const unassigned = allContracts ? (allRuns || []).filter(r => !r.contractId || !allContracts.find(c => c.id === r.contractId)) : [];
+      const viewOptions = allContracts ? buildViewOptions(allContracts, unassigned, allRuns || []) : [];
+      const showSelector = viewOptions.length >= 2;
+      const defaultViewId = viewOptions.find(o => o.isActive)?.id || viewOptions[0]?.id || null;
+      const [selectedView, setSelectedView] = useState(defaultViewId);
+
+      const viewData = allContracts && selectedView ? getViewData(selectedView, allContracts, unassigned, allRuns || []) : null;
+
+      // Use view data if selector is active, otherwise fall back to props
+      const vRuns = viewData ? viewData.runs.sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)) : runs;
+      const vContract = viewData ? viewData.contract : contract;
+      const vTot = viewData ? (() => {
+        const o = vRuns.reduce((s, r) => s + (r.totalOpens || 0), 0);
+        const c = vRuns.reduce((s, r) => s + (getRunClicks(r) || r.totalClicks || 0), 0);
+        return { opens: o, clicks: c, ctr: o > 0 ? (c / o) * 100 : 0 };
+      })() : totals;
+      const vCostMetrics = viewData && viewData.showCost && vContract ? (vContract.costMetrics || costMetrics) : (viewData ? null : costMetrics);
+      const vShowProgress = viewData ? viewData.showProgress : true;
+      const vShowCost = viewData ? viewData.showCost : true;
+      const vShowTerms = viewData ? viewData.showTerms : true;
+      const isAllTime = selectedView === "__all__";
+
+      const showCpm = vContract ? (vContract.showCpmToSponsor ?? vContract.showPricingToSponsor ?? false) : false;
+      const showCpc = vContract ? (vContract.showCpcToSponsor ?? vContract.showPricingToSponsor ?? false) : false;
+      const hasAnyCost = vShowCost && (showCpm || showCpc) && vCostMetrics;
+      const terms = vShowTerms && vContract ? getTerms(vContract) : [];
+      const latestSync = getLatestSync(vRuns);
       const updatedText = latestSync ? `Updated ${timeAgo(latestSync)}` : null;
 
       const handleDownload = async () => {
         setDlPdf(true);
-        try { await downloadReport({ sponsor, contract, runs, totals, costMetrics, config }); }
+        try { await downloadReport({ sponsor, contract: vContract, runs: vRuns, totals: vTot, costMetrics: vCostMetrics, config }); }
         catch (e) { console.error(e); }
         finally { setDlPdf(false); }
       };
@@ -950,7 +1064,7 @@
           <div style={{ padding: isMobile ? "12px 16px" : "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 0 }}>
             {!isMobile && onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-              {runs.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Generating..." : "↓ Download Report"}</button>}
+              {vRuns.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Generating..." : "↓ Download Report"}</button>}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 6, height: 6, borderRadius: 3, background: C.green, animation: "pulse 2s infinite" }} />
                 <span style={{ fontSize: 11, color: C.dim }}>{updatedText ? `Live · ${updatedText}` : "Live · auto-updates every 5 min"}</span>
@@ -958,38 +1072,42 @@
             </div>
           </div>
           <div style={{ maxWidth: 940, margin: "0 auto", padding: isMobile ? "24px 16px" : "56px 28px" }}>
-            <div style={{ marginBottom: isMobile ? 24 : 40 }}>
+            <div style={{ marginBottom: showSelector ? 20 : (isMobile ? 24 : 40) }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: C.dim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Campaign Performance Report</p>
               <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1 }}>{sponsor.name}</h1>
             </div>
 
+            {/* View selector */}
+            {showSelector && <ViewSelector options={viewOptions} selected={selectedView} onChange={setSelectedView} />}
+
             {/* Progress bar */}
-            {contract && <ProgressBar current={runs.length} total={contract.totalRuns} />}
+            {vShowProgress && vContract && <ProgressBar current={vRuns.length} total={vContract.totalRuns} />}
 
             {/* Cumulative Reach */}
-            {runs.length > 0 && <ReachSection runs={runs} />}
+            {vRuns.length > 0 && <ReachSection runs={vRuns} />}
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: isMobile ? 12 : 20, marginBottom: hasAnyCost ? 20 : (isMobile ? 32 : 56) }}>
-              <BigStat label="Total Opens" value={num(totals.opens)} color={C.accent} sub={`${runs.length} email${runs.length !== 1 ? "s" : ""} sent`} />
-              <BigStat label="Total Clicks" value={num(totals.clicks)} color={C.green} sub="across all campaign links" />
-              <BigStat label="Click-Through Rate" value={pct(totals.ctr)} color={C.amber} sub="clicks ÷ opens" />
+              <BigStat label="Total Opens" value={num(vTot.opens)} color={C.accent} sub={`${vRuns.length} email${vRuns.length !== 1 ? "s" : ""} sent`} />
+              <BigStat label="Total Clicks" value={num(vTot.clicks)} color={C.green} sub="across all campaign links" />
+              <BigStat label="Click-Through Rate" value={pct(vTot.ctr)} color={C.amber} sub="clicks ÷ opens" />
             </div>
 
             {/* Cost metrics — independent CPM/CPC visibility */}
             {hasAnyCost && (
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (showCpm && showCpc ? "repeat(2,1fr)" : "1fr"), gap: isMobile ? 12 : 20, marginBottom: terms.length > 0 ? 12 : (isMobile ? 32 : 56) }}>
-                {showCpm && <BigStat label="CPM" value={money(costMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
-                {showCpc && <BigStat label="CPC" value={money(costMetrics.cpc)} color={C.purple} sub="cost per click" />}
+                {showCpm && <BigStat label="CPM" value={money(vCostMetrics.cpm)} color={C.purple} sub="cost per 1,000 opens" />}
+                {showCpc && <BigStat label="CPC" value={money(vCostMetrics.cpc)} color={C.purple} sub="cost per click" />}
               </div>
             )}
-            {hasAnyCost && <TermsBadges contract={contract} style={{ marginBottom: isMobile ? 32 : 56 }} />}
-            {runs.length > 0 && (
+            {terms.length > 0 && <TermsBadges contract={vContract} style={{ marginBottom: isMobile ? 32 : 56 }} />}
+            {vRuns.length > 0 && (
               <React.Fragment>
                 <h2 style={{ fontSize: 14, fontWeight: 600, color: C.muted, margin: "0 0 20px", textTransform: "uppercase", letterSpacing: 1.5 }}>Run-by-Run Breakdown</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {runs.map(r => {
+                  {vRuns.map(r => {
                     const clicks = getRunClicks(r);
                     const ctr = r.totalOpens > 0 ? (clicks / r.totalOpens) * 100 : 0;
+                    const contractLabel = isAllTime ? (r._contractName || "One-Off") : null;
                     return isMobile ? (
                       <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
                         <div style={{ marginBottom: 12 }}>
@@ -998,7 +1116,7 @@
                             : <p style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.emailName}</p>
                           }
                           {r.description && <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic", margin: "4px 0 0" }}>{r.description}</p>}
-                          <p style={{ fontSize: 12, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}</p>
+                          <p style={{ fontSize: 12, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}{contractLabel ? ` · ${contractLabel}` : ""}</p>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
                           <NumDisplay label="Opens" value={num(r.totalOpens)} color={C.accent} />
@@ -1014,7 +1132,7 @@
                             : <p style={{ fontSize: 16, fontWeight: 600 }}>{r.emailName}</p>
                           }
                           {r.description && <p style={{ fontSize: 13, color: C.muted, fontStyle: "italic", margin: "4px 0 0" }}>{r.description}</p>}
-                          <p style={{ fontSize: 13, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}</p>
+                          <p style={{ fontSize: 13, color: C.dim, margin: "4px 0 0" }}>{fmtDate(r.sendDate)}{contractLabel ? ` · ${contractLabel}` : ""}</p>
                         </div>
                         <NumDisplay label="Opens" value={num(r.totalOpens)} color={C.accent} />
                         <NumDisplay label="Clicks" value={num(clicks)} color={C.green} />
@@ -1025,7 +1143,7 @@
                 </div>
               </React.Fragment>
             )}
-            {runs.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
+            {vRuns.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
             <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
               <p style={{ fontSize: 12, color: C.dim }}>Metrics auto-update every 5 minutes • Synced via Beehiiv API</p>
             </div>
@@ -1615,26 +1733,41 @@
       );
 
       const sponsor = { id: "public", name: data.sponsorName, patterns: [] };
-      const runs = (data.runs || []).map((r, i) => ({
+      const config = { publicationName: data.publicationName || "" };
+
+      // New multi-contract format
+      if (data.contracts) {
+        const allContracts = (data.contracts || []).map(c => ({
+          ...c, sponsorId: "public",
+          runs: (c.runs || []).map(r => ({ ...r, sponsorId: "public", contractId: c.id, lastSync: data.publishedAt })),
+        }));
+        const kvUnassigned = (data.unassignedRuns || []).map(r => ({ ...r, sponsorId: "public", contractId: null, lastSync: data.publishedAt }));
+        const allRuns = [...allContracts.flatMap(c => c.runs), ...kvUnassigned].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate));
+        const activeC = allContracts.find(c => c.isActive);
+        const defaultRuns = activeC ? activeC.runs : allRuns;
+        const dTot = { opens: defaultRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: defaultRuns.reduce((s, r) => s + (r.totalClicks || 0), 0) };
+        dTot.ctr = dTot.opens > 0 ? (dTot.clicks / dTot.opens) * 100 : 0;
+        return (
+          <div>
+            <SponsorView sponsor={sponsor} runs={defaultRuns} totals={dTot} contract={activeC || null} costMetrics={activeC?.costMetrics || null} onBack={null} onQuickSync={() => {}} config={config} allContracts={allContracts} allRuns={allRuns} />
+            {data.publishedAt && <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>Last updated {timeAgo(data.publishedAt)}</div>}
+          </div>
+        );
+      }
+
+      // Legacy flat format (backward compat)
+      const runs = (data.runs || []).map(r => ({
         ...r, sponsorId: "public", contractId: data.contract ? "pub-contract" : null,
         lastSync: data.publishedAt,
       }));
       const totals = data.totals || { opens: 0, clicks: 0, ctr: 0 };
       const contract = data.contract ? { ...data.contract, id: "pub-contract", sponsorId: "public", isActive: true } : null;
       const costMetrics = data.costMetrics || null;
-      const config = { publicationName: data.publicationName || "" };
 
       return (
         <div>
-          <SponsorView
-            sponsor={sponsor} runs={runs} totals={totals} contract={contract}
-            costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config}
-          />
-          {data.publishedAt && (
-            <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>
-              Last updated {timeAgo(data.publishedAt)}
-            </div>
-          )}
+          <SponsorView sponsor={sponsor} runs={runs} totals={totals} contract={contract} costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config} />
+          {data.publishedAt && <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>Last updated {timeAgo(data.publishedAt)}</div>}
         </div>
       );
     }
