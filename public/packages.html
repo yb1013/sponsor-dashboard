@@ -439,7 +439,7 @@
                   onMouseLeave={() => setHoveredCard(null)}
                   style={{
                     flex: 1, borderRadius: 20, display: "flex", flexDirection: "column",
-                    border: `${isRec ? 2.5 : 1}px solid ${isRec ? C.accent : C.border}`,
+                    border: `${isRec ? 2.5 : key === "partner" ? 1.5 : 1}px solid ${isRec ? C.accent : key === "partner" ? "#1A1A2E" : C.border}`,
                     background: C.bg, overflow: "visible", position: "relative",
                     boxShadow: isHovered ? "0 8px 24px rgba(0,0,0,0.08)" : (isRec ? "0 8px 30px rgba(232,144,156,0.15)" : "0 1px 3px rgba(0,0,0,0.04)"),
                     transform: isHovered ? "translateY(-4px) scale(1.04)" : (isRec && !isMobile ? "scale(1.04)" : "none"),
@@ -453,14 +453,21 @@
                       fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", whiteSpace: "nowrap",
                     }}>Most Popular</div>
                   )}
-                  <div style={{ padding: 28, paddingTop: isRec ? 36 : 28, display: "flex", flexDirection: "column", flex: 1 }}>
+                  {key === "partner" && (
+                    <div style={{
+                      position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)",
+                      background: "#1A1A2E", color: "#fff", padding: "6px 20px", borderRadius: 20,
+                      fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", whiteSpace: "nowrap",
+                    }}>Best Value</div>
+                  )}
+                  <div style={{ padding: 28, paddingTop: (isRec || key === "partner") ? 36 : 28, display: "flex", flexDirection: "column", flex: 1 }}>
                     <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, color: C.text }}>{tier.name}</h3>
                     <p style={{ fontSize: 14, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>{tier.tagline}</p>
                     <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 20 }}>{tier.placements} Newsletter Placements</p>
 
                     {/* Price — moved UP */}
                     <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : C.muted, marginBottom: 6 }}>Your Investment</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : key === "partner" ? "#1A1A2E" : C.muted, marginBottom: 6 }}>Your Investment</div>
                       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
                       {valueTotal > displayPrice && (
                         <div style={{ display: "inline-block", marginTop: 10, padding: "4px 14px", borderRadius: 20, background: C.successLight, color: C.success, fontSize: 12, fontWeight: 600 }}>
@@ -472,9 +479,10 @@
                     {/* Get Started — moved UP */}
                     <a href="#inquiry" onClick={() => { window.__selectedTier = key; window.__selectedTakeover = isTakeover; }} style={{
                       display: "block", textAlign: "center", padding: "14px 0", borderRadius: 10, marginBottom: 20,
-                      background: isRec ? C.accent : "transparent", color: isRec ? "#fff" : C.text,
-                      border: isRec ? "none" : `1.5px solid ${C.border}`, fontSize: 15, fontWeight: 600,
-                      textDecoration: "none", transition: "all 0.15s",
+                      background: isRec ? C.accent : key === "partner" ? "#1A1A2E" : "transparent",
+                      color: isRec ? "#fff" : key === "partner" ? "#fff" : (isHovered ? C.accent : "#555"),
+                      border: isRec || key === "partner" ? "none" : `1.5px solid ${isHovered ? C.accent : "#999"}`,
+                      fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.15s",
                     }}>
                       Get Started
                     </a>
