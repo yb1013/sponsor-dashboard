@@ -87,7 +87,7 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
 
-    const KEYS = { config: "bh-config", sponsors: "bh-sponsors", runs: "bh-runs", contracts: "bh-contracts" };
+    const KEYS = { config: "bh-config", sponsors: "bh-sponsors", runs: "bh-runs", contracts: "bh-contracts", token: "bh-admin-token", publishTimes: "bh-publish-times" };
     const store = {
       get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
       set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.error(e); } },
@@ -137,6 +137,14 @@
     }
     function isSyncStale(iso) { return iso ? Date.now() - new Date(iso).getTime() > 24 * 60 * 60 * 1000 : false; }
 
+    // ─── Routing ──────────────────────────────────────────────────
+    function getRoute() {
+      const path = window.location.pathname;
+      const m = path.match(/^\/s\/([A-Za-z0-9]+)$/);
+      if (m) return { mode: "sponsor", shareToken: m[1] };
+      return { mode: "admin" };
+    }
+
     const C = { bg: "#06090F", surface: "#0C1018", card: "#111722", border: "#1B2233", accent: "#4F8FF7", accentDim: "rgba(79,143,247,0.10)", green: "#34D399", greenDim: "rgba(52,211,153,0.10)", amber: "#FBBF24", amberDim: "rgba(251,191,36,0.10)", red: "#F87171", redDim: "rgba(248,113,113,0.10)", purple: "#A78BFA", purpleDim: "rgba(167,139,250,0.10)", text: "#E2E8F0", muted: "#8494AB", dim: "#4A5A72", white: "#FFFFFF" };
     const FONT = "'Outfit',sans-serif";
     const MONO = "'IBM Plex Mono',monospace";
@@ -149,10 +157,10 @@
     }
 
     // ─── Beehiiv API ─────────────────────────────────────────────────
-    async function fetchAllPosts(apiKey, pubId, maxPages = 5) {
+    async function fetchAllPosts(apiKey, pubId, maxPages = 5, token) {
       const res = await fetch("/api/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
         body: JSON.stringify({ apiKey, pubId, maxPages }),
       });
       if (!res.ok) {
@@ -162,10 +170,10 @@
       return res.json();
     }
 
-    async function fetchQuickSync(apiKey, pubId, knownPostIds) {
+    async function fetchQuickSync(apiKey, pubId, knownPostIds, token) {
       const res = await fetch("/api/quick-sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
         body: JSON.stringify({ apiKey, pubId, knownPostIds }),
       });
       if (!res.ok) {
@@ -205,7 +213,54 @@
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // LOGIN SCREEN
+    // ═══════════════════════════════════════════════════════════════
+    function LoginScreen({ onLogin }) {
+      const [pw, setPw] = useState("");
+      const [err, setErr] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const submit = async () => {
+        if (!pw.trim()) return;
+        setLoading(true); setErr(null);
+        try {
+          const res = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw }) });
+          const data = await res.json();
+          if (!res.ok) { setErr(data.error || "Login failed"); return; }
+          onLogin(data.token);
+        } catch (e) { setErr("Connection error"); }
+        finally { setLoading(false); }
+      };
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg }}>
+          <div style={{ width: 360, maxWidth: "90vw", textAlign: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg,${C.accent},#8B5CF6)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: "#fff", fontWeight: 700, margin: "0 auto 24px" }}>S</div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Sponsor Dashboard</h1>
+            <p style={{ fontSize: 13, color: C.dim, marginBottom: 32 }}>Enter your admin password to continue</p>
+            <input type="password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} placeholder="Password" autoFocus
+              style={{ width: "100%", padding: "14px 18px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, marginBottom: 16, boxSizing: "border-box", textAlign: "center" }} />
+            {err && <p style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{err}</p>}
+            <Btn onClick={submit} color={C.white} bg={C.accent} disabled={loading} style={{ width: "100%", padding: "14px", fontSize: 15 }}>{loading ? "Signing in..." : "Sign In"}</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     function App() {
+      const [authToken, setAuthToken] = useState(() => store.get(KEYS.token));
+      const login = (t) => { setAuthToken(t); store.set(KEYS.token, t); };
+      const logout = () => { setAuthToken(null); store.set(KEYS.token, null); };
+
+      // Check token expiry on mount
+      useEffect(() => {
+        if (authToken) {
+          try {
+            const payload = JSON.parse(atob(authToken.split(".")[0].replace(/-/g,"+").replace(/_/g,"/")));
+            if (payload.exp && Date.now() > payload.exp) logout();
+          } catch { logout(); }
+        }
+      }, []);
+
       const [config, setConfig] = useState(() => store.get(KEYS.config) || { apiKey: "", pubId: "" });
       const [sponsors, setSponsors] = useState(() => store.get(KEYS.sponsors) || []);
       const [runs, setRuns] = useState(() => store.get(KEYS.runs) || []);
@@ -219,20 +274,32 @@
       const [contracts, setContracts] = useState(() => store.get(KEYS.contracts) || []);
       const [selContract, setSelContract] = useState(null);
       const [downloading, setDownloading] = useState(false);
+      const [publishTimes, setPublishTimes] = useState(() => store.get(KEYS.publishTimes) || {});
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
       const isTablet = width <= TABLET;
       const [, setAdminTick] = useState(0);
       useEffect(() => { const i = setInterval(() => setAdminTick(t => t + 1), 60000); return () => clearInterval(i); }, []);
 
+      // Auth gate
+      if (!authToken) return <LoginScreen onLogin={login} />;
+
       const saveCfg = (c) => { setConfig(c); store.set(KEYS.config, c); };
       const saveSp = (s) => { setSponsors(s); store.set(KEYS.sponsors, s); };
+      const savePt = (pt) => { setPublishTimes(pt); store.set(KEYS.publishTimes, pt); };
       const saveRn = (r) => { setRuns(r); store.set(KEYS.runs, r); };
       const saveCt = (ct) => { setContracts(ct); store.set(KEYS.contracts, ct); };
 
+      // Migrate sponsors without shareToken
+      useEffect(() => {
+        if (sponsors.some(s => !s.shareToken)) {
+          saveSp(sponsors.map(s => s.shareToken ? s : { ...s, shareToken: uid() + uid() }));
+        }
+      }, []);
+
       // Sponsor CRUD
       const addSponsor = (name, patterns) => {
-        const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString() };
+        const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString(), shareToken: uid() + uid() };
         saveSp([...sponsors, s]);
         setSel(s.id);
         setModal(null);
@@ -313,18 +380,55 @@
       };
 
       // Full sync with depth control
+      // ─── Publish sponsor data to KV ────────────────────────────
+      const publishSponsor = async (sponsorId, currentRuns) => {
+        const sp = sponsors.find(s => s.id === sponsorId);
+        if (!sp || !sp.shareToken || !authToken) return;
+        const ac = contracts.find(c => c.sponsorId === sponsorId && c.isActive);
+        const spRuns = (currentRuns || runs).filter(r => r.sponsorId === sponsorId);
+        const cRuns = ac ? spRuns.filter(r => r.contractId === ac.id) : spRuns;
+        const pubRuns = [...cRuns].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(r => ({
+          id: r.id, emailName: r.emailName, sendDate: r.sendDate, totalOpens: r.totalOpens,
+          totalClicks: getRunClicks(r), webUrl: r.webUrl || null, description: r.description || null,
+        }));
+        const tot = { opens: pubRuns.reduce((s, r) => s + (r.totalOpens || 0), 0), clicks: pubRuns.reduce((s, r) => s + (r.totalClicks || 0), 0) };
+        tot.ctr = tot.opens > 0 ? (tot.clicks / tot.opens) * 100 : 0;
+        const showCpm = ac ? (ac.showCpmToSponsor ?? ac.showPricingToSponsor ?? false) : false;
+        const showCpc = ac ? (ac.showCpcToSponsor ?? ac.showPricingToSponsor ?? false) : false;
+        let cm = null;
+        if (ac && ac.totalPrice > 0 && (showCpm || showCpc)) {
+          const spent = (pubRuns.length / ac.totalRuns) * ac.totalPrice;
+          cm = {};
+          if (showCpm) cm.cpm = tot.opens > 0 ? (spent / tot.opens) * 1000 : 0;
+          if (showCpc) cm.cpc = tot.clicks > 0 ? spent / tot.clicks : 0;
+        }
+        const pubData = {
+          sponsorName: sp.name, runs: pubRuns, totals: tot,
+          contract: ac ? { name: ac.name, totalRuns: ac.totalRuns, startDate: ac.startDate, endDate: ac.endDate,
+            showCpmToSponsor: showCpm, showCpcToSponsor: showCpc, exclusivePlacement: ac.exclusivePlacement,
+            primaryPlacement: ac.primaryPlacement, categoryExclusivity: ac.categoryExclusivity, pricingNotes: ac.pricingNotes } : null,
+          costMetrics: cm, publishedAt: new Date().toISOString(), publicationName: config.publicationName || "",
+        };
+        try {
+          const res = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` }, body: JSON.stringify({ shareToken: sp.shareToken, data: pubData }) });
+          if (res.ok) savePt({ ...publishTimes, [sponsorId]: new Date().toISOString() });
+        } catch (e) { console.error("Publish failed:", e); }
+      };
+
       const doSync = async (sponsorIds, pages = syncDepth) => {
         if (!config.apiKey || !config.pubId) { setSyncMsg({ t: "err", m: "Set API key & Pub ID in Settings first." }); return; }
         setSyncing(true); setSyncMsg(null);
         try {
-          const data = await fetchAllPosts(config.apiKey, config.pubId, pages);
+          const data = await fetchAllPosts(config.apiKey, config.pubId, pages, authToken);
           const allPosts = data.posts || [];
           const { list, nw, up } = processResults(allPosts, sponsorIds, runs);
           saveRn(list);
+          for (const sid of sponsorIds) publishSponsor(sid, list);
           let msg = `Done! ${nw} new, ${up} updated (${allPosts.length} posts scanned, ${data.pagesScanned || '?'}/${data.totalPages || '?'} pages).`;
           if (data.warning) msg += ` ⚠️ ${data.warning}`;
           setSyncMsg({ t: "ok", m: msg });
         } catch (e) {
+          if (e.message.includes("Unauthorized")) { logout(); return; }
           setSyncMsg({ t: "err", m: `Failed: ${e.message}` });
         } finally { setSyncing(false); }
       };
@@ -336,12 +440,14 @@
         if (!silent) setSyncing(true);
         try {
           const knownPostIds = [...new Set(runs.filter(r => sponsorIds.includes(r.sponsorId) && r.postId).map(r => r.postId))];
-          const data = await fetchQuickSync(config.apiKey, config.pubId, knownPostIds);
+          const data = await fetchQuickSync(config.apiKey, config.pubId, knownPostIds, authToken);
           const allPosts = data.posts || [];
           const { list, nw, up } = processResults(allPosts, sponsorIds, runs);
           saveRn(list);
+          if (nw > 0 || up > 0) { for (const sid of sponsorIds) publishSponsor(sid, list); }
           if (!silent && (nw > 0 || up > 0)) setSyncMsg({ t: "ok", m: `Quick sync: ${nw} new, ${up} updated.` });
         } catch (e) {
+          if (e.message.includes("Unauthorized")) { logout(); return; }
           if (!silent) setSyncMsg({ t: "err", m: `Quick sync failed: ${e.message}` });
         } finally { if (!silent) setSyncing(false); }
       };
@@ -403,6 +509,7 @@
               </select>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
+              <button onClick={logout} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, whiteSpace: "nowrap" }}>Out</button>
             </div>
           )}
 
@@ -422,6 +529,7 @@
             </div>
             {config.apiKey && <div style={{ padding: "8px 12px 4px" }}><Btn onClick={syncAll} color={C.green} bg={C.greenDim} disabled={syncing} style={{ width: "100%" }}>{syncing ? "Syncing..." : "⟳ Sync All"}</Btn></div>}
             {config.apiKey && <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} /><span style={{ fontSize: 11, color: C.green }}>API Connected</span></div>}
+            <div style={{ padding: "8px 12px 0" }}><Btn onClick={logout} color={C.dim} bg="transparent" style={{ width: "100%", fontSize: 11, border: `1px solid ${C.border}` }}>Logout</Btn></div>
             <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
               {sponsors.map(s => {
                 const cnt = runs.filter(r => r.sponsorId === s.id).length;
@@ -461,10 +569,24 @@
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {sRuns.length > 0 && <button onClick={async () => { setDownloading(true); try { await downloadReport({ sponsor, contract: viewingContract, runs: sRuns, totals: tot, costMetrics, config }); } catch(e) { console.error(e); } finally { setDownloading(false); } }} disabled={downloading} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: downloading ? C.dim : C.muted, cursor: downloading ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 14px", opacity: downloading ? 0.6 : 1 }}>{downloading ? "Generating..." : "↓ Download Report"}</button>}
+                    <Btn onClick={() => publishSponsor(sponsor.id)} color={C.green} bg={C.greenDim}>Publish</Btn>
                     <Btn onClick={() => setView("sponsor")} color={C.accent} bg={C.accentDim}>Sponsor View</Btn>
                     <Btn onClick={() => delSponsor(sponsor.id)} color={C.red} bg={C.redDim}>Delete</Btn>
                   </div>
+                  {publishTimes[sponsor.id] && <span style={{ fontSize: 11, color: C.green }}>Published {timeAgo(publishTimes[sponsor.id])}</span>}
                 </div>
+
+                {/* Share Link */}
+                {sponsor.shareToken && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", flex: isMobile ? "1 1 100%" : undefined, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontFamily: MONO, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{window.location.origin}/s/{sponsor.shareToken}</span>
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/s/${sponsor.shareToken}`); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "2px 6px", whiteSpace: "nowrap" }}>Copy</button>
+                    </div>
+                    <Btn onClick={() => { if (confirm("Regenerate share link? The old link will stop working.")) { const oldToken = sponsor.shareToken; const newToken = uid() + uid(); updateSponsor(sponsor.id, { shareToken: newToken }); fetch("/api/delete-sponsor", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` }, body: JSON.stringify({ shareToken: oldToken }) }).catch(() => {}); setTimeout(() => publishSponsor(sponsor.id), 200); } }} color={C.amber} bg={C.amberDim} small>Regenerate</Btn>
+                    <span style={{ fontSize: 11, color: C.dim }}>Share this link with your sponsor</span>
+                  </div>
+                )}
 
                 {/* Pattern Management */}
                 <PatternManager sponsor={sponsor} onUpdate={(patterns) => updateSponsor(sponsor.id, { urlPatterns: patterns })} />
@@ -675,7 +797,7 @@
             )}
           </main>
 
-          {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
+          {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} authToken={authToken} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} /></Overlay>}
           {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
           {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
@@ -826,7 +948,7 @@
       return (
         <div style={{ minHeight: "100vh" }}>
           <div style={{ padding: isMobile ? "12px 16px" : "14px 32px", borderBottom: `1px solid ${C.border}`, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isMobile ? 8 : 0 }}>
-            {!isMobile && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
+            {!isMobile && onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 13 }}>← Back to Admin</button>}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
               {runs.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: dlPdf ? C.dim : C.muted, cursor: dlPdf ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "6px 14px", opacity: dlPdf ? 0.6 : 1 }}>{dlPdf ? "Generating..." : "↓ Download Report"}</button>}
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1243,7 +1365,7 @@
     }
 
     // ─── Forms ───
-    function SettingsForm({ config, onSave, onCancel }) {
+    function SettingsForm({ config, authToken, onSave, onCancel }) {
       const [ak, setAk] = useState(config.apiKey || "");
       const [pi, setPi] = useState(config.pubId || "");
       const [pn, setPn] = useState(config.publicationName || "");
@@ -1253,7 +1375,7 @@
       const runDebug = async () => {
         if (!ak.trim() || !pi.trim()) { alert("Enter API key and Pub ID first"); return; }
         setDebugLoading(true);
-        try { const res = await fetch("/api/debug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: ak.trim(), pubId: pi.trim() }) }); setDebugData(await res.json()); }
+        try { const res = await fetch("/api/debug", { method: "POST", headers: { "Content-Type": "application/json", ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {}) }, body: JSON.stringify({ apiKey: ak.trim(), pubId: pi.trim() }) }); setDebugData(await res.json()); }
         catch (e) { setDebugData({ error: e.message }); }
         finally { setDebugLoading(false); }
       };
@@ -1446,7 +1568,85 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    // ─── Public Sponsor Page ────────────────────────────────────
+    function PublicSponsorPage({ shareToken }) {
+      const [data, setData] = useState(null);
+      const [err, setErr] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const width = useWindowWidth();
+      const isMobile = width <= MOBILE;
+
+      const fetchData = useCallback(async (silent) => {
+        if (!silent) setLoading(true);
+        try {
+          const res = await fetch(`/api/sponsor-data?token=${encodeURIComponent(shareToken)}`);
+          if (!res.ok) { setErr(res.status === 404 ? "not_found" : "error"); setLoading(false); return; }
+          const d = await res.json();
+          setData(d);
+          setErr(null);
+        } catch { setErr("error"); }
+        setLoading(false);
+      }, [shareToken]);
+
+      useEffect(() => {
+        fetchData(false);
+        const iv = setInterval(() => fetchData(true), 5 * 60 * 1000);
+        return () => clearInterval(iv);
+      }, [fetchData]);
+
+      if (loading) return (
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: C.bg }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, #4F8FF7, #34D399)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, animation: "pulse 2s ease-in-out infinite" }}>
+            <span style={{ fontSize: 28, fontWeight: 700, color: "#fff" }}>S</span>
+          </div>
+          <p style={{ color: C.muted, fontFamily: FONT, fontSize: 14 }}>Loading campaign data...</p>
+          <style dangerouslySetInnerHTML={{ __html: "@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }" }} />
+        </div>
+      );
+
+      if (err) return (
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: C.bg }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, border: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 28, fontWeight: 700, color: C.dim }}>S</span>
+          </div>
+          <p style={{ color: C.muted, fontFamily: FONT, fontSize: 15, fontWeight: 500 }}>This campaign link is no longer active</p>
+          <p style={{ color: C.dim, fontFamily: FONT, fontSize: 13, marginTop: 6 }}>Contact the publisher for an updated link</p>
+        </div>
+      );
+
+      const sponsor = { id: "public", name: data.sponsorName, patterns: [] };
+      const runs = (data.runs || []).map((r, i) => ({
+        ...r, sponsorId: "public", contractId: data.contract ? "pub-contract" : null,
+        lastSync: data.publishedAt,
+      }));
+      const totals = data.totals || { opens: 0, clicks: 0, ctr: 0 };
+      const contract = data.contract ? { ...data.contract, id: "pub-contract", sponsorId: "public", isActive: true } : null;
+      const costMetrics = data.costMetrics || null;
+      const config = { publicationName: data.publicationName || "" };
+
+      return (
+        <div>
+          <SponsorView
+            sponsor={sponsor} runs={runs} totals={totals} contract={contract}
+            costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config}
+          />
+          {data.publishedAt && (
+            <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>
+              Last updated {timeAgo(data.publishedAt)}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─── Root (route-based entry) ─────────────────────────────────
+    function Root() {
+      const route = getRoute();
+      if (route.mode === "sponsor") return <PublicSponsorPage shareToken={route.shareToken} />;
+      return <App />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
   </script>
 </body>
 

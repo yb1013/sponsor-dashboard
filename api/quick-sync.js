@@ -1,6 +1,13 @@
+import { verifyToken } from "./verify.js";
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const authToken = (req.headers.authorization || "").replace("Bearer ", "");
+  if (!await verifyToken(authToken)) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   const { apiKey, pubId, knownPostIds } = req.body;
