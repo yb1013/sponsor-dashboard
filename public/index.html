@@ -1338,31 +1338,7 @@
       const hasAnyCost = (showCpm || showCpc) && costMetrics;
       const terms = contract ? getTerms(contract) : [];
 
-      // Build static chart SVG
-      let chartSvg = "";
-      const chartData = buildChartData(runs);
       const totalOpens = runs.reduce((s, r) => s + (r.totalOpens || 0), 0);
-      if (chartData.length >= 3) {
-        const W = 700, H = 180;
-        const pad = { top: 15, right: 15, bottom: 30, left: 15 };
-        const maxVal = Math.max(...chartData.map(d => d.total)) || 1;
-        const minDate = chartData[0].date.getTime();
-        const maxDate = chartData[chartData.length - 1].date.getTime();
-        const dateRange = maxDate - minDate || 1;
-        const pts = chartData.map(d => ({
-          x: pad.left + ((d.date.getTime() - minDate) / dateRange) * (W - pad.left - pad.right),
-          y: pad.top + (1 - d.total / maxVal) * (H - pad.top - pad.bottom),
-          isSend: d.isSend, date: d.date,
-        }));
-        const linePath = pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
-        const areaPath = linePath + ` L ${pts[pts.length-1].x} ${H - pad.bottom} L ${pts[0].x} ${H - pad.bottom} Z`;
-        const sendPts = pts.filter(pt => pt.isSend);
-        const labels = sendPts.map(pt => `<text x="${pt.x}" y="${H - 6}" text-anchor="middle" style="font-size:9px;fill:${P.muted};font-family:${F}">${new Date(pt.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</text>`).join('');
-        const dots = sendPts.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${P.blue}" stroke="${P.bg}" stroke-width="2"/>`).join('');
-        chartSvg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:12px">
-          <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${P.blue}" stop-opacity="0.2"/><stop offset="100%" stop-color="${P.blue}" stop-opacity="0.02"/></linearGradient></defs>
-          <path d="${areaPath}" fill="url(#pg)"/><path d="${linePath}" fill="none" stroke="${P.blue}" stroke-width="2" stroke-linejoin="round"/>${dots}${labels}</svg>`;
-      }
 
       // Metric card helper
       const mc = (label, value, color) => `<div style="flex:1;border:1px solid ${P.border};border-radius:10px;padding:16px 12px;text-align:center;background:${P.card}">
@@ -1409,7 +1385,6 @@
           <div style="font-size:12px;color:${P.muted};margin-bottom:4px">Seen by</div>
           <div style="font-size:38px;font-weight:700;color:${P.blue};font-family:${F}">${n(totalOpens)}</div>
           <div style="font-size:12px;color:${P.muted}">readers</div>
-          ${chartSvg}
         </div>
 
         <hr style="border:none;border-top:1px solid ${P.border};margin:0 0 16px"/>
@@ -1439,21 +1414,25 @@
       const container = document.createElement('div');
       container.innerHTML = html;
       container.style.position = 'fixed';
-      container.style.left = '0';
       container.style.top = '0';
-      container.style.width = '750px';
-      container.style.zIndex = '-9999';
+      container.style.left = '0';
+      container.style.width = '8.5in';
+      container.style.zIndex = '-1';
+      container.style.opacity = '0.01';
       container.style.pointerEvents = 'none';
-      container.style.background = '#FFFFFF';
+      container.style.backgroundColor = '#ffffff';
       document.body.appendChild(container);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const opt = {
         margin: [0.4, 0.5, 0.4, 0.5],
         filename: `${sponsor.name.replace(/\s+/g, '-')}-Report-${new Date().toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all'] },
       };
+
       await html2pdf().set(opt).from(container).save();
       document.body.removeChild(container);
     }
