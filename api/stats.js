@@ -15,11 +15,11 @@ export default async function handler(req, res) {
   try {
     const headers = { Authorization: `Bearer ${apiKey}` };
 
-    // Fetch publication stats + subscriber count + recent posts in parallel
+    // Fetch publication stats (with expand), subscriber count, and recent newsletter posts in parallel
     const [pubRes, subsRes, postsRes] = await Promise.all([
-      fetch(`https://api.beehiiv.com/v2/publications/${pubId}`, { headers }),
+      fetch(`https://api.beehiiv.com/v2/publications/${pubId}?expand[]=stats`, { headers }),
       fetch(`https://api.beehiiv.com/v2/publications/${pubId}/subscriptions?status=active&limit=1`, { headers }),
-      fetch(`https://api.beehiiv.com/v2/publications/${pubId}/posts?status=confirmed&limit=20&expand[]=stats&order_by=publish_date&direction=desc`, { headers }),
+      fetch(`https://api.beehiiv.com/v2/publications/${pubId}/posts?status=confirmed&content_tags[]=newsletter&limit=20&expand[]=stats&order_by=publish_date&direction=desc`, { headers }),
     ]);
 
     const pubData = await pubRes.json();
@@ -47,14 +47,13 @@ export default async function handler(req, res) {
 
     // Try multiple paths for subscriber count
     const activeSubscribers =
-      subsData?.total_results ||
       pubData?.data?.stats?.active_subscriptions ||
       pubData?.data?.stats?.total_active_subscribers ||
       pubData?.data?.stats?.active_subscribers ||
+      subsData?.total_results ||
       pubData?.data?.active_subscriptions ||
       pubData?.data?.total_subscribers ||
       pubData?.data?.subscriber_count ||
-      pubData?.stats?.active_subscriptions ||
       0;
 
     return res.status(200).json({
@@ -67,8 +66,9 @@ export default async function handler(req, res) {
       _debug: {
         pubKeys: pubData?.data ? Object.keys(pubData.data) : [],
         pubStatsKeys: pubData?.data?.stats ? Object.keys(pubData.data.stats) : [],
-        subsTotal: subsData?.total_results,
+        pubStatsSnapshot: pubData?.data?.stats ? JSON.stringify(pubData.data.stats).substring(0, 500) : null,
         subsKeys: Object.keys(subsData || {}),
+        subsTotal: subsData?.total_results,
       },
     });
   } catch (e) {
