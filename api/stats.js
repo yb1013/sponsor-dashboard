@@ -15,15 +15,13 @@ export default async function handler(req, res) {
   try {
     const headers = { Authorization: `Bearer ${apiKey}` };
 
-    // Fetch publication stats (with expand), subscriber count, and recent newsletter posts in parallel
-    const [pubRes, subsRes, postsRes] = await Promise.all([
+    // Fetch publication stats and recent newsletter posts in parallel
+    const [pubRes, postsRes] = await Promise.all([
       fetch(`https://api.beehiiv.com/v2/publications/${pubId}?expand[]=stats`, { headers }),
-      fetch(`https://api.beehiiv.com/v2/publications/${pubId}/subscriptions?status=active&limit=1`, { headers }),
       fetch(`https://api.beehiiv.com/v2/publications/${pubId}/posts?status=confirmed&content_tags[]=newsletter&limit=20&expand[]=stats&order_by=publish_date&direction=desc`, { headers }),
     ]);
 
     const pubData = await pubRes.json();
-    const subsData = await subsRes.json();
     const postsData = await postsRes.json();
     const posts = postsData.data || [];
 
@@ -45,16 +43,7 @@ export default async function handler(req, res) {
     const avgClicks = postCount > 0 ? Math.round(totalClicks / postCount) : 0;
     const avgCtr = avgOpens > 0 ? parseFloat(((avgClicks / avgOpens) * 100).toFixed(2)) : 0;
 
-    // Try multiple paths for subscriber count
-    const activeSubscribers =
-      pubData?.data?.stats?.active_subscriptions ||
-      pubData?.data?.stats?.total_active_subscribers ||
-      pubData?.data?.stats?.active_subscribers ||
-      subsData?.total_results ||
-      pubData?.data?.active_subscriptions ||
-      pubData?.data?.total_subscribers ||
-      pubData?.data?.subscriber_count ||
-      0;
+    const activeSubscribers = pubData?.data?.stats?.active_subscriptions || 0;
 
     return res.status(200).json({
       activeSubscribers,
@@ -63,13 +52,6 @@ export default async function handler(req, res) {
       avgCtr,
       postsAnalyzed: postCount,
       fetchedAt: new Date().toISOString(),
-      _debug: {
-        pubKeys: pubData?.data ? Object.keys(pubData.data) : [],
-        pubStatsKeys: pubData?.data?.stats ? Object.keys(pubData.data.stats) : [],
-        pubStatsSnapshot: pubData?.data?.stats ? JSON.stringify(pubData.data.stats).substring(0, 500) : null,
-        subsKeys: Object.keys(subsData || {}),
-        subsTotal: subsData?.total_results,
-      },
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });
