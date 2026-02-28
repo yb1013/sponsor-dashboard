@@ -16,8 +16,9 @@
     .fade-in { animation: fadeIn 0.4s ease-out both; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
     @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-    .section { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
-    .section.visible { opacity: 1; transform: translateY(0); }
+    .section { opacity: 1; transform: translateY(0); }
+    .section.animate-ready { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    .section.animate-ready.visible { opacity: 1; transform: translateY(0); }
     ::selection { background: #E8909C33; }
     input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
   </style>
@@ -125,16 +126,12 @@
     function Hero({ stats, config, isMobile }) {
       const subs = stats?.activeSubscribers;
       const subsRaw = subs && subs > 0 ? Math.floor(subs / 1000) * 1000 : 110000;
-      const subsAnimated = useCountUp(subsRaw);
-      const readersAnimated = useCountUp(config.engagedReaders);
-      const openRateAnimated = useCountUp(config.uniqueOpenRate);
-      const rebookAnimated = useCountUp(config.pavedRebookRate);
 
       const heroStats = [
-        { label: "Subscribers", display: subsAnimated.toLocaleString() + "+", live: subs > 0 },
-        { label: "Engaged Readers", display: readersAnimated.toLocaleString() },
-        { label: "Unique Open Rate", display: openRateAnimated + "%" },
-        { label: "Sponsors Rebook", display: rebookAnimated + "%" },
+        { label: "Subscribers", display: subsRaw.toLocaleString() + "+", live: subs > 0 },
+        { label: "Engaged Readers", display: (config.engagedReaders || 0).toLocaleString() },
+        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%" },
+        { label: "Sponsors Rebook", display: config.pavedRebookRate + "%" },
       ];
       return (
         <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg }}>
@@ -1014,16 +1011,29 @@
 
     ReactDOM.createRoot(document.getElementById("root")).render(<PackagesPage />);
 
-    // Scroll fade-in observer
+    // Scroll fade-in observer (progressive enhancement — page works without it)
     requestAnimationFrame(() => {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(e => {
-          if (e.isIntersecting) {
-            e.target.classList.add('visible');
-          }
+      try {
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach(e => {
+              if (e.isIntersecting) {
+                e.target.classList.add('visible');
+              }
+            });
+          }, { threshold: 0.1 });
+          document.querySelectorAll('.section').forEach(el => {
+            el.classList.add('animate-ready');
+            observer.observe(el);
+          });
+        }
+      } catch (e) {
+        console.warn('Animation setup failed:', e);
+        document.querySelectorAll('.section').forEach(el => {
+          el.style.opacity = '1';
+          el.style.transform = 'none';
         });
-      }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
-      document.querySelectorAll('.section').forEach(el => observer.observe(el));
+      }
     });
   </script>
 </body>
