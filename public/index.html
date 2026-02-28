@@ -1374,8 +1374,8 @@
       const m = (v) => "$" + (v || 0).toFixed(2);
       const fd = (d) => { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
 
-      const showCpm = includeCpm && (contract ? (contract.showCpmToSponsor ?? contract.showPricingToSponsor ?? false) : false);
-      const showCpc = includeCpc && (contract ? (contract.showCpcToSponsor ?? contract.showPricingToSponsor ?? false) : false);
+      const showCpm = includeCpm && costMetrics?.cpm != null;
+      const showCpc = includeCpc && costMetrics?.cpc != null;
       const hasAnyCost = (showCpm || showCpc) && costMetrics;
       const terms = contract ? getTerms(contract) : [];
 
