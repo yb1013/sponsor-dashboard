@@ -108,12 +108,9 @@
 
     // ─── Hero ─────────────────────────────────────────────────────
     function Hero({ stats, config, isMobile }) {
-      const subs = stats?.activeSubscribers;
-      const subsRaw = subs && subs > 0 ? Math.floor(subs / 1000) * 1000 : 110000;
-
       const heroStats = [
-        { label: "Subscribers", display: subsRaw.toLocaleString() + "+", live: subs > 0 },
-        { label: "Engaged Readers", display: (config.engagedReaders || 0).toLocaleString() },
+        { label: "Subscribers", display: num(config.totalSubscribers || 120000) + "+" },
+        { label: "Engaged Moms", display: num(config.engagedReaders) },
         { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
         { label: "Sponsors Rebook", display: config.pavedRebookRate + "%" },
       ];
@@ -122,7 +119,7 @@
           <div style={{ maxWidth: 860, margin: "0 auto" }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
             <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Reach {(config.engagedReaders || 31000).toLocaleString()} Moms Who{isMobile ? " " : <br />}Open, Read, and Buy
+              Reach {num(config.engagedReaders)} Moms Who{isMobile ? " " : <br />}Open, Read, and Buy
             </h1>
             <div style={{
               display: "grid",
@@ -132,15 +129,7 @@
             }}>
               {heroStats.map((s, i) => (
                 <div key={i} style={{ textAlign: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{s.display}</span>
-                    {s.live && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 3, background: C.success, display: "inline-block", animation: "pulse 2s infinite" }} />
-                        <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>Live</span>
-                      </span>
-                    )}
-                  </div>
+                  <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</span>
                 </div>
               ))}
@@ -1060,7 +1049,7 @@
       }, []);
 
       const cfg = config || {
-        engagedReaders: 31000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
+        totalSubscribers: 120000, engagedReaders: 31000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
         instagramFollowers: 6081, facebookFollowers: 14000,
         demographics: [
           "100% moms, aged 22-45",
