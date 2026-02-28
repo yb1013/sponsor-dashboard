@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner with The Mommy Newsletter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { background: #FAFAFA; color: #1A1A2E; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.4s ease-out both; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    ::selection { background: #2563EB22; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    // ═══════════════════════════════════════════════════════════════
+    // CONSTANTS
+    // ═══════════════════════════════════════════════════════════════
+    const C = {
+      bg: "#FAFAFA", white: "#FFFFFF", text: "#1A1A2E", muted: "#6B7280", dim: "#9CA3AF",
+      border: "#E5E7EB", accent: "#2563EB", accentDim: "#EFF6FF",
+      coral: "#F43F5E", coralDim: "#FFF1F2",
+      green: "#059669", greenDim: "#ECFDF5",
+      purple: "#7C3AED", purpleDim: "#F5F3FF",
+      amber: "#D97706", amberDim: "#FFFBEB",
+    };
+    const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+    const MONO = "'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace";
+    const MOBILE = 640;
+    const TABLET = 1024;
+
+    function useWindowWidth() {
+      const [w, setW] = useState(window.innerWidth);
+      useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+      return w;
+    }
+
+    const num = (v) => (v || 0).toLocaleString();
+    const money = (v) => "$" + (v || 0).toLocaleString();
+
+    // ═══════════════════════════════════════════════════════════════
+    // PRICING HELPERS
+    // ═══════════════════════════════════════════════════════════════
+    function getPriceAdjustment(subscriberCount, milestones) {
+      let adj = 0;
+      for (const m of (milestones || [])) {
+        if (subscriberCount >= m.subscribers) adj = m.adjustment;
+      }
+      return adj;
+    }
+
+    function getNextMilestone(subscriberCount, milestones) {
+      for (const m of (milestones || [])) {
+        if (subscriberCount < m.subscribers) return m;
+      }
+      return null;
+    }
+
+    function calcGuarantee(avgOpens, placements, multiplier) {
+      const raw = Math.floor(avgOpens * placements * (multiplier || 0.6));
+      return Math.floor(raw / 10000) * 10000;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SECTION COMPONENTS
+    // ═══════════════════════════════════════════════════════════════
+
+    function Section({ children, id, bg, style }) {
+      return (
+        <section id={id} style={{ padding: "80px 24px", background: bg || "transparent", ...style }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>{children}</div>
+        </section>
+      );
+    }
+
+    function SectionTitle({ children, sub }) {
+      return (
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, marginBottom: sub ? 12 : 0 }}>{children}</h2>
+          {sub && <p style={{ fontSize: 16, color: C.muted, maxWidth: 600, margin: "0 auto" }}>{sub}</p>}
+        </div>
+      );
+    }
+
+    // ─── Hero ─────────────────────────────────────────────────────
+    function Hero({ stats, config, isMobile }) {
+      const subs = stats?.activeSubscribers;
+      const subsDisplay = subs ? (Math.floor(subs / 1000) * 1000).toLocaleString() + "+" : "110,000+";
+      return (
+        <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 72px", textAlign: "center", background: C.white }}>
+          <div style={{ maxWidth: 800, margin: "0 auto" }} className="fade-in">
+            <p style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
+            <h1 style={{ fontSize: isMobile ? 28 : 44, fontWeight: 800, lineHeight: 1.15, letterSpacing: -1, marginBottom: 32 }}>
+              Partner with the #1 Family<br />Newsletter on Paved
+            </h1>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: isMobile ? 16 : 32, marginBottom: 40 }}>
+              <StatPill label="Subscribers" value={subsDisplay} live={!!subs} fetchedAt={stats?.fetchedAt} />
+              <StatPill label="Engaged Readers" value={num(config.engagedReaders)} />
+              <StatPill label="Unique Open Rate" value={config.uniqueOpenRate + "%"} />
+              <StatPill label="Sponsors Rebook" value={config.pavedRebookRate + "%"} />
+            </div>
+            <a href="#pricing" style={{ display: "inline-block", padding: "14px 32px", background: C.accent, color: "#fff", borderRadius: 10, fontSize: 16, fontWeight: 600, textDecoration: "none" }}>
+              See Packages ↓
+            </a>
+          </div>
+        </section>
+      );
+    }
+
+    function StatPill({ label, value, live, fetchedAt }) {
+      return (
+        <div style={{ textAlign: "center", minWidth: 120 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <span style={{ fontSize: 28, fontWeight: 800, color: C.text, fontFamily: FONT }}>{value}</span>
+            {live && <span title={fetchedAt ? `Last fetched: ${new Date(fetchedAt).toLocaleString()}` : "Live data"} style={{ width: 7, height: 7, borderRadius: 4, background: C.green, display: "inline-block", animation: "pulse 2s infinite" }} />}
+          </div>
+          <span style={{ fontSize: 12, color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
+        </div>
+      );
+    }
+
+    // ─── Brand Partners ───────────────────────────────────────────
+    function BrandPartners({ config, isMobile }) {
+      return (
+        <Section bg={C.bg}>
+          <p style={{ textAlign: "center", fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim, marginBottom: 24 }}>Trusted by leading brands</p>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
+            {(config.brandPartners || []).map((b, i) => (
+              <span key={i} style={{ padding: "8px 18px", borderRadius: 20, border: `1px solid ${C.border}`, background: C.white, fontSize: 13, fontWeight: 600, color: C.muted }}>{b}</span>
+            ))}
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Demographics ─────────────────────────────────────────────
+    function Demographics({ config, isMobile }) {
+      return (
+        <Section bg={C.white}>
+          <SectionTitle sub="Who reads The Mommy">Your Audience</SectionTitle>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 24, marginBottom: 40 }}>
+            <MiniStat label="Engaged Readers" value={num(config.engagedReaders)} color={C.accent} />
+            <MiniStat label="Unique Open Rate" value={config.uniqueOpenRate + "%+"} color={C.green} />
+            <MiniStat label="Total Open Rate" value={config.totalOpenRate} color={C.purple} />
+          </div>
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            {(config.demographics || []).map((d, i) => (
+              <p key={i} style={{ fontSize: 15, color: C.text, lineHeight: 1.7, marginBottom: 8, paddingLeft: 24, position: "relative" }}>
+                <span style={{ position: "absolute", left: 0 }}>{["👩", "🌎", "🛒"][i] || "•"}</span>
+                {d}
+              </p>
+            ))}
+          </div>
+        </Section>
+      );
+    }
+
+    function MiniStat({ label, value, color }) {
+      return (
+        <div style={{ textAlign: "center", padding: "16px 24px", borderRadius: 12, border: `1px solid ${C.border}`, background: C.white, minWidth: 160 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+        </div>
+      );
+    }
+
+    // ─── Testimonials ─────────────────────────────────────────────
+    function Testimonials({ config, isMobile }) {
+      return (
+        <Section bg={C.bg}>
+          <SectionTitle>What Our Readers Say</SectionTitle>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20 }}>
+            {(config.testimonials || []).map((t, i) => (
+              <div key={i} style={{ flex: 1, padding: 28, borderRadius: 14, background: C.white, border: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: 15, color: C.text, lineHeight: 1.65, fontStyle: "italic", marginBottom: 16 }}>"{t.quote}"</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>— {t.name}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Pricing Tiers ────────────────────────────────────────────
+    function PricingSection({ config, stats, isMobile }) {
+      const [takeoverState, setTakeoverState] = useState({});
+      const subs = stats?.activeSubscribers || config.engagedReaders;
+      const adj = getPriceAdjustment(subs, config.pricingMilestones);
+      const nextMs = getNextMilestone(subs, config.pricingMilestones);
+      const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
+      const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
+
+      return (
+        <Section id="pricing" bg={C.white}>
+          <SectionTitle>Partnership Packages</SectionTitle>
+          {nextMs && (
+            <div style={{ textAlign: "center", padding: "14px 24px", borderRadius: 10, background: C.amberDim, border: `1px solid #FDE68A`, marginBottom: 40, fontSize: 14, color: C.amber }}>
+              <strong>📈 Rates based on our current audience of {num(subs)} subscribers.</strong>
+              {" "}Lock in today's rates — next increase at {num(nextMs.subscribers)} subscribers.
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20, alignItems: isMobile ? "stretch" : "flex-start" }}>
+            {tierOrder.map(key => {
+              const tier = config.tiers?.[key];
+              if (!tier) return null;
+              const isRec = tier.recommended;
+              const isTakeover = takeoverState[key] || false;
+              const basePrice = tier.price + (adj * tier.placements);
+              const takeoverTotal = (tier.takeoverPrice || 0) + (adj * tier.placements);
+              const displayPrice = isTakeover ? takeoverTotal : basePrice;
+              const valueTotal = (tier.valueStack || []).reduce((s, v) => s + v.value, 0);
+              const guarantee = calcGuarantee(avgOpens, tier.placements, config.guaranteeMultiplier);
+
+              return (
+                <div key={key} style={{
+                  flex: 1, borderRadius: 16, border: `${isRec ? 2 : 1}px solid ${isRec ? C.accent : C.border}`,
+                  background: C.white, overflow: "hidden", position: "relative",
+                  boxShadow: isRec ? "0 8px 32px rgba(37,99,235,0.1)" : "0 2px 8px rgba(0,0,0,0.04)",
+                }}>
+                  {isRec && <div style={{ background: C.accent, color: "#fff", textAlign: "center", padding: "6px 0", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Most Popular</div>}
+                  <div style={{ padding: 28 }}>
+                    <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{tier.name}</h3>
+                    <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>{tier.tagline}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 16 }}>{tier.placements} Newsletter Placements</p>
+
+                    {guarantee > 0 && (
+                      <div style={{ padding: "10px 14px", borderRadius: 8, background: C.greenDim, marginBottom: 16, fontSize: 13, color: C.green }}>
+                        <strong>✓ Guaranteed {num(guarantee)}+ reader impressions</strong>
+                        <span style={{ display: "block", fontSize: 12, marginTop: 2, opacity: 0.8 }}>or we keep running free</span>
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: 20 }}>
+                      {(tier.features || []).map((f, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, fontSize: 14, color: C.text, lineHeight: 1.5 }}>
+                          <span style={{ color: C.accent, fontWeight: 700, flexShrink: 0 }}>✓</span>
+                          <span>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Value Stack */}
+                    {(tier.valueStack || []).length > 0 && (
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 16 }}>
+                        <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, color: C.dim, marginBottom: 10 }}>Value Breakdown</p>
+                        {tier.valueStack.map((v, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted, marginBottom: 4 }}>
+                            <span>{v.label}</span>
+                            <span style={{ fontFamily: MONO }}>{money(v.value)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.text, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                          <span>Total Value</span>
+                          <span style={{ fontFamily: MONO }}>{money(valueTotal)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Price */}
+                    <div style={{ textAlign: "center", padding: "20px 0 16px", marginBottom: 16, borderRadius: 12, background: isRec ? C.accentDim : C.bg }}>
+                      <div style={{ fontSize: 36, fontWeight: 800, color: C.text, fontFamily: FONT }}>{money(displayPrice)}</div>
+                      {valueTotal > displayPrice && <div style={{ fontSize: 13, color: C.green, fontWeight: 600, marginTop: 4 }}>Save {money(valueTotal - displayPrice)}</div>}
+                    </div>
+
+                    {/* Takeover Toggle */}
+                    {tier.includeTakeoverOption && tier.takeoverPrice && (
+                      <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${isTakeover ? C.accent : C.border}`, background: isTakeover ? C.accentDim : "transparent", marginBottom: 16, cursor: "pointer", transition: "all 0.15s" }} onClick={() => setTakeoverState(s => ({ ...s, [key]: !s[key] }))}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: isTakeover ? C.accent : C.muted }}>Newsletter Takeover</span>
+                          <div style={{ width: 36, height: 20, borderRadius: 10, padding: 2, background: isTakeover ? C.accent : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                            <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", transform: isTakeover ? "translateX(16px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                          </div>
+                        </div>
+                        {isTakeover && (
+                          <p style={{ fontSize: 12, color: C.accent, marginTop: 6 }}>Sole sponsor per newsletter — ~25% higher engagement</p>
+                        )}
+                      </div>
+                    )}
+
+                    <a href="#inquiry" onClick={() => { window.__selectedTier = key; window.__selectedTakeover = isTakeover; }} style={{
+                      display: "block", textAlign: "center", padding: "14px 0", borderRadius: 10,
+                      background: isRec ? C.accent : "transparent", color: isRec ? "#fff" : C.accent,
+                      border: isRec ? "none" : `2px solid ${C.accent}`, fontSize: 15, fontWeight: 700,
+                      textDecoration: "none", transition: "all 0.15s",
+                    }}>
+                      Get Started →
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── How It Works ─────────────────────────────────────────────
+    function HowItWorks({ config, isMobile }) {
+      const placements = [
+        { icon: "🏷️", title: "Featured Banner", desc: "Your logo at the top — \"Together with [Brand]\"" },
+        { icon: "✍️", title: "Promotional Intro", desc: "One line woven into the newsletter opening" },
+        { icon: "📢", title: "Main Ad Placement", desc: "Headline, image, ~100 words, CTA button, multiple links" },
+      ];
+      return (
+        <Section bg={C.bg}>
+          <SectionTitle sub="Three touchpoints in every sponsored issue">What Your Sponsorship Looks Like</SectionTitle>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20, marginBottom: 32 }}>
+            {placements.map((p, i) => (
+              <div key={i} style={{ flex: 1, padding: 24, borderRadius: 14, background: C.white, border: `1px solid ${C.border}`, textAlign: "center" }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>{p.icon}</div>
+                <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{p.title}</h4>
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>{p.desc}</p>
+              </div>
+            ))}
+          </div>
+          {(config.liveExamples || []).length > 0 && (
+            <div style={{ textAlign: "center" }}>
+              {config.liveExamples.map((ex, i) => (
+                <a key={i} href={ex.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, color: C.accent, fontWeight: 600, textDecoration: "none", marginRight: 24 }}>
+                  See live example: {ex.title} → {ex.cpc && <span style={{ color: C.muted, fontWeight: 400 }}>({ex.cpc})</span>}
+                </a>
+              ))}
+            </div>
+          )}
+        </Section>
+      );
+    }
+
+    // ─── CPM Comparison ───────────────────────────────────────────
+    function CpmComparison({ config, stats, isMobile }) {
+      const growth = config.tiers?.growth;
+      const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
+      const cpm = growth && avgOpens > 0 ? ((growth.price / (avgOpens * growth.placements)) * 1000).toFixed(0) : "~24";
+
+      const channels = [
+        { name: "Instagram Ads", cpm: "$6-10", note: "Algorithmic, skippable" },
+        { name: "Facebook Ads", cpm: "$7-12", note: "Algorithmic, skippable" },
+        { name: "Display Ads", cpm: "$5-15", note: "Banner blindness, ad blockers" },
+        { name: "The Mommy Newsletter", cpm: `~$${cpm}`, note: `Direct inbox, ${config.uniqueOpenRate}% open rate, trusted voice`, highlight: true },
+      ];
+
+      return (
+        <Section bg={C.white}>
+          <SectionTitle sub="Premium placement, premium results">How We Compare</SectionTitle>
+          <div style={{ maxWidth: 700, margin: "0 auto" }}>
+            {channels.map((ch, i) => (
+              <div key={i} style={{
+                display: "flex", flexDirection: isMobile ? "column" : "row",
+                justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center",
+                padding: "16px 20px", borderRadius: 10, marginBottom: 8,
+                background: ch.highlight ? C.accentDim : C.bg,
+                border: `1px solid ${ch.highlight ? C.accent : C.border}`,
+              }}>
+                <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: isMobile ? 6 : 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: ch.highlight ? 700 : 500, color: ch.highlight ? C.accent : C.text, minWidth: isMobile ? "auto" : 180 }}>{ch.name}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, fontFamily: MONO, color: ch.highlight ? C.accent : C.text }}>{ch.cpm} CPM</span>
+                </div>
+                <span style={{ fontSize: 13, color: ch.highlight ? C.accent : C.muted }}>{ch.note}</span>
+              </div>
+            ))}
+            <p style={{ fontSize: 12, color: C.dim, textAlign: "center", marginTop: 16 }}>* Based on Growth tier pricing. Rates vary by package.</p>
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Lock-In Messaging ────────────────────────────────────────
+    function LockIn({ config, stats, isMobile }) {
+      const subs = stats?.activeSubscribers || 0;
+      const milestones = config.pricingMilestones || [];
+      const nextMs = getNextMilestone(subs, milestones);
+      const adj = getPriceAdjustment(subs, milestones);
+
+      return (
+        <Section bg={C.bg}>
+          <SectionTitle>📈 Lock In Today's Rates</SectionTitle>
+          <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+            <p style={{ fontSize: 16, color: C.text, lineHeight: 1.7, marginBottom: 32 }}>
+              The Mommy is growing. Rates are based on our current audience of <strong>{num(subs)}</strong> subscribers.
+              Sponsors who commit to 6+ months lock in today's rates — even as our audience (and rates) grow.
+            </p>
+            {/* Milestone visualization */}
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, marginBottom: 24 }}>
+              {milestones.map((m, i) => {
+                const isCurrent = subs >= m.subscribers && (!milestones[i + 1] || subs < milestones[i + 1].subscribers);
+                return (
+                  <div key={i} style={{
+                    padding: "10px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    background: isCurrent ? C.accent : m.subscribers <= subs ? C.accentDim : C.white,
+                    color: isCurrent ? "#fff" : m.subscribers <= subs ? C.accent : C.dim,
+                    border: `1px solid ${isCurrent ? C.accent : C.border}`,
+                  }}>
+                    <div>{num(m.subscribers)}</div>
+                    <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2 }}>{m.adjustment === 0 ? "Base" : `+$${m.adjustment}/email`}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {nextMs && (
+              <p style={{ fontSize: 14, color: C.amber, fontWeight: 600 }}>
+                Next rate increase: at {num(nextMs.subscribers)} subscribers (+${nextMs.adjustment}/placement)
+              </p>
+            )}
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Guarantee ────────────────────────────────────────────────
+    function Guarantee({ config }) {
+      return (
+        <Section bg={C.white}>
+          <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🛡️</div>
+            <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>Our Guarantee</h2>
+            <p style={{ fontSize: 17, color: C.text, lineHeight: 1.7, marginBottom: 40 }}>
+              If we don't hit your guaranteed reader impressions, we keep running until we do — <strong>at no extra cost.</strong>
+            </p>
+            <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Flexible Cancellation</h3>
+            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.7 }}>{config.cancellationPolicy}</p>
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Inquiry Form ─────────────────────────────────────────────
+    function InquiryForm({ config, isMobile }) {
+      const [tier, setTier] = useState("growth");
+      const [name, setName] = useState("");
+      const [email, setEmail] = useState("");
+      const [company, setCompany] = useState("");
+      const [message, setMessage] = useState("");
+      const [sending, setSending] = useState(false);
+      const [sent, setSent] = useState(false);
+      const formRef = useRef(null);
+
+      // Pick up tier from "Get Started" button click
+      useEffect(() => {
+        const checkTier = () => {
+          if (window.__selectedTier) {
+            setTier(window.__selectedTier);
+            window.__selectedTier = null;
+          }
+        };
+        window.addEventListener("hashchange", checkTier);
+        // Also check immediately in case hash was already set
+        const iv = setInterval(checkTier, 200);
+        return () => { window.removeEventListener("hashchange", checkTier); clearInterval(iv); };
+      }, []);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!email) return;
+        setSending(true);
+        try {
+          await fetch("/api/inquiry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, company, tier, takeover: false, message }),
+          });
+          setSent(true);
+        } catch {
+          alert("Something went wrong. Please try again.");
+        }
+        setSending(false);
+      };
+
+      if (sent) {
+        return (
+          <Section id="inquiry" bg={C.bg}>
+            <div style={{ textAlign: "center", padding: "40px 0" }} className="fade-in">
+              <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+              <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 12 }}>Thanks! We'll be in touch within 24 hours.</h2>
+              <p style={{ fontSize: 15, color: C.muted }}>Check your email for a confirmation.</p>
+            </div>
+          </Section>
+        );
+      }
+
+      const tiers = config.tiers || {};
+      const tierKeys = ["starter", "growth", "partner"];
+      const inputStyle = { width: "100%", padding: "14px 16px", borderRadius: 10, border: `1px solid ${C.border}`, fontSize: 15, fontFamily: FONT, color: C.text, background: C.white, outline: "none", boxSizing: "border-box" };
+
+      return (
+        <Section id="inquiry" bg={C.bg}>
+          <SectionTitle sub="Tell us about your brand and we'll follow up with a custom proposal">Let's Get Started</SectionTitle>
+          <form onSubmit={handleSubmit} ref={formRef} style={{ maxWidth: 520, margin: "0 auto" }}>
+            {/* Tier selector */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap", justifyContent: "center" }}>
+              {tierKeys.map(k => {
+                const t = tiers[k];
+                if (!t) return null;
+                const isActive = tier === k;
+                return (
+                  <button key={k} type="button" onClick={() => setTier(k)} style={{
+                    padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, fontFamily: FONT, cursor: "pointer",
+                    background: isActive ? C.accent : C.white, color: isActive ? "#fff" : C.text,
+                    border: `1px solid ${isActive ? C.accent : C.border}`, transition: "all 0.15s",
+                  }}>{t.name}</button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" style={inputStyle} />
+              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email *" required type="email" style={inputStyle} />
+              <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Company" style={inputStyle} />
+              <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Message (optional)" rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+              <button type="submit" disabled={sending} style={{
+                padding: "16px 0", borderRadius: 10, border: "none", background: C.accent, color: "#fff",
+                fontSize: 16, fontWeight: 700, fontFamily: FONT, cursor: sending ? "not-allowed" : "pointer",
+                opacity: sending ? 0.6 : 1, transition: "opacity 0.15s",
+              }}>{sending ? "Sending..." : "Send Inquiry →"}</button>
+            </div>
+            {config.calendlyUrl && (
+              <p style={{ textAlign: "center", marginTop: 16, fontSize: 14, color: C.muted }}>
+                Or <a href={config.calendlyUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 600, textDecoration: "none" }}>schedule a call</a>
+              </p>
+            )}
+          </form>
+        </Section>
+      );
+    }
+
+    // ─── Footer ───────────────────────────────────────────────────
+    function Footer({ config }) {
+      return (
+        <section style={{ padding: "60px 24px 40px", textAlign: "center", background: C.white, borderTop: `1px solid ${C.border}` }}>
+          <p style={{ fontSize: 16, color: C.text, fontWeight: 500, marginBottom: 6 }}>Managing multiple brands or need something different?</p>
+          <p style={{ fontSize: 14, color: C.muted, marginBottom: 20 }}>We build custom packages for agencies and multi-brand partnerships.</p>
+          <a href="#inquiry" style={{ display: "inline-block", padding: "12px 28px", borderRadius: 10, border: `2px solid ${C.accent}`, color: C.accent, fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 40 }}>Let's Talk →</a>
+          <p style={{ fontSize: 12, color: C.dim, opacity: 0.6 }}>The Mommy Newsletter · themommy.news</p>
+        </section>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MAIN APP
+    // ═══════════════════════════════════════════════════════════════
+    function PackagesPage() {
+      const [stats, setStats] = useState(null);
+      const [config, setConfig] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const width = useWindowWidth();
+      const isMobile = width <= MOBILE;
+
+      useEffect(() => {
+        let mounted = true;
+
+        async function loadData() {
+          // Try cached stats first
+          const cached = sessionStorage.getItem("pkg-stats");
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              const age = Date.now() - new Date(parsed.fetchedAt).getTime();
+              if (age < 3600000) { // 1 hour
+                if (mounted) setStats(parsed);
+              }
+            } catch {}
+          }
+
+          // Fetch both in parallel
+          const [statsRes, configRes] = await Promise.allSettled([
+            fetch("/api/stats").then(r => r.ok ? r.json() : null),
+            fetch("/api/packages-config").then(r => r.ok ? r.json() : null),
+          ]);
+
+          if (!mounted) return;
+
+          if (statsRes.status === "fulfilled" && statsRes.value) {
+            setStats(statsRes.value);
+            sessionStorage.setItem("pkg-stats", JSON.stringify(statsRes.value));
+          }
+
+          if (configRes.status === "fulfilled" && configRes.value) {
+            // Parse if stringified
+            const cfg = typeof configRes.value === "string" ? JSON.parse(configRes.value) : configRes.value;
+            setConfig(cfg);
+          }
+
+          setLoading(false);
+        }
+
+        loadData();
+        return () => { mounted = false; };
+      }, []);
+
+      // Fallback defaults for config (matches packages-config.js getDefaults)
+      const cfg = config || {
+        engagedReaders: 31000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
+        instagramFollowers: 6081, facebookFollowers: 14000,
+        demographics: ["100% moms, aged 22-45", "94% in the USA", "Interests: Baby/toddler gear, health & wellness, family finances"],
+        pavedRebookRate: 92, brandPartners: ["Netflix", "Instacart", "Canva", "Betterment", "UPPAbaby", "BabyBjörn", "Nanit", "Evenflo", "Blinkist", "Mockingbird", "ResortPass"],
+        testimonials: [
+          { quote: "I love the content and am obsessed with it all.", name: "Amy Ballou" },
+          { quote: "I absolutely love the newsletter.", name: "Sarah Snyder" },
+          { quote: "I feel like I'm talking to another Mom.", name: "Mary Hoerchler" },
+        ],
+        liveExamples: [{ title: "ResortPass", url: "https://newsletter.themommy.news/p/ipad-holder-car-organizer-tidy-travel", cpc: "$1.53/click" }],
+        baseRatePerPlacement: 750, takeoverPremiumPerPlacement: 200,
+        tiers: {
+          starter: { name: "Starter", tagline: "For brands testing newsletter sponsorship.", placements: 6, price: 3500, features: ["Standard placement", "Live dashboard"], includeTakeoverOption: false, valueStack: [{ label: "6 Placements", value: 4500 }, { label: "Dashboard", value: 500 }] },
+          growth: { name: "Growth", tagline: "For brands ready to own their category.", placements: 12, price: 7500, recommended: true, features: ["Primary placement", "Category exclusivity", "2 IG stories + 2 FB posts", "Dashboard + mid-campaign report"], includeTakeoverOption: true, takeoverPrice: 9900, valueStack: [{ label: "12 Placements", value: 9000 }, { label: "Primary Placement", value: 1200 }, { label: "Category Exclusivity", value: 1500 }, { label: "Social", value: 800 }, { label: "Reports", value: 500 }] },
+          partner: { name: "Partner", tagline: "Become synonymous with The Mommy.", placements: 24, price: 15000, features: ["Exclusive placement", "Primary placement every send", "Category exclusivity (12 mo)", "4 IG posts + 4 IG stories", "Welcome sequence", "1 dedicated send", "Dashboard + quarterly reports", "Strategy access"], includeTakeoverOption: true, takeoverPrice: 19800, valueStack: [{ label: "24 Placements", value: 18000 }, { label: "Exclusive Placement", value: 3600 }, { label: "Exclusivity (12 mo)", value: 3000 }, { label: "Social", value: 1600 }, { label: "Welcome Sequence", value: 1500 }, { label: "Dedicated Send", value: 2000 }, { label: "Reports", value: 500 }, { label: "Strategy", value: 500 }] },
+        },
+        pricingMilestones: [{ subscribers: 25000, adjustment: 0 }, { subscribers: 30000, adjustment: 100 }, { subscribers: 35000, adjustment: 200 }, { subscribers: 40000, adjustment: 300 }, { subscribers: 45000, adjustment: 400 }, { subscribers: 50000, adjustment: 500 }],
+        cancellationPolicy: "Cancel with 30 days' notice. Unused placements are refunded on a prorated basis. No penalties, no fine print.",
+        guaranteeMultiplier: 0.6,
+        contactEmail: "", calendlyUrl: "",
+      };
+
+      if (loading && !config) {
+        return (
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.white }}>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, color: C.dim, animation: "pulse 2s infinite" }}>The Mommy Newsletter</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <Hero stats={stats} config={cfg} isMobile={isMobile} />
+          <BrandPartners config={cfg} isMobile={isMobile} />
+          <Demographics config={cfg} isMobile={isMobile} />
+          <Testimonials config={cfg} isMobile={isMobile} />
+          <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
+          <HowItWorks config={cfg} isMobile={isMobile} />
+          <CpmComparison config={cfg} stats={stats} isMobile={isMobile} />
+          <LockIn config={cfg} stats={stats} isMobile={isMobile} />
+          <Guarantee config={cfg} />
+          <InquiryForm config={cfg} isMobile={isMobile} />
+          <Footer config={cfg} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<PackagesPage />);
+  </script>
+</body>
+</html>
