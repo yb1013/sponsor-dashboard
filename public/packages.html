@@ -528,16 +528,19 @@
         if (isTabletOrBelow) return;
         const interval = setInterval(() => {
           setCurrentTP(prev => (prev + 1) % 3);
-        }, 3000);
+        }, 3500);
         return () => clearInterval(interval);
       }, [isTabletOrBelow]);
 
-      const scrollPositions = [0, 180, 320];
+      const scrollPositions = [0, 200, 380];
+
+      const tpBorderColor = (i) => currentTP === i ? C.accent : "transparent";
+      const tpBg = (i, defaultBg) => currentTP === i ? C.accentLight : defaultBg;
 
       const callouts = [
-        { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo featured at the top of the newsletter. Every reader sees this first — before any content." },
-        { label: "Touchpoint 2", title: "Promotional Intro", desc: "A natural mention woven into the newsletter opening. Feels editorial, not like an ad." },
-        { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen." },
+        { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo alongside The Mommy's at the very top of the email. 31,000+ readers see this before any content loads." },
+        { label: "Touchpoint 2", title: "Promotional Intro", desc: "A one-line mention woven naturally into the newsletter opening. Feels editorial — not like an ad. Readers click because they're curious." },
+        { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Your headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen. Average result: $1.53/click." },
       ];
 
       return (
@@ -549,74 +552,163 @@
               {/* Phone Frame */}
               <div style={{ flexShrink: 0, width: 300 }}>
                 <div style={{
-                  border: "8px solid #1A1A2E", borderRadius: 36, overflow: "hidden",
-                  height: 580, position: "relative",
-                  boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+                  border: "6px solid #1A1A2E", borderRadius: 40, overflow: "hidden",
+                  height: 600, position: "relative", background: "#1A1A2E",
+                  boxShadow: "0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.2)",
                 }}>
-                  {/* Notch */}
+                  {/* Dynamic Island */}
                   <div style={{
-                    position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
-                    width: 120, height: 24, background: "#1A1A2E",
-                    borderRadius: "0 0 16px 16px", zIndex: 10,
+                    position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
+                    width: 90, height: 22, background: "#1A1A2E",
+                    borderRadius: 12, zIndex: 10,
                   }} />
 
-                  {/* Scrolling content */}
-                  <div style={{ height: "100%", overflow: "hidden", background: "#FFFFFF", position: "relative" }}>
+                  {/* Status Bar */}
+                  <div style={{
+                    position: "absolute", top: 0, left: 0, right: 0, height: 44,
+                    background: "#FFFFFF", zIndex: 5,
+                    display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+                    padding: "0 20px 4px", fontSize: 9, fontWeight: 600, color: "#1A1A2E",
+                  }}>
+                    <span>9:41</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <span style={{ fontSize: 8 }}>&#9679;&#9679;&#9679;&#9679;</span>
+                      <span style={{ fontSize: 8 }}>WiFi</span>
+                      <span style={{ fontSize: 8 }}>&#128267;</span>
+                    </span>
+                  </div>
+
+                  {/* Home Indicator */}
+                  <div style={{
+                    position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
+                    width: 100, height: 4, background: "#1A1A2E", borderRadius: 2, zIndex: 10,
+                  }} />
+
+                  {/* Scrolling content area */}
+                  <div style={{ position: "absolute", top: 44, bottom: 20, left: 0, right: 0, overflow: "hidden", background: "#FFFFFF" }}>
                     <div style={{
                       position: "absolute", top: 0, left: 0, right: 0,
                       transition: "transform 0.8s ease-in-out",
                       transform: `translateY(-${scrollPositions[currentTP]}px)`,
+                      padding: 0, background: "#FFFFFF",
                     }}>
-                      {/* Section 1: Header with sponsor banner */}
-                      <div style={{ padding: "32px 16px 12px", borderBottom: "1px solid #eee" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                          <div style={{ width: 32, height: 32, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 700 }}>TM</div>
-                          <span style={{ fontWeight: 700, fontSize: 14, color: "#1A1A2E" }}>The Mommy</span>
-                        </div>
-                        <div style={{ background: "#FAF9F7", borderRadius: 8, padding: 10, textAlign: "center", fontSize: 12, color: "#666" }}>
-                          Together with <span style={{ fontWeight: 700, color: C.accent }}>Your Brand</span>
+                      {/* Logo Header */}
+                      <div style={{ textAlign: "center", padding: "16px 16px 8px" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 24, height: 24, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>M</span>
+                          </div>
+                          <span style={{ fontFamily: "Georgia, serif", fontSize: 14, fontWeight: 700, color: "#1A1A2E" }}>The Mommy</span>
                         </div>
                       </div>
 
-                      {/* Section 2: Newsletter intro with promo line */}
-                      <div style={{ padding: 16 }}>
-                        <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>Today's Mommy Scoop:</div>
-                        <div style={{ fontSize: 12, lineHeight: 1.5, color: "#333", marginBottom: 12 }}>
-                          <div>Simplify Car Rides with an iPad Holder</div>
-                          <div>Whip Up Delicious Mango Frozen Yogurt</div>
-                          <div>Make and Sell Beautiful Bird Feeders</div>
+                      {/* Touchpoint 1: Sponsor Banner */}
+                      <div style={{
+                        margin: "8px 16px", padding: 10, background: tpBg(0, "#FAF9F7"),
+                        borderRadius: 8, textAlign: "center",
+                        border: `2px solid ${tpBorderColor(0)}`, transition: "border-color 0.4s, background 0.4s",
+                      }}>
+                        <div style={{ fontSize: 9, color: "#888", marginBottom: 4 }}>Together with</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>Your Brand</div>
+                      </div>
+
+                      {/* Quote */}
+                      <div style={{ padding: "8px 16px", textAlign: "center" }}>
+                        <div style={{ fontStyle: "italic", fontSize: 9, color: "#666", lineHeight: 1.4 }}>
+                          "All endings are also beginnings. We just don't know it at the time."
+                        </div>
+                        <div style={{ fontSize: 8, color: "#999", marginTop: 2 }}>- Mitch Albom</div>
+                      </div>
+
+                      {/* Greeting + Today's Scoop */}
+                      <div style={{ padding: "8px 16px" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>TGIF, Mama!</div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>
+                          Time to kick back (just kidding, we're moms). Today, we're sprucing up the kitchen and getting crafty!
+                        </div>
+                        <div style={{ fontSize: 9, color: "#333", marginBottom: 2 }}>Today's Mommy scoop:</div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.6, paddingLeft: 4 }}>
+                          &#129529; Microwave Makeover<br />
+                          &#129382; Healthy Mashed Potatoes<br />
+                          &#127912; Rainbow Fish Craft
+                        </div>
+                      </div>
+
+                      {/* Touchpoint 2: Promotional Intro */}
+                      <div style={{
+                        margin: "6px 16px", padding: "8px 12px",
+                        background: tpBg(1, C.accentLight), borderRadius: 6,
+                        border: `2px solid ${tpBorderColor(1)}`, transition: "border-color 0.4s, background 0.4s",
+                      }}>
+                        <div style={{ fontSize: 9, color: "#333", lineHeight: 1.4 }}>
+                          Ok this kids' card is smart. <span style={{ color: C.accent, textDecoration: "underline", fontWeight: 600, fontSize: 9 }}>Allowance doesn't hit until the chores are done.</span>
+                        </div>
+                      </div>
+
+                      {/* Mom Hack Section */}
+                      <div style={{ padding: "12px 16px" }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom Hack</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Freshen Your Microwave with Vinegar</div>
+                        <div style={{ background: "#F5F5F5", borderRadius: 6, height: 60, marginBottom: 6 }} />
+                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.4 }}>
+                          Microwave smelling a little "leftover fish"? Here's a quick reset that makes cleanup so much easier...
+                        </div>
+                      </div>
+
+                      {/* Touchpoint 3: Main Ad Placement */}
+                      <div style={{
+                        margin: "6px 16px", padding: 12, borderRadius: 8,
+                        border: `2px solid ${tpBorderColor(2)}`, transition: "border-color 0.4s, background 0.4s",
+                        background: tpBg(2, "transparent"),
+                      }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Together with Your Brand</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Your Phone Buzzes Every Time They Swipe</div>
+                        <div style={{ background: "#F0F0F0", borderRadius: 6, height: 70, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 9, color: "#AAA" }}>Your Image</span>
+                        </div>
+                        <div style={{ fontSize: 8, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>
+                          That's the feature parents talk about most. It's a debit card and app made for kids and teens. They get their own card. You see every transaction...
+                        </div>
+                        <div style={{ fontSize: 8, color: "#555", marginBottom: 8 }}>
+                          <strong>6.5 million families.</strong> <strong>4.8 stars.</strong> 440k+ reviews.
                         </div>
                         <div style={{
-                          background: C.accentLight, borderRadius: 6,
-                          padding: "8px 12px", fontSize: 11, color: C.accentDark,
-                        }}>
-                          Transform a regular day into a resort day — Starting at $25
+                          background: C.accent, color: "white", textAlign: "center",
+                          padding: 6, borderRadius: 5, fontSize: 9, fontWeight: 600,
+                        }}>See how it works</div>
+                      </div>
+
+                      {/* Poll Section */}
+                      <div style={{ padding: "12px 16px" }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Mic &#127908;</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Where do you shop for kids' clothes?</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Department stores</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Online</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Second-hand stores</div>
                         </div>
                       </div>
 
-                      {/* Section 3: Main ad placement */}
-                      <div style={{ padding: 16 }}>
-                        <div style={{ fontSize: 10, color: C.accent, fontWeight: 600, marginBottom: 4 }}>Together with Your Brand</div>
-                        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: "#1A1A2E" }}>Get away for the day, no travel required.</div>
-                        <div style={{ background: "#F0F0F0", borderRadius: 8, height: 140, display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 12, marginBottom: 8 }}>
-                          Your Image
-                        </div>
-                        <div style={{ fontSize: 11, color: "#555", lineHeight: 1.5, marginBottom: 8 }}>
-                          As a mom, finding time for relaxation is difficult. They offer day passes to 1,300+ of the world's top hotels, starting at just $25...
-                        </div>
-                        <div style={{ background: C.accent, color: "white", textAlign: "center", padding: 8, borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
-                          Book a day pass
+                      {/* Recipe Section */}
+                      <div style={{ padding: "12px 16px" }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Menu</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#129382; Healthy Mashed Potatoes with Broccoli</div>
+                        <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
+                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.3 }}>
+                          Mix up your side dish game with this nutritious, delicious, and super easy way to get your kids to eat their veggies!
                         </div>
                       </div>
 
-                      {/* Filler content below */}
-                      <div style={{ padding: 16 }}>
-                        <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, marginBottom: 8, width: "80%" }} />
-                        <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, marginBottom: 8, width: "90%" }} />
-                        <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, marginBottom: 8, width: "70%" }} />
-                        <div style={{ height: 100, background: "#F0F0F0", borderRadius: 8, marginBottom: 8 }} />
-                        <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, marginBottom: 8, width: "85%" }} />
+                      {/* DIY Section */}
+                      <div style={{ padding: "12px 16px" }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Daily DIY</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#127912; Rainbow Fish</div>
+                        <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
+                        <div style={{ fontSize: 8, color: "#777" }}>Bring the beloved Rainbow Fish story to life...</div>
                       </div>
+
+                      {/* Bottom padding for scroll room */}
+                      <div style={{ height: 200 }} />
                     </div>
                   </div>
                 </div>
