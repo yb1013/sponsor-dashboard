@@ -411,7 +411,7 @@
         const unassignedRuns = [...spRuns.filter(r => !r.contractId || !assignedIds.has(r.contractId))].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(r => ({ ...cleanRun(r), price: r.price || 0 }));
         const pubData = {
           sponsorName: sp.name, showCostToSponsor: !!sp.showCostToSponsor, contracts: pubContracts, unassignedRuns,
-          publishedAt: new Date().toISOString(), publicationName: config.publicationName || "",
+          publishedAt: new Date().toISOString(), publicationName: config.publicationName || "", publicationUrl: config.publicationUrl || "", campaignUrl: config.campaignUrl || "",
         };
         try {
           const res = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` }, body: JSON.stringify({ shareToken: sp.shareToken, data: pubData }) });
@@ -1193,8 +1193,18 @@
               </React.Fragment>
             )}
             {vRuns.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
-            <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
-              <p style={{ fontSize: 12, color: C.dim }}>Metrics auto-update every 5 minutes • Synced via Beehiiv API</p>
+            <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
+              {vRuns.length > 0 && <button onClick={handleDownload} disabled={dlPdf} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: dlPdf ? C.dim : C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: dlPdf ? "not-allowed" : "pointer", opacity: dlPdf ? 0.6 : 1, transition: "border-color 0.15s" }}>{dlPdf ? "Generating..." : "📄 Download Full Report (PDF)"}</button>}
+              {config.campaignUrl && (
+                <div style={{ textAlign: "center", marginTop: 24 }}>
+                  <p style={{ fontSize: 14, color: C.muted }}>Want to do more with {config.publicationName || "us"}?</p>
+                  <p style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>Newsletter placements, socials, welcome sequences — build a package that fits.</p>
+                  <a href={config.campaignUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, fontSize: 14, fontWeight: 600, color: C.accent, textDecoration: "none", fontFamily: FONT }}>Build a Custom Package →</a>
+                </div>
+              )}
+              <div style={{ marginTop: 32, paddingTop: 16, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+                <p style={{ fontSize: 12, color: C.dim, opacity: 0.5 }}>{config.publicationName || "Newsletter"}{config.publicationUrl ? ` · ${config.publicationUrl}` : ""}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1537,6 +1547,7 @@
       const [pi, setPi] = useState(config.pubId || "");
       const [pn, setPn] = useState(config.publicationName || "");
       const [pu, setPu] = useState(config.publicationUrl || "");
+      const [cu, setCu] = useState(config.campaignUrl || "");
       const [debugData, setDebugData] = useState(null);
       const [debugLoading, setDebugLoading] = useState(false);
       const runDebug = async () => {
@@ -1556,11 +1567,12 @@
             <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 12 }}>PDF Report Branding</p>
             <Input label="Publication Name" value={pn} onChange={e => setPn(e.target.value)} placeholder="e.g. The Mommy" help="Used in PDF report header and footer" />
             <Input label="Publication URL" value={pu} onChange={e => setPu(e.target.value)} placeholder="e.g. themommy.news" help="Used in PDF report footer" />
+            <Input label="Campaign / Quote Page URL" value={cu} onChange={e => setCu(e.target.value)} placeholder="e.g. https://themommy.news/partner" help="Shown as 'Explore Options' link on sponsor reports" />
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={runDebug} color={C.amber} bg={C.amberDim} disabled={debugLoading}>{debugLoading ? "Loading..." : "🔍 Test API"}</Btn>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => onSave({ apiKey: ak.trim(), pubId: pi.trim(), publicationName: pn.trim(), publicationUrl: pu.trim() })} color={C.white} bg={C.accent}>Save</Btn>
+            <Btn onClick={() => onSave({ apiKey: ak.trim(), pubId: pi.trim(), publicationName: pn.trim(), publicationUrl: pu.trim(), campaignUrl: cu.trim() })} color={C.white} bg={C.accent}>Save</Btn>
           </div>
           {debugData && (
             <div style={{ marginTop: 16, padding: 12, background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, maxHeight: 300, overflow: "auto" }}>
@@ -1784,7 +1796,7 @@
       );
 
       const sponsor = { id: "public", name: data.sponsorName, patterns: [], showCostToSponsor: data.showCostToSponsor ?? false };
-      const config = { publicationName: data.publicationName || "" };
+      const config = { publicationName: data.publicationName || "", publicationUrl: data.publicationUrl || "", campaignUrl: data.campaignUrl || "" };
 
       // New multi-contract format
       if (data.contracts) {
