@@ -550,7 +550,7 @@
       const [takeoverState, setTakeoverState] = useState({});
       const [valueStackOpen, setValueStackOpen] = useState({});
       const [hoveredCard, setHoveredCard] = useState(null);
-      const subscriberCount = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders);
+      const subscriberCount = (stats?.engagedMoms || config.engagedReaders) + 3000;
       const adj = getPriceAdjustment(subscriberCount, config.pricingMilestones);
       const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
       const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
@@ -875,7 +875,7 @@
 
     // ─── Lock-In Messaging ────────────────────────────────────────
     function LockIn({ config, stats, isMobile }) {
-      const subs = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders);
+      const subs = (stats?.engagedMoms || config.engagedReaders) + 3000;
       const milestones = config.pricingMilestones || [];
       const nextMs = getNextMilestone(subs, milestones);
       const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
