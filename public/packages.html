@@ -117,10 +117,9 @@
     // ─── Hero ─────────────────────────────────────────────────────
     function Hero({ stats, config, isMobile }) {
       const heroStats = [
-        { label: "Subscribers", display: num(config.totalSubscribers || 120000) + "+" },
-        { label: "Engaged Moms", display: num(config.engagedReaders) },
-        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
-        { label: "Sponsors Rebook", display: config.pavedRebookRate + "%" },
+        { label: "Moms Per Send", display: num(config.engagedReaders) },
+        { label: "Open Rate", display: config.uniqueOpenRate + "%+" },
+        { label: "Would Sponsor Again", display: config.pavedRebookRate + "%" },
       ];
       return (
         <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg, position: "relative", overflow: "hidden" }}>
@@ -137,14 +136,17 @@
           {/* Content */}
           <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
-            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Reach {num(config.engagedReaders)} Moms Who{isMobile ? " " : <br />}Open, Read, and Buy
+            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 16px" }}>
+              Your Brand, Introduced by{isMobile ? " " : <br />}a Voice {num(config.engagedReaders)} Moms Trust
             </h1>
+            <p style={{ fontSize: 16, color: C.muted, maxWidth: 520, margin: "0 auto 32px", lineHeight: 1.6 }}>
+              Newsletter sponsorship isn't an ad — it's an introduction from a trusted friend, in a space readers chose to open.
+            </p>
             <div style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
-              gap: isMobile ? 16 : 32,
-              maxWidth: 720, margin: "0 auto 48px",
+              gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
+              gap: isMobile ? 16 : 48,
+              maxWidth: 600, margin: "0 auto 48px",
             }}>
               {heroStats.map((s, i) => (
                 <div key={i} style={{
@@ -303,63 +305,13 @@
     }
 
     // ─── Demographics ─────────────────────────────────────────────
-    function Demographics({ config, isMobile, configIsLive }) {
-      const numRef = useRef(null);
-      const prevRef = useRef(config.engagedReaders);
-      const [showLive, setShowLive] = useState(false);
-
-      useLayoutEffect(() => {
-        if (!configIsLive || !numRef.current) return;
-        const from = prevRef.current;
-        const to = config.engagedReaders;
-        prevRef.current = to;
-        if (from === to) { setShowLive(true); return; }
-        numRef.current.textContent = from.toLocaleString();
-        const start = performance.now();
-        const duration = 800;
-        function update(now) {
-          const elapsed = now - start;
-          const progress = Math.min(elapsed / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 3);
-          const current = Math.round(from + (to - from) * eased);
-          numRef.current.textContent = current.toLocaleString();
-          if (progress < 1) requestAnimationFrame(update);
-          else setShowLive(true);
-        }
-        requestAnimationFrame(update);
-      }, [configIsLive, config.engagedReaders]);
-
-      const otherStats = [
-        { label: "Unique Open Rate", value: config.uniqueOpenRate + "%+" },
-        { label: "Total Open Rate", value: config.totalOpenRate },
-      ];
-      const cardStyle = {
-        textAlign: "center", padding: "32px 24px", borderRadius: 16,
-        border: `1px solid ${C.border}`, background: C.bg,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      };
+    function Demographics({ config, isMobile }) {
       return (
         <Section bg={C.bgSubtle}>
-          <SectionTitle sub={`We send our 3\u00D7 weekly newsletter to the ${num(config.engagedReaders)} most engaged \u2014 not the full list`}>Who You're Reaching</SectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, maxWidth: 800, margin: "0 auto 48px" }}>
-            <div style={cardStyle}>
-              <div style={{ fontSize: 40, fontWeight: 700, color: C.text, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>
-                <span ref={numRef}>{num(config.engagedReaders)}</span>
-                {showLive && (
-                  <span style={{ marginLeft: 10, fontSize: 10, color: C.muted, fontWeight: 500, verticalAlign: "middle" }}>
-                    <span className="live-dot"></span> Live
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Engaged Moms</div>
-            </div>
-            {otherStats.map((s, i) => (
-              <div key={i} style={cardStyle}>
-                <div style={{ fontSize: 40, fontWeight: 700, color: C.text, marginBottom: 8 }}>{s.value}</div>
-                <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+          <SectionTitle>Who You're Reaching</SectionTitle>
+          <p style={{ fontSize: 16, color: C.textSecondary, maxWidth: 600, margin: "-32px auto 48px", lineHeight: 1.65, textAlign: "center" }}>
+            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num(config.engagedReaders)}</strong> most engaged — the moms who consistently open, read, and act.
+          </p>
           <WorldMap isMobile={isMobile} />
           <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 24 }}>
             100% moms, aged 22–45
@@ -1194,7 +1146,7 @@
         <div>
           <Hero stats={stats} config={cfg} isMobile={isMobile} />
           <BrandTicker config={cfg} isMobile={isMobile} />
-          <Demographics config={cfg} isMobile={isMobile} configIsLive={configIsLive} />
+          <Demographics config={cfg} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
