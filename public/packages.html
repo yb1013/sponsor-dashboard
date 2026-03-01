@@ -658,7 +658,7 @@
         if (isTabletOrBelow) return;
         const interval = setInterval(() => {
           setCurrentTP(prev => (prev + 1) % 3);
-        }, 3500);
+        }, 5000);
         return () => clearInterval(interval);
       }, [isTabletOrBelow]);
 
@@ -745,12 +745,11 @@
                       {/* Poll */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Mic &#127908;</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>How often do you exercise?</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Where do you shop for kids' clothes?</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Daily</div>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>A few times a week</div>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Rarely</div>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>I don't exercise</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Department stores</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Online</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Second-hand stores</div>
                         </div>
                       </div>
                       {/* Recipe */}
