@@ -137,7 +137,7 @@
           <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
             <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(config.engagedReaders)} Moms Trust
+              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(Math.floor(config.engagedReaders / 1000) * 1000)}+ Moms Trust
             </h1>
             <div style={{
               display: "grid",
