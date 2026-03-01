@@ -17,9 +17,14 @@
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
     @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
     @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-    .section { opacity: 1; transform: translateY(0); }
-    .section.animate-ready { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
-    .section.animate-ready.visible { opacity: 1; transform: translateY(0); }
+    .section.section-hidden { opacity: 0; transform: translateY(30px); transition: opacity 0.8s ease, transform 0.8s ease; }
+    .section.section-hidden.section-visible { opacity: 1; transform: translateY(0); }
+    @keyframes hero-drift { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 33% { transform: translate(2%, -1%) rotate(1deg); } 66% { transform: translate(-1%, 1%) rotate(-0.5deg); } }
+    @keyframes float-1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-20px, 15px); } }
+    @keyframes float-2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(15px, -10px); } }
+    @keyframes float-3 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 20px); } }
+    @keyframes stat-enter { to { opacity: 1; transform: translateY(0); } }
+    body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #E8909C, #D4707E, #E8909C); z-index: 9999; }
     .live-dot { display: inline-block; width: 6px; height: 6px; background: #22C55E; border-radius: 50%; margin-left: 8px; vertical-align: middle; animation: live-pulse 2s ease-in-out infinite; }
     @keyframes live-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); } }
     ::selection { background: #E8909C33; }
@@ -97,11 +102,11 @@
       );
     }
 
-    function SectionTitle({ children, sub }) {
+    function SectionTitle({ children, sub, titleColor, subColor }) {
       return (
         <div style={{ textAlign: "center", marginBottom: 56 }}>
-          <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, marginBottom: sub ? 14 : 0, color: C.text }}>{children}</h2>
-          {sub && <p style={{ fontSize: 16, color: C.muted, maxWidth: 520, margin: "0 auto", lineHeight: 1.65 }}>{sub}</p>}
+          <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, marginBottom: sub ? 14 : 0, color: titleColor || C.text }}>{children}</h2>
+          {sub && <p style={{ fontSize: 16, color: subColor || C.muted, maxWidth: 520, margin: "0 auto", lineHeight: 1.65 }}>{sub}</p>}
         </div>
       );
     }
@@ -115,8 +120,19 @@
         { label: "Sponsors Rebook", display: config.pavedRebookRate + "%" },
       ];
       return (
-        <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg }}>
-          <div style={{ maxWidth: 860, margin: "0 auto" }} className="fade-in">
+        <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg, position: "relative", overflow: "hidden" }}>
+          {/* Animated gradient background */}
+          <div style={{
+            position: "absolute", top: "-50%", left: "-50%", width: "200%", height: "200%",
+            background: "radial-gradient(ellipse at 20% 50%, rgba(232, 144, 156, 0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(232, 144, 156, 0.06) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(79, 143, 247, 0.04) 0%, transparent 50%)",
+            animation: "hero-drift 20s ease-in-out infinite", zIndex: 0, pointerEvents: "none",
+          }} />
+          {/* Floating accent shapes */}
+          <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", opacity: 0.04, background: "#E8909C", top: -100, right: -100, animation: "float-1 15s ease-in-out infinite", pointerEvents: "none", zIndex: 0 }} />
+          <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", opacity: 0.04, background: "#E8909C", bottom: -80, left: -80, animation: "float-2 18s ease-in-out infinite", pointerEvents: "none", zIndex: 0 }} />
+          <div style={{ position: "absolute", width: 200, height: 200, borderRadius: "50%", opacity: 0.04, background: "#4F8FF7", top: "30%", left: "60%", animation: "float-3 22s ease-in-out infinite", pointerEvents: "none", zIndex: 0 }} />
+          {/* Content */}
+          <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
             <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
               Reach {num(config.engagedReaders)} Moms Who{isMobile ? " " : <br />}Open, Read, and Buy
@@ -128,7 +144,11 @@
               maxWidth: 720, margin: "0 auto 48px",
             }}>
               {heroStats.map((s, i) => (
-                <div key={i} style={{ textAlign: "center" }}>
+                <div key={i} style={{
+                  textAlign: "center", opacity: 0, transform: "translateY(16px)",
+                  animation: "stat-enter 0.6s ease-out forwards",
+                  animationDelay: `${0.1 + i * 0.1}s`,
+                }}>
                   <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</span>
                 </div>
@@ -173,7 +193,7 @@
       ));
 
       return (
-        <section style={{ padding: "28px 0", background: C.accentLight, overflow: "hidden" }}>
+        <section style={{ padding: "28px 0", background: C.accentLight, overflow: "hidden", borderTop: "1px solid rgba(232, 144, 156, 0.15)", borderBottom: "1px solid rgba(232, 144, 156, 0.15)" }}>
           <p style={{ textAlign: "center", fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 20 }}>
             These Brands Already Reach Our Readers
           </p>
@@ -370,7 +390,7 @@
       const cardWidth = isMobile ? "calc(100vw - 64px)" : "340px";
 
       return (
-        <Section bg={C.bgSubtle}>
+        <Section bg="linear-gradient(180deg, #FDF2F4 0%, #FAF9F7 100%)">
           <SectionTitle sub="Loved by thousands of moms">Our Readers Don't Just Read — They Act</SectionTitle>
           <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: isMobile ? "0 24px" : "0 56px" }}>
             {!isMobile && (
@@ -382,28 +402,29 @@
                 boxShadow: "0 2px 8px rgba(0,0,0,0.08)", transition: "all 0.2s",
               }}>&lsaquo;</button>
             )}
-            {!isMobile && <div style={{ position: "absolute", left: 56, top: 0, bottom: 0, width: 40, background: "linear-gradient(to right, #FAF9F7, transparent)", zIndex: 3, pointerEvents: "none" }} />}
+            {!isMobile && <div style={{ position: "absolute", left: 56, top: 0, bottom: 0, width: 40, background: "linear-gradient(to right, #FDF2F4, transparent)", zIndex: 3, pointerEvents: "none" }} />}
             <div ref={trackRef} className="carousel-track" style={{
               display: "flex", gap: 24, overflowX: "auto", scrollSnapType: "x mandatory",
               scrollBehavior: "smooth", padding: "16px 0",
               scrollbarWidth: "none", msOverflowStyle: "none",
               WebkitOverflowScrolling: "touch",
             }}>
-              <style>{`.carousel-track::-webkit-scrollbar { display: none; }`}</style>
+              <style>{`.carousel-track::-webkit-scrollbar { display: none; } .testimonial-card { transition: transform 0.3s ease, box-shadow 0.3s ease; } .testimonial-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(232, 144, 156, 0.1) !important; }`}</style>
               {testimonials.map((t, i) => (
-                <div key={i} style={{
+                <div key={i} className="testimonial-card" style={{
                   background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16,
                   padding: 32, width: cardWidth, minWidth: cardWidth, maxWidth: isMobile ? cardWidth : 360, minHeight: 200,
                   flexShrink: 0, scrollSnapAlign: "start",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 }}>
-                  <div style={{ fontSize: 48, fontFamily: "Georgia, serif", color: C.accentLight, lineHeight: 0, display: "block", marginBottom: 16 }}>&ldquo;</div>
+                  <div style={{ fontSize: 64, fontFamily: "Georgia, serif", color: "rgba(232, 144, 156, 0.15)", lineHeight: 1, display: "block", marginBottom: -8 }}>&ldquo;</div>
                   <p style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.65, marginBottom: 16, fontStyle: "italic" }}>{t.quote}</p>
                   <p style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.text }}>{t.name}</p>
                 </div>
               ))}
             </div>
             {!isMobile && <div style={{ position: "absolute", right: 56, top: 0, bottom: 0, width: 40, background: "linear-gradient(to left, #FAF9F7, transparent)", zIndex: 3, pointerEvents: "none" }} />}
+
             {!isMobile && (
               <button onClick={() => scrollCarousel(1)} style={{
                 position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)",
@@ -427,11 +448,13 @@
           <SectionTitle sub="Every partner gets a private, always-updated dashboard. No spreadsheets. No waiting.">
             Real-Time Campaign Tracking
           </SectionTitle>
+          <div style={{ position: "relative", maxWidth: 960, margin: "0 auto" }}>
+            {/* Ambient blue glow */}
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "80%", height: "80%", background: "radial-gradient(ellipse, rgba(79, 143, 247, 0.15) 0%, transparent 70%)", filter: "blur(40px)", zIndex: 0, pointerEvents: "none" }} />
           <div style={{
             background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 24 : 48,
-            maxWidth: 960, margin: "0 auto",
             color: "#E2E8F0", position: "relative", overflow: "hidden",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT, zIndex: 1,
           }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)", animation: "shimmer 8s ease-in-out infinite" }} />
@@ -478,6 +501,7 @@
               <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Category Exclusivity</span>
             </div>
           </div>
+          </div>{/* end dashboard wrapper */}
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
               display: "inline-flex", alignItems: "center", gap: 8,
@@ -509,9 +533,11 @@
       const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
 
       return (
-        <Section id="pricing" bg={C.bgSubtle}>
+        <Section id="pricing" bg={C.bgSubtle} style={{ position: "relative", overflow: "hidden" }}>
+          {/* Subtle pink radial glow */}
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 800, height: 600, background: "radial-gradient(ellipse, rgba(232, 144, 156, 0.06) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
           <SectionTitle>Partnership Packages</SectionTitle>
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 24, alignItems: "stretch" }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 24, alignItems: "stretch", position: "relative", zIndex: 1 }}>
             {tierOrder.map(key => {
               const tier = config.tiers?.[key];
               if (!tier) return null;
@@ -533,9 +559,13 @@
                     flex: 1, borderRadius: 20, display: "flex", flexDirection: "column",
                     border: `${isRec ? 2.5 : key === "partner" ? 1.5 : 1}px solid ${isRec ? C.accent : key === "partner" ? "#1A1A2E" : C.border}`,
                     background: C.bg, overflow: "visible", position: "relative",
-                    boxShadow: isHovered ? "0 8px 24px rgba(0,0,0,0.08)" : (isRec ? "0 8px 30px rgba(232,144,156,0.15)" : "0 1px 3px rgba(0,0,0,0.04)"),
-                    transform: isHovered ? "translateY(-4px) scale(1.04)" : (isRec && !isMobile ? "scale(1.04)" : "none"),
-                    transition: "transform 0.2s, box-shadow 0.2s",
+                    boxShadow: isHovered
+                      ? (isRec ? "0 12px 40px rgba(232, 144, 156, 0.2)" : "0 12px 32px rgba(0,0,0,0.08)")
+                      : (isRec ? "0 8px 30px rgba(232,144,156,0.15)" : "0 1px 3px rgba(0,0,0,0.04)"),
+                    transform: isHovered
+                      ? (isRec ? "scale(1.06)" : "translateY(-6px)")
+                      : (isRec && !isMobile ? "scale(1.04)" : "none"),
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
                     zIndex: isRec ? 2 : 0,
                   }}>
                   {isRec && (
@@ -691,15 +721,18 @@
       ];
 
       return (
-        <Section bg={C.bg} style={{ padding: "120px 24px" }}>
-          <SectionTitle sub="Three touchpoints in every sponsored issue">What Your Sponsorship Looks Like</SectionTitle>
+        <Section bg="linear-gradient(180deg, #0A0E1A 0%, #131830 100%)" style={{ padding: "120px 24px", position: "relative", overflow: "hidden" }}>
+          {/* Background orbs */}
+          <div style={{ position: "absolute", width: 500, height: 500, background: "radial-gradient(circle, rgba(232, 144, 156, 0.08) 0%, transparent 70%)", top: -100, right: -100, pointerEvents: "none" }} />
+          <div style={{ position: "absolute", width: 400, height: 400, background: "radial-gradient(circle, rgba(79, 143, 247, 0.06) 0%, transparent 70%)", bottom: -50, left: -100, pointerEvents: "none" }} />
+          <SectionTitle sub="Three touchpoints in every sponsored issue" titleColor="#FFFFFF" subColor="rgba(255, 255, 255, 0.6)">What Your Sponsorship Looks Like</SectionTitle>
           {!isTabletOrBelow ? (
             <div style={{ display: "flex", gap: 80, alignItems: "center", maxWidth: 1100, margin: "0 auto" }}>
               <div style={{ flexShrink: 0, width: 320 }}>
                 <div style={{
                   border: "6px solid #1A1A2E", borderRadius: 40, overflow: "hidden",
                   height: 640, position: "relative", background: "#1A1A2E",
-                  boxShadow: "0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.2)",
+                  boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.1), 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 100px rgba(232, 144, 156, 0.08)",
                 }}>
                   <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: 90, height: 22, background: "#1A1A2E", borderRadius: 12, zIndex: 10 }} />
                   <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, background: "#FFFFFF", zIndex: 5, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "0 20px 4px", fontSize: 9, fontWeight: 600, color: "#1A1A2E" }}>
@@ -773,8 +806,8 @@
                 {callouts.map((c, i) => (
                   <div key={i} style={{ marginBottom: 48, paddingLeft: 24, borderLeft: `3px solid ${currentTP === i ? C.accent : "transparent"}`, opacity: currentTP === i ? 1 : 0.3, transition: "opacity 0.4s, border-color 0.4s", cursor: "pointer" }} onClick={() => setCurrentTP(i)}>
                     <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.accent, marginBottom: 8 }}>{c.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 10, color: C.text }}>{c.title}</div>
-                    <div style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.6, maxWidth: 380 }}>{c.desc}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 10, color: "#FFFFFF" }}>{c.title}</div>
+                    <div style={{ fontSize: 16, color: "rgba(255, 255, 255, 0.7)", lineHeight: 1.6, maxWidth: 380 }}>{c.desc}</div>
                   </div>
                 ))}
               </div>
@@ -782,17 +815,17 @@
           ) : (
             <div style={{ maxWidth: 500, margin: "0 auto" }}>
               {callouts.map((c, i) => (
-                <div key={i} style={{ marginBottom: 32, padding: 24, borderRadius: 16, border: `1px solid ${C.border}`, background: C.bg }}>
+                <div key={i} style={{ marginBottom: 32, padding: 24, borderRadius: 16, border: "1px solid rgba(255, 255, 255, 0.1)", background: "rgba(255, 255, 255, 0.05)" }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 2, color: C.accent, marginBottom: 8 }}>{c.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: C.text }}>{c.title}</div>
-                  <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.6 }}>{c.desc}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: "#FFFFFF" }}>{c.title}</div>
+                  <div style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.7)", lineHeight: 1.6 }}>{c.desc}</div>
                 </div>
               ))}
             </div>
           )}
           {example && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
-              <p style={{ fontSize: 15, color: C.textSecondary, marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy — {example.cpc || "$1.53 per click"}</p>
+              <p style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy — {example.cpc || "$1.53 per click"}</p>
               <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example &rarr;</a>
             </div>
           )}
@@ -808,7 +841,7 @@
       const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
 
       return (
-        <Section bg={C.bg}>
+        <Section bg="linear-gradient(180deg, #FFFBF5 0%, #FAF9F7 100%)">
           <SectionTitle>Lock In Today's Rates</SectionTitle>
           <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
             <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: C.text, marginBottom: 8, lineHeight: 1.4 }}>
@@ -864,6 +897,30 @@
             <div style={{ width: 48, height: 1, background: C.border, margin: "0 auto 40px" }} />
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Flexible Cancellation</p>
             <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65 }}>{config.cancellationPolicy}</p>
+          </div>
+        </Section>
+      );
+    }
+
+    // ─── Founder Note ──────────────────────────────────────────────
+    function Founder() {
+      return (
+        <Section bg={C.bg}>
+          <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: "linear-gradient(135deg, #E8909C, #D4707E)",
+              margin: "0 auto 20px", display: "flex", alignItems: "center",
+              justifyContent: "center", fontSize: 24, color: "white", fontWeight: 700,
+            }}>D</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+              A note from Danielle
+            </div>
+            <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.7, fontStyle: "italic" }}>
+              I built The Mommy because I wanted a newsletter I'd actually look forward to opening.
+              Every brand I partner with is one I'd genuinely recommend to a friend. That's the bar —
+              and it's why our readers trust what they see.
+            </div>
           </div>
         </Section>
       );
@@ -1120,6 +1177,7 @@
           <HowItWorks config={cfg} isMobile={isMobile} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} />
           <Guarantee config={cfg} />
+          <Founder />
           <InquiryForm config={cfg} stats={stats} isMobile={isMobile} />
           <Footer config={cfg} />
         </div>
@@ -1128,21 +1186,25 @@
 
     ReactDOM.createRoot(document.getElementById("root")).render(<PackagesPage />);
 
-    // Scroll fade-in observer (progressive enhancement — page works without it)
+    // Scroll fade-in observer (progressive enhancement — sections visible by default)
     requestAnimationFrame(() => {
       try {
         if ('IntersectionObserver' in window) {
           const observer = new IntersectionObserver((entries) => {
-            entries.forEach(e => {
-              if (e.isIntersecting) {
-                e.target.classList.add('visible');
+            entries.forEach(entry => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('section-visible');
+                observer.unobserve(entry.target);
               }
             });
-          }, { threshold: 0.1 });
-          document.querySelectorAll('.section').forEach(el => {
-            el.classList.add('animate-ready');
-            observer.observe(el);
-          });
+          }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+          setTimeout(() => {
+            document.querySelectorAll('.section').forEach(el => {
+              el.classList.add('section-hidden');
+              observer.observe(el);
+            });
+          }, 100);
         }
       } catch (e) {
         console.warn('Animation setup failed:', e);
