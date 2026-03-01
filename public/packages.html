@@ -662,7 +662,7 @@
         return () => clearInterval(interval);
       }, [isTabletOrBelow]);
 
-      const scrollPositions = [0, 200, 380];
+      const scrollPositions = [0, 210, 400];
       const tpBorderColor = (i) => currentTP === i ? C.accent : "transparent";
       const tpBg = (i, defaultBg) => currentTP === i ? C.accentLight : defaultBg;
 
@@ -698,56 +698,74 @@
                   <div style={{ position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)", width: 100, height: 4, background: "#1A1A2E", borderRadius: 2, zIndex: 10 }} />
                   <div style={{ position: "absolute", top: 44, bottom: 20, left: 0, right: 0, overflow: "hidden", background: "#FFFFFF" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, transition: "transform 0.8s ease-in-out", transform: `translateY(-${scrollPositions[currentTP]}px)`, background: "#FFFFFF" }}>
-                      <div style={{ textAlign: "center", padding: "16px 16px 8px" }}>
+                      {/* Header */}
+                      <div style={{ textAlign: "center", padding: "28px 16px 8px" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ width: 24, height: 24, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>M</span></div>
+                          <div style={{ width: 24, height: 24, background: C.accent, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "white", fontSize: 10, fontWeight: 700, fontFamily: "serif" }}>M</span></div>
                           <span style={{ fontFamily: "Georgia, serif", fontSize: 14, fontWeight: 700, color: "#1A1A2E" }}>The Mommy</span>
                         </div>
                       </div>
+                      {/* TP 0: Sponsor Banner */}
                       <div style={{ margin: "8px 16px", padding: 10, background: tpBg(0, "#FAF9F7"), borderRadius: 8, textAlign: "center", border: `2px solid ${tpBorderColor(0)}`, transition: "border-color 0.4s, background 0.4s" }}>
                         <div style={{ fontSize: 9, color: "#888", marginBottom: 4 }}>Together with</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>Your Brand</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>ResortPass</div>
                       </div>
+                      {/* Quote */}
                       <div style={{ padding: "8px 16px", textAlign: "center" }}>
-                        <div style={{ fontStyle: "italic", fontSize: 9, color: "#666", lineHeight: 1.4 }}>"All endings are also beginnings. We just don't know it at the time."</div>
-                        <div style={{ fontSize: 8, color: "#999", marginTop: 2 }}>- Mitch Albom</div>
+                        <div style={{ fontStyle: "italic", fontSize: 9, color: "#666", lineHeight: 1.4 }}>"You never know how strong you are until being strong is the only choice you have."</div>
+                        <div style={{ fontSize: 8, color: "#999", marginTop: 2 }}>- Bob Marley</div>
                       </div>
+                      {/* Greeting */}
                       <div style={{ padding: "8px 16px" }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>TGIF, Mama!</div>
-                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>Time to kick back (just kidding, we're moms). Today, we're sprucing up the kitchen and getting crafty!</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Rise and Shine, Mommy!</div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>Happy Monday! Let's celebrate surviving the weekend by upgrading our car's mess level to 'organized chaos.'</div>
                         <div style={{ fontSize: 9, color: "#333", marginBottom: 2 }}>Today's Mommy scoop:</div>
-                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.6, paddingLeft: 4 }}>&#129529; Microwave Makeover<br />&#129382; Healthy Mashed Potatoes<br />&#127912; Rainbow Fish Craft</div>
+                        <div style={{ fontSize: 9, color: "#555", lineHeight: 1.6, paddingLeft: 4 }}>&#128663; Simplify Car Rides with an iPad Holder<br />&#129389; Whip Up Delicious Mango Frozen Yogurt<br />&#128038; Make and Sell Beautiful Bird Feeders</div>
                       </div>
-                      <div style={{ margin: "6px 16px", padding: "8px 12px", background: tpBg(1, C.accentLight), borderRadius: 6, border: `2px solid ${tpBorderColor(1)}`, transition: "border-color 0.4s, background 0.4s" }}>
-                        <div style={{ fontSize: 9, color: "#333", lineHeight: 1.4 }}>Ok this kids' card is smart. <span style={{ color: C.accent, textDecoration: "underline", fontWeight: 600, fontSize: 9 }}>Allowance doesn't hit until the chores are done.</span></div>
+                      {/* TP 1: Promo Intro */}
+                      <div style={{ margin: "6px 16px", padding: "8px 12px", background: tpBg(1, "#FDF2F4"), borderRadius: 6, border: `2px solid ${tpBorderColor(1)}`, transition: "border-color 0.4s, background 0.4s" }}>
+                        <div style={{ fontSize: 9, color: "#333", lineHeight: 1.4 }}>Transform a regular day into a resort day, no overnight needed. <span style={{ color: C.accent, textDecoration: "underline", fontWeight: 600, fontSize: 9, cursor: "pointer" }}>Starting at $25</span></div>
                       </div>
+                      {/* Mom Hack */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom Hack</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Freshen Your Microwave with Vinegar</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>iPad Holder and Tidy Car Hack</div>
                         <div style={{ background: "#F5F5F5", borderRadius: 6, height: 60, marginBottom: 6 }} />
-                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.4 }}>Microwave smelling a little "leftover fish"? Here's a quick reset...</div>
+                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.4 }}>For kids who love their iPads, consider a multi-functional kick mat with a built-in tablet holder. Great for long car rides...</div>
                       </div>
+                      {/* TP 2: Main Ad */}
                       <div style={{ margin: "6px 16px", padding: 12, borderRadius: 8, border: `2px solid ${tpBorderColor(2)}`, transition: "border-color 0.4s, background 0.4s", background: tpBg(2, "transparent") }}>
-                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Together with Your Brand</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Your Phone Buzzes Every Time They Swipe</div>
-                        <div style={{ background: "#F0F0F0", borderRadius: 6, height: 70, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}><span style={{ fontSize: 9, color: "#AAA" }}>Your Image</span></div>
-                        <div style={{ fontSize: 8, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>That's the feature parents talk about most. It's a debit card and app made for kids and teens...</div>
-                        <div style={{ fontSize: 8, color: "#555", marginBottom: 8 }}><strong>6.5 million families.</strong> <strong>4.8 stars.</strong> 440k+ reviews.</div>
-                        <div style={{ background: C.accent, color: "white", textAlign: "center", padding: 6, borderRadius: 5, fontSize: 9, fontWeight: 600 }}>See how it works</div>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Together with ResortPass</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Get away for the day, no travel required.</div>
+                        <div style={{ background: "#F0F0F0", borderRadius: 6, height: 70, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}><span style={{ fontSize: 9, color: "#AAA" }}>Resort Pool Image</span></div>
+                        <div style={{ fontSize: 8, color: "#555", lineHeight: 1.4, marginBottom: 8 }}>As a mom, finding time for relaxation is difficult. They offer day passes to 1,300+ of the world's top hotels, starting at just $25.</div>
+                        <div style={{ fontSize: 8, color: "#555", marginBottom: 8 }}>Access waterslides, lazy rivers, cabanas, and more. Fun for the whole family.</div>
+                        <div style={{ background: C.accent, color: "white", textAlign: "center", padding: 6, borderRadius: 5, fontSize: 9, fontWeight: 600 }}>Book a day pass</div>
                       </div>
+                      {/* Poll */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Mic &#127908;</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>Where do you shop for kids' clothes?</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>How often do you exercise?</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Department stores</div>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Online</div>
-                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Second-hand stores</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Daily</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>A few times a week</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>Rarely</div>
+                          <div style={{ background: "#F5F5F5", borderRadius: 4, padding: "5px 8px", fontSize: 8, color: "#555" }}>I don't exercise</div>
                         </div>
                       </div>
+                      {/* Recipe */}
                       <div style={{ padding: "12px 16px" }}>
                         <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Mom's Menu</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#129382; Healthy Mashed Potatoes with Broccoli</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#129389; Mango Frozen Yogurt</div>
                         <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
+                        <div style={{ fontSize: 8, color: "#777", lineHeight: 1.3 }}>A refreshing snack that's as healthy as it is delicious. Just three ingredients, no added sugar!</div>
+                      </div>
+                      {/* DIY */}
+                      <div style={{ padding: "12px 16px" }}>
+                        <div style={{ fontSize: 8, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Daily DIY</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#1A1A2E", marginBottom: 6 }}>&#128038; Tea Cup Bird Feeders</div>
+                        <div style={{ background: "#F5F5F5", borderRadius: 6, height: 50, marginBottom: 6 }} />
+                        <div style={{ fontSize: 8, color: "#777" }}>Transform your garden with these charming bird feeders made from thrifted teacups!</div>
                       </div>
                       <div style={{ height: 200 }} />
                     </div>
