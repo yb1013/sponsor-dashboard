@@ -664,9 +664,9 @@
       const tpBg = (i, defaultBg) => currentTP === i ? C.accentLight : defaultBg;
 
       const callouts = [
-        { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo alongside The Mommy's at the very top of the email. 31,000+ readers see this before any content loads." },
+        { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo at the very top of every email. The first thing 31,000+ readers see." },
         { label: "Touchpoint 2", title: "Promotional Intro", desc: "A one-line mention woven naturally into the newsletter opening. Feels editorial, not like an ad. Readers click because they're curious." },
-        { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Your headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen. Average result: $1.53/click." },
+        { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Your headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen." },
       ];
 
       return (
@@ -791,7 +791,7 @@
           )}
           {example && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
-              <p style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy, {example.cpc || "$1.53 per click"}</p>
+              <p style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy, {example.cpc || "$1.47 per click"}</p>
               <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example &rarr;</a>
             </div>
           )}
