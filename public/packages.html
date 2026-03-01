@@ -209,6 +209,7 @@
             <div style={{
               display: "flex",
               justifyContent: "center",
+              alignItems: "flex-start",
               gap: isMobile ? 16 : 48,
               maxWidth: 600, margin: "0 auto 48px",
             }}>
@@ -218,7 +219,7 @@
                   animation: "stat-enter 0.6s ease-out forwards",
                   animationDelay: `${0.1 + i * 0.1}s`,
                 }}>
-                  <span ref={i === 0 ? momsStatRef : null} style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
+                  <span ref={i === 0 ? momsStatRef : null} style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block", lineHeight: 1 }}>{s.display}</span>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</span>
                   {i === 0 && (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 6 }}>
