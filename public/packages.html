@@ -207,19 +207,25 @@
               Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(headlineNum)}+ Moms Trust
             </h1>
             <div style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
+              display: "flex",
+              justifyContent: "center",
               gap: isMobile ? 16 : 48,
               maxWidth: 600, margin: "0 auto 48px",
             }}>
               {heroStats.map((s, i) => (
                 <div key={i} style={{
-                  textAlign: "center", opacity: 0, transform: "translateY(16px)",
+                  flex: 1, textAlign: "center", opacity: 0, transform: "translateY(16px)",
                   animation: "stat-enter 0.6s ease-out forwards",
                   animationDelay: `${0.1 + i * 0.1}s`,
                 }}>
                   <span ref={i === 0 ? momsStatRef : null} style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</span>
+                  {i === 0 && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 6 }}>
+                      <span style={{ width: 6, height: 6, background: "#22C55E", borderRadius: "50%", display: "inline-block", animation: "pulse 2s ease-in-out infinite" }} />
+                      <span style={{ fontSize: 11, color: "#999", letterSpacing: 0.5 }}>Live</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
