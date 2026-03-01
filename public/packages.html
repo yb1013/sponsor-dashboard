@@ -32,6 +32,10 @@
     @keyframes bar-pulse { 0%, 100% { transform: translateY(-50%) scale(1); opacity: 1; box-shadow: 0 0 8px rgba(232, 144, 156, 0.5); } 50% { transform: translateY(-50%) scale(1.4); opacity: 0.6; box-shadow: 0 0 16px rgba(232, 144, 156, 0.3); } }
     ::selection { background: #E8909C33; }
     input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
+    .odometer-container { display: inline-flex; overflow: hidden; line-height: 1; font-variant-numeric: tabular-nums; }
+    .odometer-digit { display: inline-block; position: relative; overflow: hidden; height: 1.15em; }
+    .odometer-digit-inner { display: block; transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
+    .odometer-separator { display: inline-block; width: 0.3em; text-align: center; }
   </style>
 </head>
 <body>
@@ -114,10 +118,71 @@
       );
     }
 
+    // ─── Odometer ──────────────────────────────────────────────────
+    function createOdometer(element, initialValue) {
+      const formatted = initialValue.toLocaleString();
+      element.innerHTML = '';
+      element.classList.add('odometer-container');
+      for (let i = 0; i < formatted.length; i++) {
+        const char = formatted[i];
+        if (char === ',') {
+          const sep = document.createElement('span');
+          sep.className = 'odometer-separator';
+          sep.textContent = ',';
+          element.appendChild(sep);
+        } else {
+          const digitWrap = document.createElement('span');
+          digitWrap.className = 'odometer-digit';
+          const inner = document.createElement('span');
+          inner.className = 'odometer-digit-inner';
+          let stack = '';
+          for (let d = 0; d <= 9; d++) {
+            stack += '<span style="display:block;height:1.15em;line-height:1.15em;">' + d + '</span>';
+          }
+          inner.innerHTML = stack;
+          inner.style.transform = 'translateY(-' + parseInt(char) * 1.15 + 'em)';
+          digitWrap.appendChild(inner);
+          element.appendChild(digitWrap);
+        }
+      }
+    }
+
+    function updateOdometer(element, newValue) {
+      const formatted = newValue.toLocaleString();
+      const digits = element.querySelectorAll('.odometer-digit-inner');
+      let digitIndex = 0;
+      for (let i = 0; i < formatted.length; i++) {
+        const char = formatted[i];
+        if (char !== ',') {
+          if (digits[digitIndex]) {
+            const idx = digitIndex;
+            const delay = idx * 80;
+            setTimeout(() => {
+              digits[idx].style.transform = 'translateY(-' + parseInt(char) * 1.15 + 'em)';
+            }, delay);
+          }
+          digitIndex++;
+        }
+      }
+    }
+
     // ─── Hero ─────────────────────────────────────────────────────
     function Hero({ stats, config, isMobile }) {
+      const momsStatRef = useRef(null);
+      const odometerInitRef = useRef(false);
+      const engagedMoms = stats?.engagedMoms || config.engagedReaders;
+      const headlineNum = Math.floor(engagedMoms / 1000) * 1000;
+
+      useEffect(() => {
+        if (!stats?.engagedMoms || !momsStatRef.current || odometerInitRef.current) return;
+        odometerInitRef.current = true;
+        const el = momsStatRef.current;
+        createOdometer(el, config.engagedReaders || 31000);
+        setTimeout(() => updateOdometer(el, stats.engagedMoms), 200);
+      }, [stats?.engagedMoms]);
+
       const heroStats = [
-        { label: "Moms Per Send", display: num(config.engagedReaders) },
+        { label: "Moms Per Send", display: num(engagedMoms) },
         { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
         { label: "Would Sponsor Again", display: config.pavedRebookRate + "%" },
       ];
@@ -137,7 +202,7 @@
           <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
             <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(Math.floor(config.engagedReaders / 1000) * 1000)}+ Moms Trust
+              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(headlineNum)}+ Moms Trust
             </h1>
             <div style={{
               display: "grid",
@@ -151,7 +216,7 @@
                   animation: "stat-enter 0.6s ease-out forwards",
                   animationDelay: `${0.1 + i * 0.1}s`,
                 }}>
-                  <span style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
+                  <span ref={i === 0 ? momsStatRef : null} style={{ fontSize: isMobile ? 32 : 40, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", display: "block" }}>{s.display}</span>
                   <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5 }}>{s.label}</span>
                 </div>
               ))}
@@ -302,12 +367,12 @@
     }
 
     // ─── Demographics ─────────────────────────────────────────────
-    function Demographics({ config, isMobile }) {
+    function Demographics({ config, stats, isMobile }) {
       return (
         <Section bg={C.bgSubtle}>
           <SectionTitle>Who You're Reaching</SectionTitle>
           <p style={{ fontSize: 16, color: C.textSecondary, maxWidth: 600, margin: "-32px auto 48px", lineHeight: 1.65, textAlign: "center" }}>
-            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num(config.engagedReaders)}</strong> most engaged — the moms who consistently open, read, and act.
+            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num(stats?.engagedMoms || config.engagedReaders)}</strong> most engaged — the moms who consistently open, read, and act.
           </p>
           <WorldMap isMobile={isMobile} />
           <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 24 }}>
@@ -1150,7 +1215,7 @@
         <div>
           <Hero stats={stats} config={cfg} isMobile={isMobile} />
           <BrandTicker config={cfg} isMobile={isMobile} />
-          <Demographics config={cfg} isMobile={isMobile} />
+          <Demographics config={cfg} stats={stats} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
