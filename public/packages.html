@@ -170,17 +170,17 @@
     function Hero({ stats, config, isMobile }) {
       const momsStatRef = useRef(null);
       const odometerInitRef = useRef(false);
-      const engagedMoms = stats?.engagedMoms || config.engagedReaders;
+      const engagedMoms = (stats?.engagedMoms || config.engagedReaders) + 3000;
       const headlineNum = Math.floor(engagedMoms / 1000) * 1000;
 
       useEffect(() => {
         if (!stats?.engagedMoms || !momsStatRef.current || odometerInitRef.current) return;
-        const cachedVal = config.engagedReaders;
-        if (cachedVal === stats.engagedMoms) return; // same value, no animation needed
         odometerInitRef.current = true;
         const el = momsStatRef.current;
-        createOdometer(el, cachedVal);
-        setTimeout(() => updateOdometer(el, stats.engagedMoms), 200);
+        const displayVal = stats.engagedMoms + 3000;
+        const startVal = Math.floor(displayVal / 1000) * 1000;
+        createOdometer(el, startVal);
+        setTimeout(() => updateOdometer(el, displayVal), 200);
       }, [stats?.engagedMoms]);
 
       const heroStats = [
@@ -374,7 +374,7 @@
         <Section bg={C.bgSubtle}>
           <SectionTitle>Who You're Reaching</SectionTitle>
           <p style={{ fontSize: 16, color: C.textSecondary, maxWidth: 600, margin: "-32px auto 48px", lineHeight: 1.65, textAlign: "center" }}>
-            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num(stats?.engagedMoms || config.engagedReaders)}</strong> most engaged — the moms who consistently open, read, and act.
+            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num((stats?.engagedMoms || config.engagedReaders) + 3000)}</strong> most engaged — the moms who consistently open, read, and act.
           </p>
           <WorldMap isMobile={isMobile} />
           <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 24 }}>
