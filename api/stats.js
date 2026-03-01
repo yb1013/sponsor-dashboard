@@ -66,7 +66,7 @@ async function getDormantCount(pubId, apiKey) {
       (s.name || '').toLowerCase().includes('dormant')
     );
     if (dormantSegment) {
-      const count = dormantSegment.subscriber_count || dormantSegment.count || 0;
+      const count = dormantSegment.total_results || dormantSegment.subscriber_count || dormantSegment.count || 0;
       cachedDormantCount = count;
       dormantCacheTimestamp = now;
       console.log('[stats] Approach C worked! Segment:', dormantSegment.name, 'dormantCount:', count);
