@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing Admin - The Mommy</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #0F1117; color: #E2E4E9; min-height: 100vh; }
+  .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .login-card { background: #1A1C24; border-radius: 16px; padding: 48px; max-width: 400px; width: 100%; border: 1px solid #2A2D37; }
+  .login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+  .login-card p { font-size: 14px; color: #8A8D9A; margin-bottom: 28px; }
+  .login-card input { width: 100%; padding: 14px 16px; border-radius: 10px; border: 1px solid #2A2D37; background: #0F1117; color: #E2E4E9; font-size: 15px; font-family: inherit; outline: none; margin-bottom: 16px; }
+  .login-card input:focus { border-color: #E8909C; }
+  .btn-primary { width: 100%; padding: 14px; border-radius: 10px; border: none; background: #E8909C; color: #fff; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .btn-primary:hover { background: #D4707E; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error-msg { color: #E8909C; font-size: 13px; margin-bottom: 12px; }
+
+  .app-header { padding: 20px 32px; border-bottom: 1px solid #2A2D37; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #0F1117; z-index: 100; }
+  .app-header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .app-header .actions { display: flex; gap: 12px; align-items: center; }
+  .btn-sm { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; border: none; }
+  .btn-save { background: #E8909C; color: #fff; }
+  .btn-save:hover { background: #D4707E; }
+  .btn-reset { background: transparent; border: 1px solid #2A2D37; color: #8A8D9A; }
+  .btn-reset:hover { border-color: #E8909C; color: #E8909C; }
+  .status-badge { font-size: 12px; padding: 4px 12px; border-radius: 6px; font-weight: 500; }
+  .status-saved { background: #1a3a2a; color: #4ADE80; }
+  .status-unsaved { background: #3a2a1a; color: #FBBF24; }
+
+  .app-body { display: flex; gap: 0; min-height: calc(100vh - 65px); }
+  .inputs-panel { flex: 1; padding: 32px; overflow-y: auto; max-height: calc(100vh - 65px); }
+  .preview-panel { width: 420px; flex-shrink: 0; padding: 32px; border-left: 1px solid #2A2D37; overflow-y: auto; max-height: calc(100vh - 65px); position: sticky; top: 65px; background: #13151B; }
+
+  .live-data { padding: 16px 20px; background: #1A1C24; border-radius: 12px; border: 1px solid #2A2D37; margin-bottom: 28px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  .live-data .stat { }
+  .live-data .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8A8D9A; margin-bottom: 2px; }
+  .live-data .stat-value { font-size: 20px; font-weight: 700; color: #fff; }
+  .live-data .stat-value.accent { color: #E8909C; }
+
+  .card { background: #1A1C24; border-radius: 14px; border: 1px solid #2A2D37; padding: 24px; margin-bottom: 20px; }
+  .card h3 { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #2A2D37; }
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 13px; font-weight: 500; color: #C0C2C9; margin-bottom: 4px; }
+  .field .hint { font-size: 11px; color: #6A6D7A; margin-bottom: 6px; }
+  .field input[type="number"], .field input[type="text"] {
+    width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #2A2D37;
+    background: #0F1117; color: #E2E4E9; font-size: 14px; font-family: inherit; outline: none;
+  }
+  .field input:focus { border-color: #E8909C; }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
+
+  .preview-panel h2 { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 20px; }
+  .tier-preview { background: #1A1C24; border-radius: 12px; border: 1px solid #2A2D37; padding: 20px; margin-bottom: 16px; }
+  .tier-preview.recommended { border-color: #E8909C; }
+  .tier-preview h4 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .tier-preview .price { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .tier-preview .save { font-size: 12px; color: #4ADE80; font-weight: 600; }
+  .tier-preview .impressions { font-size: 12px; color: #8A8D9A; margin-top: 8px; }
+  .tier-preview .cpm-eff { font-size: 12px; color: #E8909C; font-weight: 500; margin-top: 4px; }
+  .breakdown { margin-top: 12px; border-top: 1px solid #2A2D37; padding-top: 12px; }
+  .breakdown-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; color: #8A8D9A; }
+  .breakdown-row .val { color: #C0C2C9; font-weight: 500; }
+  .breakdown-total { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; padding-top: 8px; margin-top: 8px; border-top: 1px solid #2A2D37; color: #8A8D9A; text-decoration: line-through; }
+
+  .projections { background: #1A1C24; border-radius: 12px; border: 1px solid #2A2D37; padding: 20px; margin-top: 16px; }
+  .projections h4 { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+  .proj-table { width: 100%; font-size: 12px; }
+  .proj-table th { text-align: left; color: #8A8D9A; font-weight: 500; padding: 4px 8px 4px 0; }
+  .proj-table td { padding: 4px 8px 4px 0; color: #C0C2C9; }
+
+  .takeover-preview { margin-top: 16px; padding: 16px; background: #1A1C24; border-radius: 12px; border: 1px solid #2A2D37; }
+  .takeover-preview h4 { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .takeover-preview .val { font-size: 18px; font-weight: 700; color: #E8909C; }
+
+  @media (max-width: 900px) {
+    .app-body { flex-direction: column; }
+    .preview-panel { width: 100%; border-left: none; border-top: 1px solid #2A2D37; position: static; max-height: none; }
+    .inputs-panel { max-height: none; }
+    .app-header { padding: 16px 20px; flex-wrap: wrap; gap: 12px; }
+    .inputs-panel, .preview-panel { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const DEFAULT_CONFIG = {
+  anchorCPM: 40,
+  starterDiscountPct: 0.50,
+  growthDiscountPct: 0.55,
+  partnerDiscountPct: 0.60,
+  starterPlacements: 6,
+  growthPlacements: 12,
+  partnerPlacements: 24,
+  exclusivityPremiumPct: 0.25,
+  igFollowers: 6500,
+  igBaseRatePer1K: 30,
+  igReelFloor: 200,
+  growthIGReels: 2,
+  partnerIGReels: 4,
+  fbFollowers: 15000,
+  fbDiscountVsIG: 0.65,
+  fbReelFloor: 150,
+  growthFBReels: 2,
+  partnerFBReels: 4,
+  dedicatedSendMultiplier: 1.5,
+  monthlyNewSubscribers: 10000,
+  welcomeCPMMultiplier: 2.0,
+  welcomeMonthlyFloor: 750,
+  partnerWelcomeMonths: 2,
+  stageMonthlyFlat: 500,
+  partnerStageMonths: 1,
+  takeoverPremiumPct: 0.20,
+  takeoverPerEmail: null,
+  hourlyRate: 250,
+  growthCallHours: 0.5,
+  partnerCallHours: 1.0,
+  roundToNearest: 500,
+  starterPriceOverride: null,
+  growthPriceOverride: null,
+  partnerPriceOverride: null,
+  nextMilestone: 40000,
+};
+
+const money = (v) => "$" + Math.round(v || 0).toLocaleString();
+const num = (v) => (v || 0).toLocaleString();
+
+function calculatePricing(config, engagedMoms) {
+  const anchorPricePerPlacement = (engagedMoms / 1000) * config.anchorCPM;
+
+  const starterPlacementValue = config.starterPlacements * anchorPricePerPlacement;
+  const growthPlacementValue = config.growthPlacements * anchorPricePerPlacement;
+  const partnerPlacementValue = config.partnerPlacements * anchorPricePerPlacement;
+
+  const exclusivityPerPlacement = anchorPricePerPlacement * config.exclusivityPremiumPct;
+  const growthExclusivity = exclusivityPerPlacement * config.growthPlacements;
+  const partnerExclusivity = exclusivityPerPlacement * config.partnerPlacements;
+
+  const igReelPrice = Math.max(
+    (config.igFollowers / 1000) * config.igBaseRatePer1K,
+    config.igReelFloor
+  );
+  const fbBaseRate = config.igBaseRatePer1K * config.fbDiscountVsIG;
+  const fbReelPrice = Math.max(
+    (config.fbFollowers / 1000) * fbBaseRate,
+    config.fbReelFloor
+  );
+
+  const dedicatedSendPrice = anchorPricePerPlacement * config.dedicatedSendMultiplier;
+
+  const welcomeMonthly = Math.max(
+    (config.monthlyNewSubscribers / 1000) * (config.anchorCPM * config.welcomeCPMMultiplier),
+    config.welcomeMonthlyFloor
+  );
+  const welcomeContractValue = welcomeMonthly * config.partnerWelcomeMonths;
+
+  const stageContractValue = config.stageMonthlyFlat * config.partnerStageMonths;
+
+  const growthCallValue = config.hourlyRate * config.growthCallHours;
+  const partnerCallValue = config.hourlyRate * config.partnerCallHours;
+
+  const takeoverPerEmail = config.takeoverPerEmail ||
+    Math.round(anchorPricePerPlacement * config.takeoverPremiumPct);
+
+  const starterAnchorValue = starterPlacementValue;
+  const growthAnchorValue = growthPlacementValue
+    + growthExclusivity
+    + (config.growthIGReels * igReelPrice)
+    + (config.growthFBReels * fbReelPrice)
+    + growthCallValue;
+  const partnerAnchorValue = partnerPlacementValue
+    + partnerExclusivity
+    + (config.partnerIGReels * igReelPrice)
+    + (config.partnerFBReels * fbReelPrice)
+    + welcomeContractValue
+    + stageContractValue
+    + dedicatedSendPrice
+    + partnerCallValue;
+
+  const roundTo = config.roundToNearest || 1;
+
+  const starterPrice = config.starterPriceOverride ||
+    Math.round((starterPlacementValue * (1 - config.starterDiscountPct)) / roundTo) * roundTo;
+  const growthPrice = config.growthPriceOverride ||
+    Math.round((growthPlacementValue * (1 - config.growthDiscountPct)) / roundTo) * roundTo;
+  const partnerPrice = config.partnerPriceOverride ||
+    Math.round((partnerPlacementValue * (1 - config.partnerDiscountPct)) / roundTo) * roundTo;
+
+  const starterSavings = starterAnchorValue - starterPrice;
+  const growthSavings = growthAnchorValue - growthPrice;
+  const partnerSavings = partnerAnchorValue - partnerPrice;
+
+  const starterImpressions = engagedMoms * config.starterPlacements;
+  const growthImpressions = engagedMoms * config.growthPlacements;
+  const partnerImpressions = engagedMoms * config.partnerPlacements;
+
+  return {
+    starterPrice, growthPrice, partnerPrice,
+    starterSavings, growthSavings, partnerSavings,
+    starterAnchorValue, growthAnchorValue, partnerAnchorValue,
+    starterImpressions, growthImpressions, partnerImpressions,
+    anchorPricePerPlacement, exclusivityPerPlacement,
+    igReelPrice, fbReelPrice, dedicatedSendPrice,
+    welcomeMonthly, welcomeContractValue, stageContractValue,
+    growthCallValue, partnerCallValue, takeoverPerEmail,
+    starterBreakdown: [
+      { label: `${config.starterPlacements} Newsletter Placements`, value: starterPlacementValue },
+    ],
+    growthBreakdown: [
+      { label: `${config.growthPlacements} Newsletter Placements`, value: growthPlacementValue },
+      { label: 'Category Exclusivity', value: growthExclusivity },
+      { label: `${config.growthIGReels} IG Reels + ${config.growthFBReels} FB Reels`, value: (config.growthIGReels * igReelPrice) + (config.growthFBReels * fbReelPrice) },
+      { label: 'Mid-Campaign Strategy Call', value: growthCallValue },
+    ],
+    partnerBreakdown: [
+      { label: `${config.partnerPlacements} Newsletter Placements`, value: partnerPlacementValue },
+      { label: 'Category Exclusivity (full contract)', value: partnerExclusivity },
+      { label: `${config.partnerIGReels} IG Reels + ${config.partnerFBReels} FB Reels`, value: (config.partnerIGReels * igReelPrice) + (config.partnerFBReels * fbReelPrice) },
+      { label: 'Welcome Sequence Integration', value: welcomeContractValue },
+      { label: 'Stage-Based Sequence Sponsorship', value: stageContractValue },
+      { label: '1 Dedicated Send', value: dedicatedSendPrice },
+      { label: 'Strategy Calls with Danielle', value: partnerCallValue },
+    ],
+  };
+}
+
+// ─── Login Screen ─────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("bh-admin-token", data.token);
+        onLogin(data.token);
+      } else {
+        setErr("Invalid password");
+      }
+    } catch {
+      setErr("Connection failed");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="login-wrap">
+      <form className="login-card" onSubmit={submit}>
+        <h1>Pricing Admin</h1>
+        <p>Enter your admin password to continue.</p>
+        {err && <div className="error-msg">{err}</div>}
+        <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Password" autoFocus />
+        <button className="btn-primary" type="submit" disabled={loading}>
+          {loading ? "Signing in..." : "Sign In"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ─── Field Components ─────────────────────────────────────────
+function NumField({ label, hint, value, onChange, step, min, max, suffix }) {
+  return (
+    <div className="field">
+      <label>{label}{suffix ? ` (${suffix})` : ""}</label>
+      {hint && <div className="hint">{hint}</div>}
+      <input type="number" value={value ?? ""} onChange={e => {
+        const v = e.target.value;
+        onChange(v === "" ? null : Number(v));
+      }} step={step || "any"} min={min} max={max} />
+    </div>
+  );
+}
+
+// ─── Tier Preview Card ────────────────────────────────────────
+function TierPreview({ name, pricing, breakdownKey, anchorKey, savingsKey, impressionsKey, recommended, engagedMoms, placements }) {
+  const price = pricing[`${breakdownKey}Price`];
+  const savings = pricing[`${savingsKey}Savings`];
+  const anchor = pricing[`${anchorKey}AnchorValue`];
+  const impressions = pricing[`${impressionsKey}Impressions`];
+  const breakdown = pricing[`${breakdownKey}Breakdown`];
+  const effectiveCPM = engagedMoms > 0 ? ((price / placements) / (engagedMoms / 1000)).toFixed(2) : 0;
+
+  return (
+    <div className={`tier-preview${recommended ? " recommended" : ""}`}>
+      <h4>{name}</h4>
+      <div className="price">{money(price)}</div>
+      {savings > 0 && <div className="save">Save {money(savings)}</div>}
+      <div className="impressions">{num(impressions)}+ guaranteed impressions</div>
+      <div className="cpm-eff">Effective CPM: ${effectiveCPM}</div>
+      <div className="breakdown">
+        {breakdown.map((b, i) => (
+          <div className="breakdown-row" key={i}>
+            <span>{b.label}</span>
+            <span className="val">{money(b.value)}</span>
+          </div>
+        ))}
+        <div className="breakdown-total">
+          <span>Total Value</span>
+          <span>{money(anchor)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Admin App ───────────────────────────────────────────
+function AdminApp({ token: initialToken }) {
+  const [token, setToken] = useState(initialToken);
+  const [config, setConfig] = useState(null);
+  const [savedConfig, setSavedConfig] = useState(null);
+  const [engagedMoms, setEngagedMoms] = useState(29000);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/pricing-config").then(r => r.ok ? r.json() : null),
+      fetch("/api/stats").then(r => r.ok ? r.json() : null),
+    ]).then(([pricingData, statsData]) => {
+      const cfg = pricingData || DEFAULT_CONFIG;
+      setConfig({ ...DEFAULT_CONFIG, ...cfg });
+      setSavedConfig({ ...DEFAULT_CONFIG, ...cfg });
+      if (statsData?.engagedMoms) {
+        setEngagedMoms(statsData.engagedMoms + 3000);
+      }
+      setLoaded(true);
+    });
+  }, []);
+
+  const isDirty = loaded && JSON.stringify(config) !== JSON.stringify(savedConfig);
+
+  const update = useCallback((key, val) => {
+    setConfig(prev => ({ ...prev, [key]: val }));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch("/api/pricing-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(config),
+      });
+      if (res.ok) {
+        setSavedConfig({ ...config });
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus(null), 3000);
+      } else if (res.status === 401) {
+        localStorage.removeItem("bh-admin-token");
+        setToken(null);
+      } else {
+        setSaveStatus("error");
+      }
+    } catch {
+      setSaveStatus("error");
+    }
+    setSaving(false);
+  };
+
+  const handleReset = () => {
+    if (window.confirm("Reset all values to defaults?")) {
+      setConfig({ ...DEFAULT_CONFIG });
+    }
+  };
+
+  if (!token) return <LoginScreen onLogin={setToken} />;
+  if (!loaded) return <div className="login-wrap"><p style={{ color: "#8A8D9A" }}>Loading...</p></div>;
+
+  const pricing = calculatePricing(config, engagedMoms);
+
+  const projections = [40000, 50000, 75000].map(subs => ({
+    subs,
+    ...calculatePricing(config, subs),
+  }));
+
+  return (
+    <div>
+      <div className="app-header">
+        <h1>Pricing Engine</h1>
+        <div className="actions">
+          {saveStatus === "saved" && <span className="status-badge status-saved">Saved</span>}
+          {saveStatus === "error" && <span className="status-badge" style={{ background: "#3a1a1a", color: "#F87171" }}>Error</span>}
+          {isDirty && <span className="status-badge status-unsaved">Unsaved changes</span>}
+          <button className="btn-sm btn-reset" onClick={handleReset}>Reset Defaults</button>
+          <button className="btn-sm btn-save" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div className="app-body">
+        <div className="inputs-panel">
+          <div className="live-data">
+            <div className="stat">
+              <div className="stat-label">Engaged Moms (Live)</div>
+              <div className="stat-value accent">{num(engagedMoms)}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Anchor CPM</div>
+              <div className="stat-value">${config.anchorCPM}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Per Placement</div>
+              <div className="stat-value">{money(pricing.anchorPricePerPlacement)}</div>
+            </div>
+          </div>
+
+          {/* Core */}
+          <div className="card">
+            <h3>Core</h3>
+            <NumField label="Anchor CPM" hint="$ per 1,000 impressions (one-off/anchor rate)" value={config.anchorCPM} onChange={v => update("anchorCPM", v)} step={1} min={1} suffix="$" />
+          </div>
+
+          {/* Tier Discounts */}
+          <div className="card">
+            <h3>Tier Discounts</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>% off anchor CPM. 0.50 = 50% discount. Higher = cheaper for the sponsor.</div>
+            <div className="field-row">
+              <NumField label="Starter Discount" value={config.starterDiscountPct} onChange={v => update("starterDiscountPct", v)} step={0.01} min={0} max={1} />
+              <NumField label="Growth Discount" value={config.growthDiscountPct} onChange={v => update("growthDiscountPct", v)} step={0.01} min={0} max={1} />
+              <NumField label="Partner Discount" value={config.partnerDiscountPct} onChange={v => update("partnerDiscountPct", v)} step={0.01} min={0} max={1} />
+            </div>
+          </div>
+
+          {/* Placements */}
+          <div className="card">
+            <h3>Tier Placements</h3>
+            <div className="field-row">
+              <NumField label="Starter" value={config.starterPlacements} onChange={v => update("starterPlacements", v)} step={1} min={1} />
+              <NumField label="Growth" value={config.growthPlacements} onChange={v => update("growthPlacements", v)} step={1} min={1} />
+              <NumField label="Partner" value={config.partnerPlacements} onChange={v => update("partnerPlacements", v)} step={1} min={1} />
+            </div>
+          </div>
+
+          {/* Exclusivity */}
+          <div className="card">
+            <h3>Category Exclusivity</h3>
+            <NumField label="Exclusivity Premium" hint="% of placement value per placement (0.25 = 25%)" value={config.exclusivityPremiumPct} onChange={v => update("exclusivityPremiumPct", v)} step={0.01} min={0} max={1} />
+          </div>
+
+          {/* Instagram */}
+          <div className="card">
+            <h3>Instagram</h3>
+            <div className="field-row">
+              <NumField label="Followers" value={config.igFollowers} onChange={v => update("igFollowers", v)} step={100} min={0} />
+              <NumField label="Rate per 1K" value={config.igBaseRatePer1K} onChange={v => update("igBaseRatePer1K", v)} step={1} min={0} suffix="$" />
+              <NumField label="Reel Floor" value={config.igReelFloor} onChange={v => update("igReelFloor", v)} step={10} min={0} suffix="$" />
+            </div>
+            <div className="field-row" style={{ marginTop: 12 }}>
+              <NumField label="Growth Reels" value={config.growthIGReels} onChange={v => update("growthIGReels", v)} step={1} min={0} />
+              <NumField label="Partner Reels" value={config.partnerIGReels} onChange={v => update("partnerIGReels", v)} step={1} min={0} />
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>Reel price: {money(pricing.igReelPrice)}/reel</div>
+          </div>
+
+          {/* Facebook */}
+          <div className="card">
+            <h3>Facebook</h3>
+            <div className="field-row">
+              <NumField label="Followers" value={config.fbFollowers} onChange={v => update("fbFollowers", v)} step={100} min={0} />
+              <NumField label="Discount vs IG" hint="0.65 = 65% of IG rate" value={config.fbDiscountVsIG} onChange={v => update("fbDiscountVsIG", v)} step={0.01} min={0} max={1} />
+              <NumField label="Reel Floor" value={config.fbReelFloor} onChange={v => update("fbReelFloor", v)} step={10} min={0} suffix="$" />
+            </div>
+            <div className="field-row" style={{ marginTop: 12 }}>
+              <NumField label="Growth Reels" value={config.growthFBReels} onChange={v => update("growthFBReels", v)} step={1} min={0} />
+              <NumField label="Partner Reels" value={config.partnerFBReels} onChange={v => update("partnerFBReels", v)} step={1} min={0} />
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>Reel price: {money(pricing.fbReelPrice)}/reel</div>
+          </div>
+
+          {/* Dedicated Send */}
+          <div className="card">
+            <h3>Dedicated Send</h3>
+            <NumField label="Multiplier" hint="Multiplier of anchor CPM price per placement" value={config.dedicatedSendMultiplier} onChange={v => update("dedicatedSendMultiplier", v)} step={0.1} min={0} />
+            <div className="hint" style={{ marginTop: 8 }}>Value: {money(pricing.dedicatedSendPrice)}</div>
+          </div>
+
+          {/* Welcome Sequence */}
+          <div className="card">
+            <h3>Welcome Sequence</h3>
+            <div className="field-row">
+              <NumField label="Monthly New Subs" value={config.monthlyNewSubscribers} onChange={v => update("monthlyNewSubscribers", v)} step={500} min={0} />
+              <NumField label="CPM Multiplier" hint="vs anchor CPM" value={config.welcomeCPMMultiplier} onChange={v => update("welcomeCPMMultiplier", v)} step={0.1} min={0} />
+            </div>
+            <div className="field-row" style={{ marginTop: 12 }}>
+              <NumField label="Monthly Floor" value={config.welcomeMonthlyFloor} onChange={v => update("welcomeMonthlyFloor", v)} step={50} min={0} suffix="$" />
+              <NumField label="Months in Partner" value={config.partnerWelcomeMonths} onChange={v => update("partnerWelcomeMonths", v)} step={1} min={0} />
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>Monthly value: {money(pricing.welcomeMonthly)} | Contract value: {money(pricing.welcomeContractValue)}</div>
+          </div>
+
+          {/* Stage-Based */}
+          <div className="card">
+            <h3>Stage-Based Sequence</h3>
+            <div className="field-row">
+              <NumField label="Monthly Flat Fee" value={config.stageMonthlyFlat} onChange={v => update("stageMonthlyFlat", v)} step={50} min={0} suffix="$" />
+              <NumField label="Months in Partner" value={config.partnerStageMonths} onChange={v => update("partnerStageMonths", v)} step={1} min={0} />
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>Contract value: {money(pricing.stageContractValue)}</div>
+          </div>
+
+          {/* Takeover */}
+          <div className="card">
+            <h3>Newsletter Takeover</h3>
+            <div className="field-row">
+              <NumField label="Premium %" hint="% of placement price per email" value={config.takeoverPremiumPct} onChange={v => update("takeoverPremiumPct", v)} step={0.01} min={0} max={1} />
+              <NumField label="Override" hint="Leave empty for formula" value={config.takeoverPerEmail} onChange={v => update("takeoverPerEmail", v)} step={10} min={0} suffix="$" />
+            </div>
+            <div className="hint" style={{ marginTop: 8 }}>Per-email price: {money(pricing.takeoverPerEmail)}</div>
+          </div>
+
+          {/* Strategy Calls */}
+          <div className="card">
+            <h3>Strategy Calls</h3>
+            <div className="field-row">
+              <NumField label="Hourly Rate" value={config.hourlyRate} onChange={v => update("hourlyRate", v)} step={25} min={0} suffix="$" />
+              <NumField label="Growth Hours" value={config.growthCallHours} onChange={v => update("growthCallHours", v)} step={0.25} min={0} />
+              <NumField label="Partner Hours" value={config.partnerCallHours} onChange={v => update("partnerCallHours", v)} step={0.25} min={0} />
+            </div>
+          </div>
+
+          {/* Rounding */}
+          <div className="card">
+            <h3>Rounding</h3>
+            <NumField label="Round to Nearest" hint="Final prices rounded to this value (500 = nearest $500)" value={config.roundToNearest} onChange={v => update("roundToNearest", v)} step={100} min={1} suffix="$" />
+          </div>
+
+          {/* Price Overrides */}
+          <div className="card">
+            <h3>Price Overrides</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>If set, these override the formula. Leave empty to use calculated price.</div>
+            <div className="field-row">
+              <NumField label="Starter Override" value={config.starterPriceOverride} onChange={v => update("starterPriceOverride", v)} step={100} min={0} suffix="$" />
+              <NumField label="Growth Override" value={config.growthPriceOverride} onChange={v => update("growthPriceOverride", v)} step={100} min={0} suffix="$" />
+              <NumField label="Partner Override" value={config.partnerPriceOverride} onChange={v => update("partnerPriceOverride", v)} step={100} min={0} suffix="$" />
+            </div>
+          </div>
+
+          {/* Milestone */}
+          <div className="card">
+            <h3>Progress Bar</h3>
+            <NumField label="Next Milestone" hint="Subscriber count for the progress bar target" value={config.nextMilestone} onChange={v => update("nextMilestone", v)} step={5000} min={0} />
+          </div>
+        </div>
+
+        {/* ─── Preview Panel ────────────────────────────────────── */}
+        <div className="preview-panel">
+          <h2>Live Preview</h2>
+
+          <TierPreview name="Starter" pricing={pricing} breakdownKey="starter" anchorKey="starter" savingsKey="starter" impressionsKey="starter" engagedMoms={engagedMoms} placements={config.starterPlacements} />
+          <TierPreview name="Growth" pricing={pricing} breakdownKey="growth" anchorKey="growth" savingsKey="growth" impressionsKey="growth" recommended engagedMoms={engagedMoms} placements={config.growthPlacements} />
+          <TierPreview name="Partner" pricing={pricing} breakdownKey="partner" anchorKey="partner" savingsKey="partner" impressionsKey="partner" engagedMoms={engagedMoms} placements={config.partnerPlacements} />
+
+          <div className="takeover-preview">
+            <h4>Newsletter Takeover Add-On</h4>
+            <div className="val">+{money(pricing.takeoverPerEmail)}/email</div>
+          </div>
+
+          <div className="projections">
+            <h4>If subscribers grow...</h4>
+            <table className="proj-table">
+              <thead>
+                <tr>
+                  <th>Subs</th>
+                  <th>Starter</th>
+                  <th>Growth</th>
+                  <th>Partner</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ color: "#E8909C" }}>
+                  <td>{num(engagedMoms)}</td>
+                  <td>{money(pricing.starterPrice)}</td>
+                  <td>{money(pricing.growthPrice)}</td>
+                  <td>{money(pricing.partnerPrice)}</td>
+                </tr>
+                {projections.map(p => (
+                  <tr key={p.subs}>
+                    <td>{num(p.subs)}</td>
+                    <td>{money(p.starterPrice)}</td>
+                    <td>{money(p.growthPrice)}</td>
+                    <td>{money(p.partnerPrice)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Root ─────────────────────────────────────────────────────
+function App() {
+  const [token, setToken] = useState(localStorage.getItem("bh-admin-token"));
+  if (!token) return <LoginScreen onLogin={setToken} />;
+  return <AdminApp token={token} />;
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+</script>
+</body>
+</html>

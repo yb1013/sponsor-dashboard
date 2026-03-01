@@ -75,26 +75,74 @@
     const money = (v) => "$" + (v || 0).toLocaleString();
 
     // ═══════════════════════════════════════════════════════════════
-    // PRICING HELPERS
+    // PRICING ENGINE
     // ═══════════════════════════════════════════════════════════════
-    function getPriceAdjustment(subscriberCount, milestones) {
-      let adj = 0;
-      for (const m of (milestones || [])) {
-        if (subscriberCount >= m.subscribers) adj = m.adjustment;
-      }
-      return adj;
-    }
+    const DEFAULT_PRICING = {
+      anchorCPM: 40,
+      starterDiscountPct: 0.50, growthDiscountPct: 0.55, partnerDiscountPct: 0.60,
+      starterPlacements: 6, growthPlacements: 12, partnerPlacements: 24,
+      exclusivityPremiumPct: 0.25,
+      igFollowers: 6500, igBaseRatePer1K: 30, igReelFloor: 200, growthIGReels: 2, partnerIGReels: 4,
+      fbFollowers: 15000, fbDiscountVsIG: 0.65, fbReelFloor: 150, growthFBReels: 2, partnerFBReels: 4,
+      dedicatedSendMultiplier: 1.5,
+      monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2,
+      stageMonthlyFlat: 500, partnerStageMonths: 1,
+      takeoverPremiumPct: 0.20, takeoverPerEmail: null,
+      hourlyRate: 250, growthCallHours: 0.5, partnerCallHours: 1.0,
+      roundToNearest: 500,
+      starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
+      nextMilestone: 40000,
+    };
 
-    function getNextMilestone(subscriberCount, milestones) {
-      for (const m of (milestones || [])) {
-        if (subscriberCount < m.subscribers) return m;
-      }
-      return null;
-    }
-
-    function calcGuarantee(avgOpens, placements, multiplier) {
-      const raw = Math.floor(avgOpens * placements * (multiplier || 0.6));
-      return Math.floor(raw / 10000) * 10000;
+    function calculatePricing(pc, engagedMoms) {
+      const anchorPricePerPlacement = (engagedMoms / 1000) * pc.anchorCPM;
+      const starterPV = pc.starterPlacements * anchorPricePerPlacement;
+      const growthPV = pc.growthPlacements * anchorPricePerPlacement;
+      const partnerPV = pc.partnerPlacements * anchorPricePerPlacement;
+      const exclPer = anchorPricePerPlacement * pc.exclusivityPremiumPct;
+      const growthExcl = exclPer * pc.growthPlacements;
+      const partnerExcl = exclPer * pc.partnerPlacements;
+      const igReelPrice = Math.max((pc.igFollowers / 1000) * pc.igBaseRatePer1K, pc.igReelFloor);
+      const fbReelPrice = Math.max((pc.fbFollowers / 1000) * (pc.igBaseRatePer1K * pc.fbDiscountVsIG), pc.fbReelFloor);
+      const dedicatedSendPrice = anchorPricePerPlacement * pc.dedicatedSendMultiplier;
+      const welcomeMonthly = Math.max((pc.monthlyNewSubscribers / 1000) * (pc.anchorCPM * pc.welcomeCPMMultiplier), pc.welcomeMonthlyFloor);
+      const welcomeCV = welcomeMonthly * pc.partnerWelcomeMonths;
+      const stageCV = pc.stageMonthlyFlat * pc.partnerStageMonths;
+      const growthCallVal = pc.hourlyRate * pc.growthCallHours;
+      const partnerCallVal = pc.hourlyRate * pc.partnerCallHours;
+      const takeoverPerEmail = pc.takeoverPerEmail || Math.round(anchorPricePerPlacement * pc.takeoverPremiumPct);
+      const starterAV = starterPV;
+      const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) + growthCallVal;
+      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice + partnerCallVal;
+      const r = pc.roundToNearest || 1;
+      const starterPrice = pc.starterPriceOverride || Math.round((starterPV * (1 - pc.starterDiscountPct)) / r) * r;
+      const growthPrice = pc.growthPriceOverride || Math.round((growthPV * (1 - pc.growthDiscountPct)) / r) * r;
+      const partnerPrice = pc.partnerPriceOverride || Math.round((partnerPV * (1 - pc.partnerDiscountPct)) / r) * r;
+      return {
+        starterPrice, growthPrice, partnerPrice,
+        starterSavings: starterAV - starterPrice, growthSavings: growthAV - growthPrice, partnerSavings: partnerAV - partnerPrice,
+        starterAnchorValue: starterAV, growthAnchorValue: growthAV, partnerAnchorValue: partnerAV,
+        starterImpressions: engagedMoms * pc.starterPlacements, growthImpressions: engagedMoms * pc.growthPlacements, partnerImpressions: engagedMoms * pc.partnerPlacements,
+        anchorPricePerPlacement, takeoverPerEmail,
+        starterBreakdown: [
+          { label: `${pc.starterPlacements} Newsletter Placements`, value: starterPV },
+        ],
+        growthBreakdown: [
+          { label: `${pc.growthPlacements} Newsletter Placements`, value: growthPV },
+          { label: 'Category Exclusivity', value: growthExcl },
+          { label: `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels`, value: (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) },
+          { label: 'Mid-Campaign Strategy Call', value: growthCallVal },
+        ],
+        partnerBreakdown: [
+          { label: `${pc.partnerPlacements} Newsletter Placements`, value: partnerPV },
+          { label: 'Category Exclusivity (full contract)', value: partnerExcl },
+          { label: `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels`, value: (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) },
+          { label: 'Welcome Sequence Integration', value: welcomeCV },
+          { label: 'Stage-Based Sequence Sponsorship', value: stageCV },
+          { label: '1 Dedicated Send', value: dedicatedSendPrice },
+          { label: 'Strategy Calls with Danielle', value: partnerCallVal },
+        ],
+      };
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -546,14 +594,64 @@
     }
 
     // ─── Pricing Tiers ────────────────────────────────────────────
-    function PricingSection({ config, stats, isMobile }) {
+    function PricingSection({ config, stats, isMobile, pricing, pricingConfig }) {
       const [takeoverState, setTakeoverState] = useState({});
       const [valueStackOpen, setValueStackOpen] = useState({});
       const [hoveredCard, setHoveredCard] = useState(null);
-      const subscriberCount = (stats?.engagedMoms || config.engagedReaders) + 3000;
-      const adj = getPriceAdjustment(subscriberCount, config.pricingMilestones);
-      const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
-      const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
+      const pc = pricingConfig || DEFAULT_PRICING;
+
+      const tierDefs = [
+        {
+          key: "starter", name: "Starter", tagline: "For brands testing newsletter sponsorship for the first time.",
+          placements: pc.starterPlacements, price: pricing.starterPrice,
+          savings: pricing.starterSavings, anchorValue: pricing.starterAnchorValue,
+          impressions: pricing.starterImpressions, breakdown: pricing.starterBreakdown,
+          recommended: false, hasTakeover: false,
+          features: [
+            `${pc.starterPlacements} newsletter placements (all 3 touchpoints)`,
+            `Guaranteed ${num(Math.floor(pricing.starterImpressions / 10000) * 10000)}+ reader impressions`,
+            "If we don't hit it, we keep running free.",
+            "Live performance dashboard",
+          ],
+        },
+        {
+          key: "growth", name: "Growth", tagline: "For brands ready to own their category.",
+          placements: pc.growthPlacements, price: pricing.growthPrice,
+          savings: pricing.growthSavings, anchorValue: pricing.growthAnchorValue,
+          impressions: pricing.growthImpressions, breakdown: pricing.growthBreakdown,
+          recommended: true, hasTakeover: true,
+          features: [
+            `${pc.growthPlacements} newsletter placements (all 3 touchpoints)`,
+            `Guaranteed ${num(Math.floor(pricing.growthImpressions / 10000) * 10000)}+ reader impressions`,
+            "If we don't hit it, we keep running free.",
+            "Category exclusivity for contract period",
+            `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels (organic-style sponsored content)`,
+            "Live dashboard + downloadable PDF reports",
+            "Mid-campaign strategy call with Danielle",
+          ],
+        },
+        {
+          key: "partner", name: "Partner", tagline: "For brands that want to become synonymous with The Mommy.",
+          placements: pc.partnerPlacements, price: pricing.partnerPrice,
+          savings: pricing.partnerSavings, anchorValue: pricing.partnerAnchorValue,
+          impressions: pricing.partnerImpressions, breakdown: pricing.partnerBreakdown,
+          recommended: false, hasTakeover: true,
+          features: [
+            `${pc.partnerPlacements} newsletter placements (all 3 touchpoints)`,
+            `Guaranteed ${num(Math.floor(pricing.partnerImpressions / 10000) * 10000)}+ reader impressions`,
+            "If we don't hit it, we keep running free.",
+            "Category exclusivity for full contract",
+            `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels (organic-style sponsored content)`,
+            "1 welcome sequence integration",
+            "1 stage-based sequence sponsorship",
+            "1 dedicated send (entire email is your content)",
+            "Live dashboard + quarterly PDF reports",
+            "Strategy calls with Danielle",
+          ],
+        },
+      ];
+
+      const tierOrder = isMobile ? [tierDefs[1], tierDefs[0], tierDefs[2]] : tierDefs;
 
       return (
         <Section id="pricing" bg={C.bgSubtle} style={{ position: "relative", overflow: "hidden" }}>
@@ -561,16 +659,12 @@
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 800, height: 600, background: "radial-gradient(ellipse, rgba(232, 144, 156, 0.06) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
           <SectionTitle>Partnership Packages</SectionTitle>
           <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 24, alignItems: "stretch", position: "relative", zIndex: 1 }}>
-            {tierOrder.map(key => {
-              const tier = config.tiers?.[key];
-              if (!tier) return null;
+            {tierOrder.map(tier => {
+              const key = tier.key;
               const isRec = tier.recommended;
               const isTakeover = takeoverState[key] || false;
-              const basePrice = tier.price + (adj * tier.placements);
-              const takeoverTotal = (tier.takeoverPrice || 0) + (adj * tier.placements);
-              const displayPrice = isTakeover ? takeoverTotal : basePrice;
-              const valueTotal = (tier.valueStack || []).reduce((s, v) => s + v.value, 0);
-              const guarantee = calcGuarantee(avgOpens, tier.placements, config.guaranteeMultiplier);
+              const takeoverAddon = isTakeover ? (pricing.takeoverPerEmail * tier.placements) : 0;
+              const displayPrice = tier.price + takeoverAddon;
               const isVSOpen = valueStackOpen[key] || false;
               const isHovered = hoveredCard === key;
 
@@ -610,18 +704,18 @@
                     <p style={{ fontSize: 14, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>{tier.tagline}</p>
                     <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 20 }}>{tier.placements} Newsletter Placements</p>
 
-                    {/* Price — moved UP */}
+                    {/* Price */}
                     <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : key === "partner" ? "#1A1A2E" : C.muted, marginBottom: 6 }}>Your Investment</div>
                       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
-                      {valueTotal > displayPrice && (
+                      {tier.savings > 0 && (
                         <div style={{ display: "inline-block", marginTop: 10, padding: "4px 14px", borderRadius: 20, background: C.successLight, color: C.success, fontSize: 12, fontWeight: 600 }}>
-                          Save {money(valueTotal - displayPrice)}
+                          Save {money(tier.savings)}
                         </div>
                       )}
                     </div>
 
-                    {/* Get Started — moved UP */}
+                    {/* Get Started */}
                     <a href="#inquiry" onClick={() => { window.__selectedTier = key; window.__selectedTakeover = isTakeover; }} style={{
                       display: "block", textAlign: "center", padding: "14px 0", borderRadius: 10, marginBottom: 20,
                       background: isRec ? C.accent : key === "partner" ? "#1A1A2E" : "transparent",
@@ -635,19 +729,12 @@
                     {/* Divider */}
                     <div style={{ height: 1, background: C.border, marginBottom: 20 }} />
 
-                    {/* Guarantee */}
-                    {guarantee > 0 && (
-                      <div style={{ margin: "16px 0", padding: "12px 0", borderTop: `1px solid ${C.border}` }}>
-                        <div style={{ fontSize: 14, color: C.success, fontWeight: 600 }}>Guaranteed {num(guarantee)}+ reader impressions</div>
-                        <div style={{ fontSize: 12, color: C.textSecondary, marginTop: 2 }}>If we don't hit it, we keep running free.</div>
-                      </div>
-                    )}
-
                     {/* Features — flex: 1 to fill remaining space for equal-height cards */}
                     <div style={{ marginBottom: 16, flex: 1 }}>
-                      {(tier.features || []).map((f, i) => (
-                        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.5 }}>
-                          <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>
+                      {tier.features.map((f, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: f === "If we don't hit it, we keep running free." ? C.textSecondary : C.text, lineHeight: 1.5, fontStyle: f === "If we don't hit it, we keep running free." ? "italic" : "normal" }}>
+                          {f !== "If we don't hit it, we keep running free." && <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>}
+                          {f === "If we don't hit it, we keep running free." && <span style={{ flexShrink: 0, width: 16 }} />}
                           <span>{f}</span>
                         </div>
                       ))}
@@ -657,7 +744,7 @@
                     <div style={{ marginTop: "auto" }}>
 
                     {/* Collapsible Value Stack */}
-                    {(tier.valueStack || []).length > 0 && (
+                    {tier.breakdown.length > 0 && (
                       <>
                         <button onClick={() => setValueStackOpen(s => ({ ...s, [key]: !s[key] }))} style={{
                           background: "none", border: "none", padding: "8px 0", fontSize: 13, fontWeight: 600,
@@ -668,15 +755,15 @@
                         <div style={{ maxHeight: isVSOpen ? 400 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
                           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginBottom: 12 }}>
                             <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 10 }}>Value Breakdown</p>
-                            {tier.valueStack.map((v, i) => (
-                              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: C.textSecondary, borderBottom: i < tier.valueStack.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
+                            {tier.breakdown.map((v, i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: C.textSecondary, borderBottom: i < tier.breakdown.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
                                 <span>{v.label}</span>
                                 <span style={{ fontWeight: 600, color: C.text }}>{money(v.value)}</span>
                               </div>
                             ))}
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
                               <span>Total Value</span>
-                              <span>{money(valueTotal)}</span>
+                              <span>{money(tier.anchorValue)}</span>
                             </div>
                           </div>
                         </div>
@@ -684,7 +771,7 @@
                     )}
 
                     {/* Takeover Toggle */}
-                    {tier.includeTakeoverOption && tier.takeoverPrice && (
+                    {tier.hasTakeover && (
                       <div style={{
                         padding: "14px 16px", borderRadius: 12, marginTop: 8, cursor: "pointer", transition: "all 0.15s",
                         border: `1px solid ${isTakeover ? C.accent : C.border}`,
@@ -693,7 +780,7 @@
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
                             <span style={{ fontSize: 14, fontWeight: 600, color: isTakeover ? C.accentDark : C.text }}>Newsletter Takeover</span>
-                            <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>+$200/email</span>
+                            <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>+{money(pricing.takeoverPerEmail)}/email</span>
                           </div>
                           <div style={{ width: 40, height: 22, borderRadius: 11, padding: 2, background: isTakeover ? C.accent : C.muted, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
                             <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff", transform: isTakeover ? "translateX(18px)" : "translateX(0)", transition: "transform 0.15s" }} />
@@ -874,11 +961,12 @@
     }
 
     // ─── Lock-In Messaging ────────────────────────────────────────
-    function LockIn({ config, stats, isMobile }) {
+    function LockIn({ config, stats, isMobile, pricingConfig }) {
       const subs = (stats?.engagedMoms || config.engagedReaders) + 3000;
-      const milestones = config.pricingMilestones || [];
-      const nextMs = getNextMilestone(subs, milestones);
-      const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
+      const pc = pricingConfig || DEFAULT_PRICING;
+      const nextMilestone = pc.nextMilestone || 40000;
+      const hasNext = subs < nextMilestone;
+      const progressPct = hasNext ? Math.min(Math.round((subs / nextMilestone) * 100), 99) : 100;
       const sectionRef = useRef(null);
       const [barVisible, setBarVisible] = useState(false);
 
@@ -907,13 +995,13 @@
             <p style={{ fontSize: 16, color: C.text, marginBottom: 4 }}>
               Current rates based on {num(subs)} subscribers.
             </p>
-            {nextMs && (
+            {hasNext && (
               <p style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 24 }}>
-                Next rate increase at {num(nextMs.subscribers)}.
+                Next rate increase at {num(nextMilestone)}.
               </p>
             )}
 
-            {nextMs && (
+            {hasNext && (
               <div style={{ maxWidth: 500, margin: "0 auto 24px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "visible" }}>
@@ -923,7 +1011,7 @@
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, color: C.muted }}>
                   <span>{num(subs)}</span>
-                  <span>{num(nextMs.subscribers)}</span>
+                  <span>{num(nextMilestone)}</span>
                 </div>
               </div>
             )}
@@ -938,7 +1026,7 @@
     }
 
     // ─── Guarantee ────────────────────────────────────────────────
-    function Guarantee({ config }) {
+    function Guarantee({ config, pricing, pricingConfig }) {
       return (
         <Section bg={C.bg}>
           <div style={{ maxWidth: 680, margin: "0 auto" }}>
@@ -951,7 +1039,7 @@
                 If we don't hit your guaranteed reader impressions, we keep running until we do. No extra cost.
               </p>
               <p style={{ fontSize: 13, color: C.muted, marginBottom: 0 }}>
-                Starter: 60,000+ &middot; Growth: 120,000+ &middot; Partner: 240,000+
+                Starter: {num(Math.floor(pricing.starterImpressions / 10000) * 10000)}+ &middot; Growth: {num(Math.floor(pricing.growthImpressions / 10000) * 10000)}+ &middot; Partner: {num(Math.floor(pricing.partnerImpressions / 10000) * 10000)}+
               </p>
               <div style={{ width: "100%", height: 1, background: "#E5E7EB", margin: "32px 0" }} />
               <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Flexible Cancellation</p>
@@ -981,7 +1069,7 @@
     }
 
     // ─── Inquiry Form ─────────────────────────────────────────────
-    function InquiryForm({ config, stats: formStats, isMobile }) {
+    function InquiryForm({ config, stats: formStats, isMobile, pricing, pricingConfig }) {
       const [tier, setTier] = useState("growth");
       const [takeover, setTakeover] = useState(false);
       const [name, setName] = useState("");
@@ -1034,7 +1122,12 @@
         );
       }
 
-      const tiers = config.tiers || {};
+      const pc = pricingConfig || DEFAULT_PRICING;
+      const tierMeta = {
+        starter: { name: "Starter", placements: pc.starterPlacements, price: pricing.starterPrice, impressions: pricing.starterImpressions },
+        growth: { name: "Growth", placements: pc.growthPlacements, price: pricing.growthPrice, impressions: pricing.growthImpressions },
+        partner: { name: "Partner", placements: pc.partnerPlacements, price: pricing.partnerPrice, impressions: pricing.partnerImpressions },
+      };
       const tierKeys = ["starter", "growth", "partner"];
       const inputStyle = {
         width: "100%", padding: "16px 18px", borderRadius: 12,
@@ -1049,8 +1142,7 @@
           <form onSubmit={handleSubmit} ref={formRef} style={{ maxWidth: 520, margin: "0 auto" }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap", justifyContent: "center" }}>
               {tierKeys.map(k => {
-                const t = tiers[k];
-                if (!t) return null;
+                const t = tierMeta[k];
                 const isActive = tier === k;
                 return (
                   <button key={k} type="button" onClick={() => setTier(k)} style={{
@@ -1063,10 +1155,8 @@
               })}
             </div>
             {(() => {
-              const t = tiers[tier];
+              const t = tierMeta[tier];
               if (!t) return null;
-              const avgOpens = formStats?.avgOpensPerSend || config.engagedReaders;
-              const guarantee = calcGuarantee(avgOpens, t.placements, config.guaranteeMultiplier);
               return (
                 <div style={{
                   textAlign: "center", padding: "16px 24px", background: C.bgSubtle,
@@ -1075,7 +1165,7 @@
                 }}>
                   <strong style={{ color: C.text }}>{t.name}</strong>
                   {" \u00B7 "}{t.placements} placements
-                  {" \u00B7 "}{num(guarantee)}+ guaranteed impressions
+                  {" \u00B7 "}{num(Math.floor(t.impressions / 10000) * 10000)}+ guaranteed impressions
                   {" \u00B7 "}{money(t.price)}
                 </div>
               );
@@ -1123,6 +1213,7 @@
     function PackagesPage() {
       const [stats, setStats] = useState(null);
       const [config, setConfig] = useState(null);
+      const [pricingConfig, setPricingConfig] = useState(null);
       const [configIsLive, setConfigIsLive] = useState(false);
       const [loading, setLoading] = useState(true);
       const width = useWindowWidth();
@@ -1139,9 +1230,10 @@
               if (age < 3600000) { if (mounted) setStats(parsed); }
             } catch {}
           }
-          const [statsRes, configRes] = await Promise.allSettled([
+          const [statsRes, configRes, pricingRes] = await Promise.allSettled([
             fetch("/api/stats").then(r => r.ok ? r.json() : null),
             fetch("/api/packages-config").then(r => r.ok ? r.json() : null),
+            fetch("/api/pricing-config").then(r => r.ok ? r.json() : null),
           ]);
           if (!mounted) return;
           if (statsRes.status === "fulfilled" && statsRes.value) {
@@ -1155,6 +1247,10 @@
             const cfg = typeof configRes.value === "string" ? JSON.parse(configRes.value) : configRes.value;
             setConfig(cfg);
             setConfigIsLive(true);
+          }
+          if (pricingRes.status === "fulfilled" && pricingRes.value) {
+            const pc = typeof pricingRes.value === "string" ? JSON.parse(pricingRes.value) : pricingRes.value;
+            setPricingConfig({ ...DEFAULT_PRICING, ...pc });
           }
           setLoading(false);
         }
@@ -1204,14 +1300,13 @@
             ],
           },
         },
-        pricingMilestones: [
-          { subscribers: 40000, adjustment: 0 }, { subscribers: 45000, adjustment: 100 },
-          { subscribers: 50000, adjustment: 200 }, { subscribers: 55000, adjustment: 300 },
-        ],
         cancellationPolicy: "Cancel with 30 days' notice. Unused placements are refunded on a prorated basis. No penalties, no fine print.",
-        guaranteeMultiplier: 0.6,
         contactEmail: "hello@themommy.news", calendlyUrl: "",
       };
+
+      const pc = pricingConfig || DEFAULT_PRICING;
+      const engagedMoms = (stats?.engagedMoms || cfg.engagedReaders) + 3000;
+      const pricing = calculatePricing(pc, engagedMoms);
 
       if (loading && !config) {
         return (
@@ -1230,12 +1325,12 @@
           <Demographics config={cfg} stats={stats} isMobile={isMobile} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
-          <PricingSection config={cfg} stats={stats} isMobile={isMobile} />
+          <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
           <HowItWorks config={cfg} isMobile={isMobile} />
-          <LockIn config={cfg} stats={stats} isMobile={isMobile} />
-          <Guarantee config={cfg} />
+          <LockIn config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
+          <Guarantee config={cfg} pricing={pricing} pricingConfig={pc} />
           <Founder />
-          <InquiryForm config={cfg} stats={stats} isMobile={isMobile} />
+          <InquiryForm config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
           <Footer config={cfg} />
         </div>
       );

@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/packages", "destination": "/packages.html" },
+    { "source": "/admin/pricing", "destination": "/admin-pricing.html" },
     { "source": "/s/:token", "destination": "/index.html" }
   ]
 }
