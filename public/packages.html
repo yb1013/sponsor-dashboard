@@ -27,6 +27,9 @@
     body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #E8909C, #D4707E, #E8909C); z-index: 9999; }
     .live-dot { display: inline-block; width: 6px; height: 6px; background: #22C55E; border-radius: 50%; margin-left: 8px; vertical-align: middle; animation: live-pulse 2s ease-in-out infinite; }
     @keyframes live-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); } }
+    .progress-fill { position: relative; border-radius: 8px; height: 100%; background: linear-gradient(90deg, #E8909C, #D4707E); box-shadow: 0 0 12px rgba(232, 144, 156, 0.3); transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1); }
+    .progress-fill::after { content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background: #E8909C; border-radius: 50%; box-shadow: 0 0 8px rgba(232, 144, 156, 0.5); animation: bar-pulse 2s ease-in-out infinite; }
+    @keyframes bar-pulse { 0%, 100% { transform: translateY(-50%) scale(1); opacity: 1; box-shadow: 0 0 8px rgba(232, 144, 156, 0.5); } 50% { transform: translateY(-50%) scale(1.4); opacity: 0.6; box-shadow: 0 0 16px rgba(232, 144, 156, 0.3); } }
     ::selection { background: #E8909C33; }
     input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
   </style>
@@ -502,7 +505,7 @@
             </div>
           </div>
           </div>{/* end dashboard wrapper */}
-          <div style={{ textAlign: "center", marginTop: 32 }}>
+          <div style={{ textAlign: "center", marginTop: 56 }}>
             <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "14px 32px", background: C.accent, color: "#fff",
@@ -688,7 +691,7 @@
               );
             })}
           </div>
-          <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 32 }}>
+          <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 48 }}>
             #1 Popular Family Newsletter on Paved &middot; #2 Most Reviewed &middot; 92% of advertisers rebook
           </p>
         </Section>
@@ -839,9 +842,29 @@
       const milestones = config.pricingMilestones || [];
       const nextMs = getNextMilestone(subs, milestones);
       const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
+      const sectionRef = useRef(null);
+      const [barVisible, setBarVisible] = useState(false);
+
+      useEffect(() => {
+        if (!sectionRef.current || !('IntersectionObserver' in window)) {
+          setBarVisible(true);
+          return;
+        }
+        const obs = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              setTimeout(() => setBarVisible(true), 200);
+              obs.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.3 });
+        obs.observe(sectionRef.current);
+        return () => obs.disconnect();
+      }, []);
 
       return (
         <Section bg="linear-gradient(180deg, #FFFBF5 0%, #FAF9F7 100%)">
+          <div ref={sectionRef}>
           <SectionTitle>Lock In Today's Rates</SectionTitle>
           <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
             <p style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: C.text, marginBottom: 8, lineHeight: 1.4 }}>
@@ -862,8 +885,8 @@
             {nextMs && (
               <div style={{ maxWidth: 500, margin: "0 auto 24px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "hidden" }}>
-                    <div style={{ background: C.accent, width: `${progressPct}%`, height: "100%", borderRadius: 8, transition: "width 1s ease" }} />
+                  <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "visible" }}>
+                    <div className="progress-fill" style={{ width: barVisible ? `${progressPct}%` : "0%" }} />
                   </div>
                   <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, flexShrink: 0 }}>{progressPct}%</span>
                 </div>
@@ -877,6 +900,7 @@
             <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65 }}>
               Sponsors who commit now keep today's rates even as our audience — and rates — grow.
             </p>
+          </div>
           </div>
         </Section>
       );
