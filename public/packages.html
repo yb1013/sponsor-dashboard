@@ -971,7 +971,7 @@
 
       return (
         <Section id="inquiry" bg={C.bgSubtle}>
-          <SectionTitle sub="Tell us about your brand. We'll send a custom proposal within 24 hours.">Let's Get Started</SectionTitle>
+          <SectionTitle sub="Tell us about your brand and we'll follow up within 24 hours.">Start Your Partnership</SectionTitle>
           <form onSubmit={handleSubmit} ref={formRef} style={{ maxWidth: 520, margin: "0 auto" }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap", justifyContent: "center" }}>
               {tierKeys.map(k => {
@@ -1015,7 +1015,7 @@
                 width: "100%", padding: "18px 0", borderRadius: 10, border: "none", background: C.accent, color: "#fff",
                 fontSize: 15, fontWeight: 600, fontFamily: FONT, cursor: sending ? "not-allowed" : "pointer",
                 opacity: sending ? 0.6 : 1, transition: "opacity 0.15s", minHeight: 56,
-              }}>{sending ? "Sending..." : "Request Your Proposal \u2192"}</button>
+              }}>{sending ? "Sending..." : "Get Started \u2192"}</button>
             </div>
             <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 20 }}>
               Prefer email? <a href="mailto:matt@themommy.news" style={{ color: C.accent, fontWeight: 600, textDecoration: "none" }}>matt@themommy.news</a>
