@@ -118,7 +118,7 @@
     function Hero({ stats, config, isMobile }) {
       const heroStats = [
         { label: "Moms Per Send", display: num(config.engagedReaders) },
-        { label: "Open Rate", display: config.uniqueOpenRate + "%+" },
+        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
         { label: "Would Sponsor Again", display: config.pavedRebookRate + "%" },
       ];
       return (
@@ -136,12 +136,9 @@
           {/* Content */}
           <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
-            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 16px" }}>
-              Your Brand, Introduced by{isMobile ? " " : <br />}a Voice {num(config.engagedReaders)} Moms Trust
+            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
+              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(config.engagedReaders)} Moms Trust
             </h1>
-            <p style={{ fontSize: 16, color: C.muted, maxWidth: 520, margin: "0 auto 32px", lineHeight: 1.6 }}>
-              Newsletter sponsorship isn't an ad — it's an introduction from a trusted friend, in a space readers chose to open.
-            </p>
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
@@ -346,7 +343,7 @@
 
       return (
         <Section bg="linear-gradient(180deg, #FDF2F4 0%, #FAF9F7 100%)">
-          <SectionTitle sub="Loved by thousands of moms">Our Readers Don't Just Read — They Act</SectionTitle>
+          <SectionTitle sub="Loved by thousands of moms">Our Readers Don't Just Read. They Act</SectionTitle>
           <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: isMobile ? "0 24px" : "0 56px" }}>
             {!isMobile && (
               <button onClick={() => scrollCarousel(-1)} style={{
@@ -467,10 +464,10 @@
               Explore the Live Demo
             </a>
             <p style={{ fontSize: 15, fontWeight: 600, color: C.text, marginTop: 16 }}>
-              Average sponsor CTR: 1.15% — 3&times; the newsletter industry average
+              Average sponsor CTR: 1.15%, 3&times; the newsletter industry average
             </p>
             <p style={{ fontSize: 14, color: C.muted, marginTop: 8 }}>
-              Every partner gets their own private dashboard — updated automatically after each send.
+              Every partner gets their own private dashboard, updated automatically after each send.
             </p>
           </div>
         </Section>
@@ -671,7 +668,7 @@
 
       const callouts = [
         { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo alongside The Mommy's at the very top of the email. 31,000+ readers see this before any content loads." },
-        { label: "Touchpoint 2", title: "Promotional Intro", desc: "A one-line mention woven naturally into the newsletter opening. Feels editorial — not like an ad. Readers click because they're curious." },
+        { label: "Touchpoint 2", title: "Promotional Intro", desc: "A one-line mention woven naturally into the newsletter opening. Feels editorial, not like an ad. Readers click because they're curious." },
         { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Your headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen. Average result: $1.53/click." },
       ];
 
@@ -780,7 +777,7 @@
           )}
           {example && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
-              <p style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy — {example.cpc || "$1.53 per click"}</p>
+              <p style={{ fontSize: 15, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>See a real sponsorship: {example.title} &times; The Mommy, {example.cpc || "$1.53 per click"}</p>
               <a href={example.url} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 600, fontSize: 14, textDecoration: "none" }}>View Live Example &rarr;</a>
             </div>
           )}
@@ -850,7 +847,7 @@
             )}
 
             <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65 }}>
-              Sponsors who commit now keep today's rates even as our audience — and rates — grow.
+              Sponsors who commit now keep today's rates even as our audience and rates grow.
             </p>
           </div>
           </div>
@@ -865,7 +862,7 @@
           <div style={{ maxWidth: 620, margin: "0 auto", textAlign: "center" }}>
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Our Guarantee</p>
             <p style={{ fontSize: 20, fontWeight: 600, color: C.text, lineHeight: 1.6, marginBottom: 16 }}>
-              If we don't hit your guaranteed reader impressions, we keep running until we do — at no extra cost.
+              If we don't hit your guaranteed reader impressions, we keep running until we do. No extra cost.
             </p>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 40 }}>
               Starter: 60,000+ &middot; Growth: 120,000+ &middot; Partner: 240,000+
@@ -894,8 +891,7 @@
             </div>
             <div style={{ fontSize: 15, color: C.textSecondary, lineHeight: 1.7, fontStyle: "italic" }}>
               I built The Mommy because I wanted a newsletter I'd actually look forward to opening.
-              Every brand I partner with is one I'd genuinely recommend to a friend. That's the bar —
-              and it's why our readers trust what they see.
+              Every brand I partner with is one I'd genuinely recommend to a friend. That's the bar, and it's why our readers trust what they see.
             </div>
           </div>
         </Section>
