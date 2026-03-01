@@ -175,9 +175,11 @@
 
       useEffect(() => {
         if (!stats?.engagedMoms || !momsStatRef.current || odometerInitRef.current) return;
+        const cachedVal = config.engagedReaders;
+        if (cachedVal === stats.engagedMoms) return; // same value, no animation needed
         odometerInitRef.current = true;
         const el = momsStatRef.current;
-        createOdometer(el, config.engagedReaders || 31000);
+        createOdometer(el, cachedVal);
         setTimeout(() => updateOdometer(el, stats.engagedMoms), 200);
       }, [stats?.engagedMoms]);
 
@@ -541,7 +543,7 @@
       const [takeoverState, setTakeoverState] = useState({});
       const [valueStackOpen, setValueStackOpen] = useState({});
       const [hoveredCard, setHoveredCard] = useState(null);
-      const subscriberCount = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders || 31000);
+      const subscriberCount = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders);
       const adj = getPriceAdjustment(subscriberCount, config.pricingMilestones);
       const avgOpens = stats?.avgOpensPerSend || config.engagedReaders;
       const tierOrder = isMobile ? ["growth", "starter", "partner"] : ["starter", "growth", "partner"];
@@ -866,7 +868,7 @@
 
     // ─── Lock-In Messaging ────────────────────────────────────────
     function LockIn({ config, stats, isMobile }) {
-      const subs = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders || 31000);
+      const subs = (stats?.activeSubscribers > 0) ? stats.activeSubscribers : (config.engagedReaders);
       const milestones = config.pricingMilestones || [];
       const nextMs = getNextMilestone(subs, milestones);
       const progressPct = nextMs ? Math.min(Math.round((subs / nextMs.subscribers) * 100), 99) : 100;
@@ -1138,6 +1140,9 @@
           if (statsRes.status === "fulfilled" && statsRes.value) {
             setStats(statsRes.value);
             sessionStorage.setItem("pkg-stats", JSON.stringify(statsRes.value));
+            if (statsRes.value.engagedMoms) {
+              localStorage.setItem("engagedMoms", String(statsRes.value.engagedMoms));
+            }
           }
           if (configRes.status === "fulfilled" && configRes.value) {
             const cfg = typeof configRes.value === "string" ? JSON.parse(configRes.value) : configRes.value;
@@ -1151,7 +1156,7 @@
       }, []);
 
       const cfg = config || {
-        totalSubscribers: 120000, engagedReaders: 31000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
+        totalSubscribers: 120000, engagedReaders: parseInt(localStorage.getItem("engagedMoms")) || 26000, uniqueOpenRate: 75, totalOpenRate: "90-110%",
         instagramFollowers: 6081, facebookFollowers: 14000,
         demographics: [
           "100% moms, aged 22-45",
