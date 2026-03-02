@@ -318,7 +318,7 @@ function TierPreview({ name, pricing, breakdownKey, anchorKey, savingsKey, impre
       <h4>{name}</h4>
       <div className="price">{money(price)}</div>
       {savings > 0 && <div className="save">Save {money(savings)}</div>}
-      <div className="impressions">{num(impressions)}+ guaranteed impressions</div>
+      <div className="impressions">{num(impressions)}+ guaranteed newsletter opens</div>
       <div className="cpm-eff">Effective CPM: ${effectiveCPM}</div>
       <div className="breakdown">
         {breakdown.map((b, i) => (
