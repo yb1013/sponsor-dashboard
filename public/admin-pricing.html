@@ -108,6 +108,9 @@ const DEFAULT_CONFIG = {
   starterPlacements: 6,
   growthPlacements: 12,
   partnerPlacements: 24,
+  starterMonths: 3,
+  growthMonths: 6,
+  partnerMonths: 12,
   exclusivityPremiumPct: 0.25,
   igFollowers: 6500,
   igBaseRatePer1K: 30,
@@ -534,6 +537,17 @@ function AdminApp({ token: initialToken }) {
               <NumField label="Starter" value={config.starterPlacements} onChange={v => update("starterPlacements", v)} step={1} min={1} />
               <NumField label="Growth" value={config.growthPlacements} onChange={v => update("growthPlacements", v)} step={1} min={1} />
               <NumField label="Partner" value={config.partnerPlacements} onChange={v => update("partnerPlacements", v)} step={1} min={1} />
+            </div>
+          </div>
+
+          {/* Contract Duration */}
+          <div className="card">
+            <h3>Contract Duration</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>Months shown on each tier's pricing card.</div>
+            <div className="field-row">
+              <NumField label="Starter (months)" value={config.starterMonths} onChange={v => update("starterMonths", v)} step={1} min={1} />
+              <NumField label="Growth (months)" value={config.growthMonths} onChange={v => update("growthMonths", v)} step={1} min={1} />
+              <NumField label="Partner (months)" value={config.partnerMonths} onChange={v => update("partnerMonths", v)} step={1} min={1} />
             </div>
           </div>
 

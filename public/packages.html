@@ -82,6 +82,7 @@
       anchorCPM: 45,
       starterDiscountPct: 0.50, growthDiscountPct: 0.55, partnerDiscountPct: 0.60,
       starterPlacements: 6, growthPlacements: 12, partnerPlacements: 24,
+      starterMonths: 3, growthMonths: 6, partnerMonths: 12,
       exclusivityPremiumPct: 0.25,
       igFollowers: 6500, igBaseRatePer1K: 30, igReelFloor: 200, growthIGReels: 2, partnerIGReels: 4,
       fbFollowers: 15000, fbDiscountVsIG: 0.65, fbReelFloor: 150, growthFBReels: 2, partnerFBReels: 4,
@@ -651,7 +652,7 @@
       const tierDefs = [
         {
           key: "starter", name: "Starter", tagline: "For brands testing newsletter sponsorship for the first time.",
-          placements: pc.starterPlacements, price: pricing.starterPrice,
+          placements: pc.starterPlacements, months: pc.starterMonths || 3, price: pricing.starterPrice,
           savings: pricing.starterSavings, anchorValue: pricing.starterAnchorValue,
           impressions: pricing.starterImpressions, breakdown: pricing.starterBreakdown,
           recommended: false, hasTakeover: false,
@@ -663,7 +664,7 @@
         },
         {
           key: "growth", name: "Growth", tagline: "For brands ready to own their category.",
-          placements: pc.growthPlacements, price: pricing.growthPrice,
+          placements: pc.growthPlacements, months: pc.growthMonths || 6, price: pricing.growthPrice,
           savings: pricing.growthSavings, anchorValue: pricing.growthAnchorValue,
           impressions: pricing.growthImpressions, breakdown: pricing.growthBreakdown,
           recommended: true, hasTakeover: true,
@@ -677,7 +678,7 @@
         },
         {
           key: "partner", name: "Partner", tagline: "For brands that want to become synonymous with The Mommy.",
-          placements: pc.partnerPlacements, price: pricing.partnerPrice,
+          placements: pc.partnerPlacements, months: pc.partnerMonths || 12, price: pricing.partnerPrice,
           savings: pricing.partnerSavings, anchorValue: pricing.partnerAnchorValue,
           impressions: pricing.partnerImpressions, breakdown: pricing.partnerBreakdown,
           recommended: false, hasTakeover: true,
@@ -757,6 +758,9 @@
                           Save {money(Math.floor(tier.savings))}
                         </div>
                       )}
+                      <div style={{ fontSize: 13, color: C.muted, marginTop: 10, fontWeight: 500 }}>
+                        {tier.months}-month partnership
+                      </div>
                     </div>
 
                     {/* Guarantee Block */}
