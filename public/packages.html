@@ -1320,9 +1320,6 @@
               <p style={{ fontSize: 13, color: C.muted, marginBottom: 0 }}>
                 Starter: {num(Math.floor(pricing.starterImpressions / 10000) * 10000)}+ &middot; Growth: {num(Math.floor(pricing.growthImpressions / 10000) * 10000)}+ &middot; Partner: {num(Math.floor(pricing.partnerImpressions / 10000) * 10000)}+
               </p>
-              <div style={{ width: "100%", height: 1, background: "#E5E7EB", margin: "32px 0" }} />
-              <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 16 }}>Flexible Cancellation</p>
-              <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65, marginBottom: 0 }}>{config.cancellationPolicy}</p>
             </div>
           </div>
         </Section>
@@ -1450,6 +1447,7 @@
                   {" \u00B7 "}{t.placements} placements
                   {" \u00B7 "}{num(Math.floor(t.impressions / 10000) * 10000)}+ guaranteed impressions
                   {" \u00B7 "}{money(t.price)}
+                  {takeover && (" + Newsletter Takeover (+" + money(pricing.takeoverPerEmail) + "/email)")}
                 </div>
               );
             })()}
