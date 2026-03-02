@@ -865,8 +865,7 @@
     }
 
     // ─── Pricing Tiers ────────────────────────────────────────────
-    function PricingSection({ config, stats, isMobile, pricing, pricingConfig }) {
-      const [takeoverState, setTakeoverState] = useState({});
+    function PricingSection({ config, stats, isMobile, pricing, pricingConfig, takeoverState, setTakeoverState }) {
       const [valueStackOpen, setValueStackOpen] = useState({});
       const [hoveredCard, setHoveredCard] = useState(null);
       const pc = pricingConfig || DEFAULT_PRICING;
@@ -1345,9 +1344,8 @@
     }
 
     // ─── Inquiry Form ─────────────────────────────────────────────
-    function InquiryForm({ config, stats: formStats, isMobile, pricing, pricingConfig }) {
+    function InquiryForm({ config, stats: formStats, isMobile, pricing, pricingConfig, takeoverState }) {
       const [tier, setTier] = useState("growth");
-      const [takeover, setTakeover] = useState(false);
       const [name, setName] = useState("");
       const [email, setEmail] = useState("");
       const [company, setCompany] = useState("");
@@ -1355,12 +1353,12 @@
       const [sending, setSending] = useState(false);
       const [sent, setSent] = useState(false);
       const formRef = useRef(null);
+      const takeover = (takeoverState && takeoverState[tier]) || false;
 
       useEffect(() => {
         const checkTier = () => {
           if (window.__selectedTier) {
             setTier(window.__selectedTier);
-            setTakeover(!!window.__selectedTakeover);
             window.__selectedTier = null;
             window.__selectedTakeover = null;
           }
@@ -1498,6 +1496,7 @@
       const [opensData, setOpensData] = useState(null);
       const [configIsLive, setConfigIsLive] = useState(false);
       const [loading, setLoading] = useState(true);
+      const [takeoverState, setTakeoverState] = useState({});
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
 
@@ -1612,11 +1611,11 @@
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <HowItWorks config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
-          <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
+          <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} takeoverState={takeoverState} setTakeoverState={setTakeoverState} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} avgOpens={avgOpens} />
           <Guarantee config={cfg} pricing={pricing} pricingConfig={pc} />
           <Founder />
-          <InquiryForm config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
+          <InquiryForm config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} takeoverState={takeoverState} />
           <Footer config={cfg} />
         </div>
       );
