@@ -529,6 +529,7 @@
                 <option value="">Select sponsor...</option>
                 {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              <a href="/admin/pricing" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, textDecoration: "none", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Pricing</a>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
               <button onClick={logout} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, whiteSpace: "nowrap" }}>Out</button>
@@ -544,6 +545,10 @@
                 <h1 style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3 }}>Sponsor Dash</h1>
               </div>
               <p style={{ fontSize: 11, color: C.dim, margin: "4px 0 0 38px" }}>Beehiiv Campaign Tracker</p>
+              <div style={{ display: "flex", gap: 10, margin: "8px 0 0 38px" }}>
+                <a href="/admin/pricing" style={{ fontSize: 11, color: C.dim, textDecoration: "none", fontWeight: 500, transition: "color 0.15s" }} onMouseEnter={e => e.target.style.color = C.accent} onMouseLeave={e => e.target.style.color = C.dim}>Pricing</a>
+                <a href="/packages" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: C.dim, textDecoration: "none", fontWeight: 500, transition: "color 0.15s" }} onMouseEnter={e => e.target.style.color = C.accent} onMouseLeave={e => e.target.style.color = C.dim}>Packages ↗</a>
+              </div>
             </div>
             <div style={{ padding: "0 12px", display: "flex", gap: 6, marginBottom: 4 }}>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ flex: 1 }}>+ Sponsor</Btn>

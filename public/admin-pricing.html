@@ -21,6 +21,10 @@
 
   .app-header { padding: 20px 32px; border-bottom: 1px solid #2A2D37; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #0F1117; z-index: 100; }
   .app-header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .app-header .nav-left { display: flex; align-items: center; gap: 12px; }
+  .app-header .nav-link { font-size: 13px; color: #8A8D9A; text-decoration: none; font-weight: 500; transition: color 0.15s; }
+  .app-header .nav-link:hover { color: #E8909C; }
+  .app-header .nav-sep { color: #2A2D37; font-size: 14px; }
   .app-header .actions { display: flex; gap: 12px; align-items: center; }
   .btn-sm { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; border: none; }
   .btn-save { background: #E8909C; color: #fff; }
@@ -400,7 +404,13 @@ function AdminApp({ token: initialToken }) {
   return (
     <div>
       <div className="app-header">
-        <h1>Pricing Engine</h1>
+        <div className="nav-left">
+          <a href="/" className="nav-link">&larr; Dashboard</a>
+          <span className="nav-sep">&middot;</span>
+          <h1>Pricing Engine</h1>
+          <span className="nav-sep">&middot;</span>
+          <a href="/packages" target="_blank" rel="noopener noreferrer" className="nav-link">Packages &nearr;</a>
+        </div>
         <div className="actions">
           {saveStatus === "saved" && <span className="status-badge status-saved">Saved</span>}
           {saveStatus === "error" && <span className="status-badge" style={{ background: "#3a1a1a", color: "#F87171" }}>Error</span>}
