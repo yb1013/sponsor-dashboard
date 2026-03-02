@@ -101,7 +101,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 const DEFAULT_CONFIG = {
-  anchorCPM: 40,
+  anchorCPM: 45,
   starterDiscountPct: 0.50,
   growthDiscountPct: 0.55,
   partnerDiscountPct: 0.60,
@@ -124,6 +124,7 @@ const DEFAULT_CONFIG = {
   welcomeCPMMultiplier: 2.0,
   welcomeMonthlyFloor: 750,
   partnerWelcomeMonths: 2,
+  welcomeSequenceEnabled: true,
   stageMonthlyFlat: 500,
   partnerStageMonths: 1,
   audiencePollValue: 1000,
@@ -146,7 +147,7 @@ const money = (v) => "$" + Math.round(v || 0).toLocaleString();
 const num = (v) => (v || 0).toLocaleString();
 
 function calculatePricing(config, engagedMoms, avgOpensPerSend) {
-  const anchorPricePerPlacement = (engagedMoms / 1000) * config.anchorCPM;
+  const anchorPricePerPlacement = ((avgOpensPerSend || engagedMoms) / 1000) * config.anchorCPM;
 
   const starterPlacementValue = config.starterPlacements * anchorPricePerPlacement;
   const growthPlacementValue = config.growthPlacements * anchorPricePerPlacement;
@@ -188,7 +189,7 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     + partnerExclusivity
     + (config.partnerIGReels * igReelPrice)
     + (config.partnerFBReels * fbReelPrice)
-    + welcomeContractValue
+    + (config.welcomeSequenceEnabled !== false ? welcomeContractValue : 0)
     + stageContractValue
     + dedicatedSendPrice
     + (config.audiencePollValue || 0);
@@ -237,7 +238,7 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
       { label: `${config.partnerPlacements} Newsletter Placements`, value: partnerPlacementValue },
       { label: 'Category Exclusivity (full contract)', value: partnerExclusivity },
       { label: `${config.partnerIGReels} IG Reels + ${config.partnerFBReels} FB Reels`, value: (config.partnerIGReels * igReelPrice) + (config.partnerFBReels * fbReelPrice) },
-      { label: 'Welcome Sequence Integration', value: welcomeContractValue },
+      ...(config.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: welcomeContractValue }] : []),
       { label: 'Stage-Based Sequence Sponsorship', value: stageContractValue },
       { label: '1 Dedicated Send', value: dedicatedSendPrice },
       { label: 'Custom Audience Poll + Insights Report', value: config.audiencePollValue || 0 },
@@ -438,8 +439,8 @@ function AdminApp({ token: initialToken }) {
         <div className="inputs-panel">
           <div className="live-data">
             <div className="stat">
-              <div className="stat-label">Engaged Moms (Live)</div>
-              <div className="stat-value accent">{num(engagedMoms)}</div>
+              <div className="stat-label">Avg Opens / Send (Live)</div>
+              <div className="stat-value accent">{num(avgOpens || engagedMoms)}</div>
             </div>
             <div className="stat">
               <div className="stat-label">Anchor CPM</div>
@@ -575,6 +576,17 @@ function AdminApp({ token: initialToken }) {
           {/* Welcome Sequence */}
           <div className="card">
             <h3>Welcome Sequence</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 13, color: "#C0C2C9" }}>Include in Partner tier</span>
+              <div onClick={() => update("welcomeSequenceEnabled", !config.welcomeSequenceEnabled)}
+                style={{ width: 40, height: 22, borderRadius: 11, padding: 2, cursor: "pointer",
+                  background: config.welcomeSequenceEnabled !== false ? "#E8909C" : "#4A4D57",
+                  transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff",
+                  transform: config.welcomeSequenceEnabled !== false ? "translateX(18px)" : "translateX(0)",
+                  transition: "transform 0.15s" }} />
+              </div>
+            </div>
             <div className="field-row">
               <NumField label="Monthly New Subs" value={config.monthlyNewSubscribers} onChange={v => update("monthlyNewSubscribers", v)} step={500} min={0} />
               <NumField label="CPM Multiplier" hint="vs anchor CPM" value={config.welcomeCPMMultiplier} onChange={v => update("welcomeCPMMultiplier", v)} step={0.1} min={0} />

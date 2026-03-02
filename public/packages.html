@@ -79,14 +79,14 @@
     // PRICING ENGINE
     // ═══════════════════════════════════════════════════════════════
     const DEFAULT_PRICING = {
-      anchorCPM: 40,
+      anchorCPM: 45,
       starterDiscountPct: 0.50, growthDiscountPct: 0.55, partnerDiscountPct: 0.60,
       starterPlacements: 6, growthPlacements: 12, partnerPlacements: 24,
       exclusivityPremiumPct: 0.25,
       igFollowers: 6500, igBaseRatePer1K: 30, igReelFloor: 200, growthIGReels: 2, partnerIGReels: 4,
       fbFollowers: 15000, fbDiscountVsIG: 0.65, fbReelFloor: 150, growthFBReels: 2, partnerFBReels: 4,
       dedicatedSendMultiplier: 1.5,
-      monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2,
+      monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2, welcomeSequenceEnabled: true,
       stageMonthlyFlat: 500, partnerStageMonths: 1,
       audiencePollValue: 1000,
       takeoverPremiumPct: 0.20, takeoverPerEmail: null,
@@ -102,7 +102,7 @@
     };
 
     function calculatePricing(pc, engagedMoms, avgOpensPerSend) {
-      const anchorPricePerPlacement = (engagedMoms / 1000) * pc.anchorCPM;
+      const anchorPricePerPlacement = ((avgOpensPerSend || engagedMoms) / 1000) * pc.anchorCPM;
       const starterPV = pc.starterPlacements * anchorPricePerPlacement;
       const growthPV = pc.growthPlacements * anchorPricePerPlacement;
       const partnerPV = pc.partnerPlacements * anchorPricePerPlacement;
@@ -118,7 +118,7 @@
       const takeoverPerEmail = pc.takeoverPerEmail || Math.ceil((anchorPricePerPlacement * pc.takeoverPremiumPct) / 25) * 25;
       const starterAV = starterPV;
       const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice);
-      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice + (pc.audiencePollValue || 0);
+      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + (pc.welcomeSequenceEnabled !== false ? welcomeCV : 0) + stageCV + dedicatedSendPrice + (pc.audiencePollValue || 0);
       const r = pc.roundToNearest || 1;
       const starterPrice = pc.starterPriceOverride || Math.round((starterPV * (1 - pc.starterDiscountPct)) / r) * r;
       const growthPrice = pc.growthPriceOverride || Math.round((growthPV * (1 - pc.growthDiscountPct)) / r) * r;
@@ -143,7 +143,7 @@
           { label: `${pc.partnerPlacements} Newsletter Placements`, value: partnerPV },
           { label: 'Category Exclusivity (full contract)', value: partnerExcl },
           { label: `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels`, value: (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) },
-          { label: 'Welcome Sequence Integration', value: welcomeCV },
+          ...(pc.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: welcomeCV }] : []),
           { label: 'Stage-Based Sequence Sponsorship', value: stageCV },
           { label: '1 Dedicated Send', value: dedicatedSendPrice },
           { label: 'Custom Audience Poll + Insights Report', value: pc.audiencePollValue || 0 },
@@ -662,7 +662,7 @@
             `${pc.partnerPlacements} newsletter placements (all 3 touchpoints)`,
             "Category exclusivity for full contract",
             `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels (organic-style sponsored content)`,
-            "1 welcome sequence integration",
+            ...(pc.welcomeSequenceEnabled !== false ? ["1 welcome sequence integration"] : []),
             "1 stage-based sequence integration",
             "1 dedicated send (entire email is your content)",
             "Custom audience poll + insights report",
@@ -812,8 +812,9 @@
                             <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff", transform: isTakeover ? "translateX(18px)" : "translateX(0)", transition: "transform 0.15s" }} />
                           </div>
                         </div>
+                        <p style={{ fontSize: 13, color: "#6A6A7A", fontStyle: "italic", marginTop: 6 }}>~32%+ higher engagement</p>
                         {isTakeover && (
-                          <p style={{ fontSize: 13, color: C.muted, marginTop: 8, lineHeight: 1.4 }}>Sole sponsor per email &middot; ~25% higher engagement</p>
+                          <p style={{ fontSize: 13, color: C.muted, marginTop: 8, lineHeight: 1.4 }}>Sole sponsor per email &middot; ~32% higher engagement</p>
                         )}
                       </div>
                     )}
