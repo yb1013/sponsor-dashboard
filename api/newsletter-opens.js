@@ -54,15 +54,15 @@ export default async function handler(req, res) {
     const posts = qualifyingPosts.map(post => ({
       title: post.title || post.subtitle || "Untitled",
       publish_date: post.publish_date || post.created_at || null,
-      unique_opens: post.stats?.email?.unique_opens || post.stats?.email?.opens || 0,
+      total_opens: post.stats?.email?.opens || 0,
     }));
 
     console.log("[newsletter-opens] Posts after discarding 2 most recent:", posts.map(p => ({
       title: p.title.slice(0, 40),
-      opens: p.unique_opens,
+      opens: p.total_opens,
     })));
 
-    const totalOpens = posts.reduce((sum, p) => sum + p.unique_opens, 0);
+    const totalOpens = posts.reduce((sum, p) => sum + p.total_opens, 0);
     const avgOpensPerSend = posts.length > 0 ? Math.round(totalOpens / posts.length) : 0;
 
     console.log(`[newsletter-opens] Average opens per send: ${avgOpensPerSend} (from ${posts.length} posts)`);

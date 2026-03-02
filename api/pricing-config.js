@@ -65,8 +65,10 @@ function getDefaults() {
     growthPriceOverride: null,
     partnerPriceOverride: null,
 
-    // === IMPRESSION ADJUSTMENT ===
-    impressionAdjustmentFactor: 1.0,
+    // === IMPRESSION ADJUSTMENT (per-tier) ===
+    starterAdjustmentFactor: 1.0,
+    growthAdjustmentFactor: 1.0,
+    partnerAdjustmentFactor: 1.0,
 
     // === MILESTONE ===
     nextMilestone: 40000,

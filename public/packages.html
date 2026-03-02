@@ -92,7 +92,9 @@
       hourlyRate: 250, growthCallHours: 0.5, partnerCallHours: 1.0,
       roundToNearest: 500,
       starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
-      impressionAdjustmentFactor: 1.0,
+      starterAdjustmentFactor: 1.0,
+      growthAdjustmentFactor: 1.0,
+      partnerAdjustmentFactor: 1.0,
       nextMilestone: 40000,
     };
 
@@ -124,9 +126,9 @@
         starterPrice, growthPrice, partnerPrice,
         starterSavings: starterAV - starterPrice, growthSavings: growthAV - growthPrice, partnerSavings: partnerAV - partnerPrice,
         starterAnchorValue: starterAV, growthAnchorValue: growthAV, partnerAnchorValue: partnerAV,
-        starterImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.starterPlacements,
-        growthImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.growthPlacements,
-        partnerImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.partnerPlacements,
+        starterImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.starterAdjustmentFactor || 1.0) : engagedMoms) * pc.starterPlacements,
+        growthImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.growthAdjustmentFactor || 1.0) : engagedMoms) * pc.growthPlacements,
+        partnerImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.partnerAdjustmentFactor || 1.0) : engagedMoms) * pc.partnerPlacements,
         anchorPricePerPlacement, takeoverPerEmail,
         starterBreakdown: [
           { label: `${pc.starterPlacements} Newsletter Placements`, value: starterPV },

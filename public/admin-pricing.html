@@ -135,7 +135,9 @@ const DEFAULT_CONFIG = {
   starterPriceOverride: null,
   growthPriceOverride: null,
   partnerPriceOverride: null,
-  impressionAdjustmentFactor: 1.0,
+  starterAdjustmentFactor: 1.0,
+  growthAdjustmentFactor: 1.0,
+  partnerAdjustmentFactor: 1.0,
   nextMilestone: 40000,
 };
 
@@ -207,12 +209,15 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
   const growthSavings = growthAnchorValue - growthPrice;
   const partnerSavings = partnerAnchorValue - partnerPrice;
 
-  const impressionsPerSend = avgOpensPerSend
-    ? avgOpensPerSend * (config.impressionAdjustmentFactor || 1.0)
-    : engagedMoms;
-  const starterImpressions = impressionsPerSend * config.starterPlacements;
-  const growthImpressions = impressionsPerSend * config.growthPlacements;
-  const partnerImpressions = impressionsPerSend * config.partnerPlacements;
+  const starterImpressions = avgOpensPerSend
+    ? avgOpensPerSend * (config.starterAdjustmentFactor || 1.0) * config.starterPlacements
+    : engagedMoms * config.starterPlacements;
+  const growthImpressions = avgOpensPerSend
+    ? avgOpensPerSend * (config.growthAdjustmentFactor || 1.0) * config.growthPlacements
+    : engagedMoms * config.growthPlacements;
+  const partnerImpressions = avgOpensPerSend
+    ? avgOpensPerSend * (config.partnerAdjustmentFactor || 1.0) * config.partnerPlacements
+    : engagedMoms * config.partnerPlacements;
 
   return {
     starterPrice, growthPrice, partnerPrice,
@@ -468,7 +473,7 @@ function AdminApp({ token: initialToken }) {
                       <tr key={i} style={{ borderBottom: i < opensData.posts.length - 1 ? "1px solid #1A1C24" : "none" }}>
                         <td style={{ padding: "6px 8px 6px 0", color: "#C0C2C9", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(p.title || "").slice(0, 40)}{(p.title || "").length > 40 ? "..." : ""}</td>
                         <td style={{ padding: "6px 0", color: "#8A8D9A", textAlign: "right", whiteSpace: "nowrap" }}>{p.publish_date ? new Date(p.publish_date * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</td>
-                        <td style={{ padding: "6px 0", color: "#C0C2C9", textAlign: "right", fontWeight: 500 }}>{num(p.unique_opens)}</td>
+                        <td style={{ padding: "6px 0", color: "#C0C2C9", textAlign: "right", fontWeight: 500 }}>{num(p.total_opens)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -478,10 +483,16 @@ function AdminApp({ token: initialToken }) {
             ) : (
               <div style={{ fontSize: 13, color: "#8A8D9A", marginBottom: 12 }}>Loading newsletter data...</div>
             )}
-            <NumField label="Adjustment Factor" hint="Multiply average by this factor. 0.9 = conservative, 1.1 = growth forecast" value={config.impressionAdjustmentFactor} onChange={v => update("impressionAdjustmentFactor", v)} step={0.05} min={0.5} max={2.0} />
+            <div style={{ display: "flex", gap: 12 }}>
+              <NumField label="Starter Factor" hint="0.9 = conservative, 1.1 = growth" value={config.starterAdjustmentFactor} onChange={v => update("starterAdjustmentFactor", v)} step={0.05} min={0.5} max={2.0} />
+              <NumField label="Growth Factor" hint="0.9 = conservative, 1.1 = growth" value={config.growthAdjustmentFactor} onChange={v => update("growthAdjustmentFactor", v)} step={0.05} min={0.5} max={2.0} />
+              <NumField label="Partner Factor" hint="0.9 = conservative, 1.1 = growth" value={config.partnerAdjustmentFactor} onChange={v => update("partnerAdjustmentFactor", v)} step={0.05} min={0.5} max={2.0} />
+            </div>
             {opensData && (
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#E8909C", marginTop: 12 }}>
-                Guaranteed impressions per send: {num(Math.round(opensData.avgOpensPerSend * (config.impressionAdjustmentFactor || 1.0)))}
+              <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 13, fontWeight: 600, color: "#E8909C" }}>
+                <div>Starter: {num(Math.round(opensData.avgOpensPerSend * (config.starterAdjustmentFactor || 1.0) * config.starterPlacements))}</div>
+                <div>Growth: {num(Math.round(opensData.avgOpensPerSend * (config.growthAdjustmentFactor || 1.0) * config.growthPlacements))}</div>
+                <div>Partner: {num(Math.round(opensData.avgOpensPerSend * (config.partnerAdjustmentFactor || 1.0) * config.partnerPlacements))}</div>
               </div>
             )}
           </div>
