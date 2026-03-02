@@ -38,6 +38,16 @@ export default async function handler(req, res) {
 
     console.log(`[newsletter-opens] Got ${allPosts.length} posts`);
 
+    // Log raw stats shape of the first post for field verification
+    if (allPosts.length > 0) {
+      const sample = allPosts[0];
+      console.log("[newsletter-opens] First post stats shape:", JSON.stringify({
+        title: (sample.title || "").slice(0, 40),
+        "stats.email": sample.stats?.email,
+        "stats keys": Object.keys(sample.stats || {}),
+      }));
+    }
+
     // Discard the 2 most recent (still accumulating opens)
     const qualifyingPosts = allPosts.slice(2);
 
@@ -56,6 +66,11 @@ export default async function handler(req, res) {
     const avgOpensPerSend = posts.length > 0 ? Math.round(totalOpens / posts.length) : 0;
 
     console.log(`[newsletter-opens] Average opens per send: ${avgOpensPerSend} (from ${posts.length} posts)`);
+
+    // Warn if all opens resolved to 0 — likely means the field path changed
+    if (posts.length > 0 && avgOpensPerSend === 0) {
+      console.warn("[newsletter-opens] WARNING: All posts returned 0 opens. The Beehiiv stats field path may have changed. Packages page will fall back to engagedMoms × placements.");
+    }
 
     const result = {
       posts,
