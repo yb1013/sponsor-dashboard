@@ -4,7 +4,7 @@ import { verifyToken } from "./_verify.js";
 
 const KV_KEY = "inquiries";
 
-function buildNotificationEmail({ name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail }) {
+function buildNotificationEmail({ name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail, takeoverTotal }) {
   const tierName = { starter: "Starter", growth: "Growth", partner: "Partner" }[tier] || tier;
   const fmtPrice = price ? `$${Number(price).toLocaleString("en-US")}` : "N/A";
   const fmtOpens = guaranteedOpens ? `${Number(guaranteedOpens).toLocaleString("en-US")}+` : "N/A";
@@ -17,8 +17,11 @@ function buildNotificationEmail({ name, email, company, tier, takeover, message,
   body += `Placements: ${placements || "—"}\n`;
   body += `Guaranteed Opens: ${fmtOpens}\n`;
   if (takeover) {
-    const fmtTakeover = takeoverPerEmail ? `$${Number(takeoverPerEmail).toLocaleString("en-US")}` : "price TBD";
-    body += `Newsletter Takeover: +${fmtTakeover}/email (was selected)\n`;
+    const fmtTotal = takeoverTotal ? `$${Number(takeoverTotal).toLocaleString("en-US")}` : "TBD";
+    const fmtPerEmail = takeoverPerEmail ? `$${Number(takeoverPerEmail).toLocaleString("en-US")}` : "?";
+    body += `Newsletter Takeover: ${fmtTotal} (${placements || "?"} placements × ${fmtPerEmail}/email)\n`;
+    const totalCampaign = (Number(price) || 0) + (Number(takeoverTotal) || 0);
+    body += `Total Campaign Cost: $${totalCampaign.toLocaleString("en-US")}\n`;
   }
   if (message) body += `\nMessage:\n"${message}"\n`;
   body += `\n—\nSubmitted ${new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "long", timeStyle: "short" })} ET`;
@@ -50,7 +53,7 @@ export default async function handler(req, res) {
   });
 
   if (req.method === "POST") {
-    const { name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail } = req.body;
+    const { name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail, takeoverTotal } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
 
     const inquiry = {
@@ -65,6 +68,7 @@ export default async function handler(req, res) {
       guaranteedOpens: guaranteedOpens || null,
       placements: placements || null,
       takeoverPerEmail: takeoverPerEmail || null,
+      takeoverTotal: takeoverTotal || null,
       status: "new",
       createdAt: new Date().toISOString(),
     };

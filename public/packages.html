@@ -1380,7 +1380,7 @@
           await fetch("/api/inquiry", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, company, tier, takeover, message, price: prices[tier], guaranteedOpens: Math.floor(impressions[tier] / 10000) * 10000, placements: placements[tier], takeoverPerEmail: pricing.takeoverPerEmail }),
+            body: JSON.stringify({ name, email, company, tier, takeover, message, price: prices[tier], guaranteedOpens: Math.floor(impressions[tier] / 10000) * 10000, placements: placements[tier], takeoverPerEmail: pricing.takeoverPerEmail, takeoverTotal: takeover ? pricing.takeoverPerEmail * placements[tier] : 0 }),
           });
           setSent(true);
         } catch {
@@ -1445,7 +1445,7 @@
                   {" \u00B7 "}{t.placements} placements
                   {" \u00B7 "}{num(Math.floor(t.impressions / 10000) * 10000)}+ guaranteed impressions
                   {" \u00B7 "}{money(t.price)}
-                  {takeover && (" + Newsletter Takeover (+" + money(pricing.takeoverPerEmail) + "/email)")}
+                  {takeover && (" + Newsletter Takeover (" + money(pricing.takeoverPerEmail * t.placements) + ")")}
                 </div>
               );
             })()}
