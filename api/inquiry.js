@@ -39,7 +39,7 @@ function buildNotificationEmail({ name, email, company, tier, takeover, message,
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -65,6 +65,7 @@ export default async function handler(req, res) {
       guaranteedOpens: guaranteedOpens || null,
       placements: placements || null,
       takeoverPerEmail: takeoverPerEmail || null,
+      status: "new",
       createdAt: new Date().toISOString(),
     };
 
@@ -96,6 +97,32 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ ok: true });
+  }
+
+  if (req.method === "PATCH") {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!(await verifyToken(token))) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { id, status, convertedTo, convertedAt, dismissedAt } = req.body;
+    if (!id || !status) return res.status(400).json({ error: "id and status required" });
+
+    try {
+      const existing = await redis.get(KV_KEY);
+      const list = Array.isArray(existing) ? existing : [];
+      const idx = list.findIndex(i => i.id === id);
+      if (idx === -1) return res.status(404).json({ error: "Inquiry not found" });
+
+      list[idx] = { ...list[idx], status };
+      if (convertedTo !== undefined) list[idx].convertedTo = convertedTo;
+      if (convertedAt !== undefined) list[idx].convertedAt = convertedAt;
+      if (dismissedAt !== undefined) list[idx].dismissedAt = dismissedAt;
+
+      await redis.set(KV_KEY, JSON.stringify(list));
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
 
   if (req.method === "GET") {

@@ -272,6 +272,10 @@
       const [syncing, setSyncing] = useState(false);
       const [syncMsg, setSyncMsg] = useState(null);
       const [modal, setModal] = useState(null);
+      const [inquiries, setInquiries] = useState([]);
+      const [inquiryFilter, setInquiryFilter] = useState("new");
+      const [toast, setToast] = useState(null);
+      const [convertInquiry, setConvertInquiry] = useState(null);
       const [editRun, setEditRun] = useState(null);
       const [syncDepth, setSyncDepth] = useState(5);
       const [contracts, setContracts] = useState(() => store.get(KEYS.contracts) || []);
@@ -348,6 +352,43 @@
         saveCt(contracts.map(c => c.sponsorId === ct.sponsorId ? { ...c, isActive: c.id === id } : c));
         setSelContract(id);
       };
+
+      // ─── Inquiries ────
+      const fetchInquiries = useCallback(async () => {
+        if (!authToken) return;
+        try {
+          const res = await fetch("/api/inquiry", { headers: { Authorization: `Bearer ${authToken}` } });
+          if (res.ok) { const data = await res.json(); setInquiries(Array.isArray(data) ? data : []); }
+        } catch {}
+      }, [authToken]);
+
+      useEffect(() => { fetchInquiries(); }, [fetchInquiries]);
+
+      const patchInquiry = async (id, updates) => {
+        if (!authToken) return;
+        try {
+          await fetch("/api/inquiry", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ id, ...updates }),
+          });
+          await fetchInquiries();
+        } catch {}
+      };
+
+      const dismissInquiry = (inq) => {
+        patchInquiry(inq.id, { status: "dismissed", dismissedAt: new Date().toISOString() });
+        const toastId = Date.now();
+        setToast({ id: toastId, message: "Inquiry dismissed", undoId: inq.id });
+        setTimeout(() => setToast(t => t && t.id === toastId ? null : t), 5000);
+      };
+
+      const undoDismiss = (id) => {
+        patchInquiry(id, { status: "new", dismissedAt: null });
+        setToast(null);
+      };
+
+      const newInquiryCount = inquiries.filter(i => (i.status || "new") === "new").length;
 
       // ─── Sync logic ────
       const processResults = (allPosts, sponsorIds, currentRuns) => {
@@ -525,11 +566,12 @@
           {/* Mobile top bar — replaces sidebar on small screens */}
           {isMobile && (
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, background: C.surface, display: "flex", alignItems: "center", gap: 8 }}>
-              <select value={sel || ""} onChange={e => { const v = e.target.value; if (v) { setSel(v); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); } else setSel(null); }}
+              <select value={sel || ""} onChange={e => { const v = e.target.value; if (v) { setSel(v); setView("admin"); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); } else setSel(null); }}
                 style={{ flex: 1, padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: FONT, fontSize: 14, minHeight: 44 }}>
                 <option value="">Select sponsor...</option>
                 {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ position: "relative", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "inquiries" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Leads{newInquiryCount > 0 && <span style={{ marginLeft: 4, fontSize: 10, padding: "1px 5px", borderRadius: 8, background: C.green, color: C.bg, fontWeight: 700 }}>{newInquiryCount}</span>}</button>
               <a href="/admin/pricing" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, textDecoration: "none", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Pricing</a>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
@@ -558,12 +600,18 @@
             {config.apiKey && <div style={{ padding: "8px 12px 4px" }}><Btn onClick={syncAll} color={C.green} bg={C.greenDim} disabled={syncing} style={{ width: "100%" }}>{syncing ? "Syncing..." : "⟳ Sync All"}</Btn></div>}
             {config.apiKey && <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} /><span style={{ fontSize: 11, color: C.green }}>API Connected</span></div>}
             <div style={{ padding: "8px 12px 0" }}><Btn onClick={logout} color={C.dim} bg="transparent" style={{ width: "100%", fontSize: 11, border: `1px solid ${C.border}` }}>Logout</Btn></div>
+            <div style={{ padding: "12px 12px 0" }}>
+              <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ width: "100%", padding: "10px 14px", background: view === "inquiries" ? C.accentDim : "transparent", border: view === "inquiries" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "inquiries" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
+                <span>Inquiries</span>
+                {newInquiryCount > 0 && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: C.greenDim, color: C.green, fontWeight: 700 }}>{newInquiryCount}</span>}
+              </button>
+            </div>
             <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
               {sponsors.map(s => {
                 const cnt = runs.filter(r => r.sponsorId === s.id).length;
                 const pats = getPatterns(s);
                 return (
-                  <div key={s.id} onClick={() => { setSel(s.id); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); }}
+                  <div key={s.id} onClick={() => { setSel(s.id); setView("admin"); setSelContract(null); setModal(null); setEditRun(null); setSyncMsg(null); }}
                     style={{ padding: "14px 20px", cursor: "pointer", background: sel === s.id ? C.accentDim : "transparent", borderLeft: `3px solid ${sel === s.id ? C.accent : "transparent"}`, transition: "all 0.12s" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <p style={{ fontSize: 14, fontWeight: sel === s.id ? 600 : 400, color: sel === s.id ? C.white : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</p>
@@ -580,13 +628,72 @@
 
           {/* Main */}
           <main style={{ flex: 1, padding: isMobile ? 16 : 32, overflow: "auto" }}>
-            {!sel && (
+            {!sel && view !== "inquiries" && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 16 }}>
                 <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📊</div>
                 <p style={{ color: C.dim, fontSize: 15, fontWeight: 500 }}>Select a sponsor to view their data</p>
                 {!config.apiKey && <Btn onClick={() => setModal("settings")} color={C.accent} bg={C.accentDim}>Connect Beehiiv API →</Btn>}
               </div>
             )}
+
+            {view === "inquiries" && !sel && (() => {
+              const tierLabel = { starter: "Starter", growth: "Growth", partner: "Partner" };
+              const statusColor = { new: C.green, dismissed: C.dim, converted: C.accent };
+              const filtered = inquiries
+                .map(i => ({ ...i, status: i.status || "new" }))
+                .filter(i => inquiryFilter === "all" || i.status === inquiryFilter)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              const allNew = inquiries.filter(i => (i.status || "new") === "new");
+
+              return (
+                <div className="fade-in">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+                    <h2 style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, letterSpacing: -0.5 }}>Inquiries</h2>
+                  </div>
+
+                  {/* Filter tabs */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 24, flexWrap: "wrap" }}>
+                    {[["new", "New"], ["all", "All"], ["dismissed", "Dismissed"], ["converted", "Converted"]].map(([key, label]) => (
+                      <button key={key} onClick={() => setInquiryFilter(key)} style={{
+                        padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: FONT,
+                        cursor: "pointer", transition: "all 0.15s", border: "none",
+                        background: inquiryFilter === key ? C.accentDim : C.card,
+                        color: inquiryFilter === key ? C.accent : C.muted,
+                      }}>{label}{key === "new" && newInquiryCount > 0 ? ` (${newInquiryCount})` : ""}</button>
+                    ))}
+                  </div>
+
+                  {/* Empty states */}
+                  {inquiries.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "64px 24px" }}>
+                      <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px" }}>📬</div>
+                      <p style={{ color: C.dim, fontSize: 15, fontWeight: 500, lineHeight: 1.6 }}>No inquiries yet. When sponsors submit the form<br/>on your packages page, they'll appear here.</p>
+                    </div>
+                  )}
+                  {inquiries.length > 0 && filtered.length === 0 && inquiryFilter === "new" && (
+                    <div style={{ textAlign: "center", padding: "64px 24px" }}>
+                      <p style={{ color: C.dim, fontSize: 15, fontWeight: 500, marginBottom: 12 }}>All caught up — no new inquiries.</p>
+                      <button onClick={() => setInquiryFilter("all")} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>View all inquiries →</button>
+                    </div>
+                  )}
+                  {inquiries.length > 0 && filtered.length === 0 && inquiryFilter !== "new" && inquiryFilter !== "all" && (
+                    <div style={{ textAlign: "center", padding: "64px 24px" }}>
+                      <p style={{ color: C.dim, fontSize: 15, fontWeight: 500 }}>No {inquiryFilter} inquiries.</p>
+                    </div>
+                  )}
+
+                  {/* Inquiry cards */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {filtered.map(inq => (
+                      <InquiryCard key={inq.id} inq={inq} isMobile={isMobile} tierLabel={tierLabel} statusColor={statusColor}
+                        onDismiss={() => dismissInquiry(inq)}
+                        onConvert={() => { setConvertInquiry(inq); setModal("convertInquiry"); }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {sel && sponsor && (
               <div className="fade-in">
@@ -847,6 +954,31 @@
           {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
           {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "editContract" && viewingContract && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={viewingContract} onSave={d => updateContract(viewingContract.id, d)} onCancel={() => setModal(null)} /></Overlay>}
+          {modal === "convertInquiry" && convertInquiry && (
+            <Overlay onClose={() => { setModal(null); setConvertInquiry(null); }}>
+              <ConvertInquiryForm inquiry={convertInquiry} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
+                const newSponsor = { id: uid(), name: data.sponsorName, urlPatterns: [], created: new Date().toISOString(), shareToken: uid() + uid() };
+                saveSp([...sponsors, newSponsor]);
+                const updated = contracts.map(c => c.sponsorId === newSponsor.id ? { ...c, isActive: false } : c);
+                const nc = { id: uid(), sponsorId: newSponsor.id, name: data.contractName, totalPrice: data.totalPrice, totalRuns: data.totalRuns, startDate: data.startDate, endDate: data.endDate, isActive: true, created: new Date().toISOString() };
+                saveCt([...updated, nc]);
+                await patchInquiry(convertInquiry.id, { status: "converted", convertedTo: data.sponsorName, convertedAt: new Date().toISOString() });
+                setSel(newSponsor.id);
+                setSelContract(nc.id);
+                setView("admin");
+                setModal(null);
+                setConvertInquiry(null);
+              }} />
+            </Overlay>
+          )}
+
+          {/* Undo toast */}
+          {toast && (
+            <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }} className="fade-in">
+              <span style={{ fontSize: 13, color: C.text }}>{toast.message}</span>
+              <button onClick={() => undoDismiss(toast.undoId)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>Undo</button>
+            </div>
+          )}
         </div>
       );
     }
@@ -1587,6 +1719,90 @@
       const mob = w <= MOBILE;
       return (<div style={{ textAlign: "center" }}><p style={{ fontFamily: MONO, fontSize: mob ? 16 : 20, fontWeight: 600, color }}>{value}</p><p style={{ fontSize: mob ? 11 : 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 4 }}>{label}</p></div>);
     }
+    // ─── Inquiry Card ──────────────────────────────────────────
+    function InquiryCard({ inq, isMobile, tierLabel, statusColor, onDismiss, onConvert }) {
+      const [expanded, setExpanded] = useState(false);
+      const status = inq.status || "new";
+      const dotColor = statusColor[status] || C.dim;
+      const fmtPrice = inq.price ? "$" + Number(inq.price).toLocaleString("en-US") : "";
+      const fmtOpens = inq.guaranteedOpens ? Number(inq.guaranteedOpens).toLocaleString("en-US") + "+" : "";
+      const tierStr = tierLabel[inq.tier] || inq.tier;
+      const label = inq.company || inq.name || inq.email;
+      const isDismissed = status === "dismissed";
+      const isConverted = status === "converted";
+
+      return (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: isMobile ? 16 : 20, opacity: isDismissed ? 0.5 : 1, transition: "opacity 0.3s" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: dotColor, flexShrink: 0 }} />
+                <p style={{ fontSize: 15, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</p>
+              </div>
+              <p style={{ fontSize: 13, color: C.muted, fontFamily: MONO, marginBottom: 8 }}>{inq.email}</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {tierStr && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.accentDim, color: C.accent, fontWeight: 600 }}>{tierStr}{fmtPrice ? ` · ${fmtPrice}` : ""}</span>}
+                {fmtOpens && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.purpleDim, color: C.purple, fontWeight: 600 }}>{fmtOpens} opens</span>}
+                {inq.takeover && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.amberDim, color: C.amber, fontWeight: 600 }}>Takeover</span>}
+              </div>
+              {inq.message && (
+                <div onClick={() => setExpanded(!expanded)} style={{ cursor: "pointer" }}>
+                  <p style={{ fontSize: 13, color: C.muted, fontStyle: "italic", lineHeight: 1.5, ...(!expanded ? { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) }}>"{inq.message}"</p>
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <span style={{ fontSize: 11, color: C.dim }}>{timeAgo(inq.createdAt)}</span>
+                {isConverted && inq.convertedTo && <span style={{ fontSize: 11, color: C.accent }}>→ {inq.convertedTo}</span>}
+              </div>
+            </div>
+            {status === "new" && (
+              <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-start" }}>
+                <button onClick={onDismiss} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, transition: "all 0.15s" }}>Dismiss</button>
+                <button onClick={onConvert} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", background: C.accent, border: "none", color: C.white, transition: "all 0.15s" }}>Convert to Sponsor</button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Convert Inquiry Form ────────────────────────────────────
+    function ConvertInquiryForm({ inquiry, onConvert, onCancel }) {
+      const tierMonths = { starter: 3, growth: 6, partner: 12 };
+      const tierLabel = { starter: "Starter", growth: "Growth", partner: "Partner" };
+      const today = new Date().toISOString().split("T")[0];
+      const months = tierMonths[inquiry.tier] || 6;
+      const endDefault = new Date(Date.now() + months * 30.44 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+      const [sponsorName, setSponsorName] = useState(inquiry.company || inquiry.name || "");
+      const [contractName, setContractName] = useState((tierLabel[inquiry.tier] || "Sponsor") + " Package");
+      const [price, setPrice] = useState(inquiry.price ?? "");
+      const [totalRuns, setTotalRuns] = useState(inquiry.placements ?? "");
+      const [startDate, setStartDate] = useState(today);
+      const [endDate, setEndDate] = useState(endDefault);
+
+      return (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Convert to Sponsor</h3>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Review and adjust details, then confirm to create the sponsor and contract.</p>
+          <Input label="Sponsor / Company Name" value={sponsorName} onChange={e => setSponsorName(e.target.value)} />
+          <Input label="Contract Name" value={contractName} onChange={e => setContractName(e.target.value)} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Total Price ($)" type="number" value={price} onChange={e => setPrice(e.target.value)} />
+            <Input label="Number of Runs" type="number" value={totalRuns} onChange={e => setTotalRuns(e.target.value)} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Start Date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+            <Btn onClick={() => sponsorName.trim() && onConvert({ sponsorName: sponsorName.trim(), contractName: contractName.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null })} color={C.white} bg={C.accent} disabled={!sponsorName.trim()}>Convert</Btn>
+          </div>
+        </div>
+      );
+    }
+
     function Btn({ children, onClick, color, bg, disabled, small, style: extra = {} }) {
       const w = useWindowWidth();
       const mob = w <= MOBILE;
