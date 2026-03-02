@@ -128,6 +128,7 @@ const DEFAULT_CONFIG = {
   stageMonthlyFlat: 500,
   partnerStageMonths: 1,
   audiencePollValue: 1000,
+  adCopyValuePerPlacement: 250,
   takeoverPremiumPct: 0.20,
   takeoverPerEmail: null,
   roundToNearest: 500,
@@ -180,11 +181,13 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
   const takeoverPerEmail = config.takeoverPerEmail ||
     Math.round(anchorPricePerPlacement * config.takeoverPremiumPct);
 
-  const starterAnchorValue = starterPlacementValue;
+  const adCopy = (config.adCopyValuePerPlacement || 0);
+  const starterAnchorValue = starterPlacementValue + adCopy * config.starterPlacements;
   const growthAnchorValue = growthPlacementValue
     + growthExclusivity
     + (config.growthIGReels * igReelPrice)
-    + (config.growthFBReels * fbReelPrice);
+    + (config.growthFBReels * fbReelPrice)
+    + adCopy * config.growthPlacements;
   const partnerAnchorValue = partnerPlacementValue
     + partnerExclusivity
     + (config.partnerIGReels * igReelPrice)
@@ -192,7 +195,8 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     + (config.welcomeSequenceEnabled !== false ? welcomeContractValue : 0)
     + stageContractValue
     + dedicatedSendPrice
-    + (config.audiencePollValue || 0);
+    + (config.audiencePollValue || 0)
+    + adCopy * config.partnerPlacements;
 
   const roundTo = config.roundToNearest || 1;
 
@@ -228,14 +232,17 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     takeoverPerEmail,
     starterBreakdown: [
       { label: `${config.starterPlacements} Newsletter Placements`, value: starterPlacementValue },
+      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.starterPlacements },
     ],
     growthBreakdown: [
       { label: `${config.growthPlacements} Newsletter Placements`, value: growthPlacementValue },
+      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.growthPlacements },
       { label: 'Category Exclusivity', value: growthExclusivity },
       { label: `${config.growthIGReels} IG Reels + ${config.growthFBReels} FB Reels`, value: (config.growthIGReels * igReelPrice) + (config.growthFBReels * fbReelPrice) },
     ],
     partnerBreakdown: [
       { label: `${config.partnerPlacements} Newsletter Placements`, value: partnerPlacementValue },
+      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.partnerPlacements },
       { label: 'Category Exclusivity (full contract)', value: partnerExclusivity },
       { label: `${config.partnerIGReels} IG Reels + ${config.partnerFBReels} FB Reels`, value: (config.partnerIGReels * igReelPrice) + (config.partnerFBReels * fbReelPrice) },
       ...(config.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: welcomeContractValue }] : []),
@@ -624,6 +631,13 @@ function AdminApp({ token: initialToken }) {
             <h3>Custom Audience Poll</h3>
             <div className="hint" style={{ marginBottom: 12 }}>Partner only. Value shown in Partner breakdown.</div>
             <NumField label="Poll Value" hint="Flat dollar value added to Partner anchor value" value={config.audiencePollValue} onChange={v => update("audiencePollValue", v)} step={100} min={0} suffix="$" />
+          </div>
+
+          {/* Ad Copy */}
+          <div className="card">
+            <h3>Ad Copy</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>Per-placement value for fresh, unique copy. Applied to all tiers.</div>
+            <NumField label="Value Per Placement" hint="Dollar value added per placement across all tiers" value={config.adCopyValuePerPlacement} onChange={v => update("adCopyValuePerPlacement", v)} step={50} min={0} suffix="$" />
           </div>
 
           {/* Rounding */}

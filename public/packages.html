@@ -89,6 +89,7 @@
       monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2, welcomeSequenceEnabled: true,
       stageMonthlyFlat: 500, partnerStageMonths: 1,
       audiencePollValue: 1000,
+      adCopyValuePerPlacement: 250,
       takeoverPremiumPct: 0.20, takeoverPerEmail: null,
       roundToNearest: 500,
       starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
@@ -116,9 +117,10 @@
       const welcomeCV = welcomeMonthly * pc.partnerWelcomeMonths;
       const stageCV = pc.stageMonthlyFlat * pc.partnerStageMonths;
       const takeoverPerEmail = pc.takeoverPerEmail || Math.ceil((anchorPricePerPlacement * pc.takeoverPremiumPct) / 25) * 25;
-      const starterAV = starterPV;
-      const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice);
-      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + (pc.welcomeSequenceEnabled !== false ? welcomeCV : 0) + stageCV + dedicatedSendPrice + (pc.audiencePollValue || 0);
+      const adCopy = (pc.adCopyValuePerPlacement || 0);
+      const starterAV = starterPV + adCopy * pc.starterPlacements;
+      const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) + adCopy * pc.growthPlacements;
+      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + (pc.welcomeSequenceEnabled !== false ? welcomeCV : 0) + stageCV + dedicatedSendPrice + (pc.audiencePollValue || 0) + adCopy * pc.partnerPlacements;
       const r = pc.roundToNearest || 1;
       const starterPrice = pc.starterPriceOverride || Math.round((starterPV * (1 - pc.starterDiscountPct)) / r) * r;
       const growthPrice = pc.growthPriceOverride || Math.round((growthPV * (1 - pc.growthDiscountPct)) / r) * r;
@@ -133,14 +135,17 @@
         anchorPricePerPlacement, takeoverPerEmail,
         starterBreakdown: [
           { label: `${pc.starterPlacements} Newsletter Placements`, value: starterPV },
+          { label: 'Fresh Ad Copy (never repeated)', value: adCopy * pc.starterPlacements },
         ],
         growthBreakdown: [
           { label: `${pc.growthPlacements} Newsletter Placements`, value: growthPV },
+          { label: 'Fresh Ad Copy (never repeated)', value: adCopy * pc.growthPlacements },
           { label: 'Category Exclusivity', value: growthExcl },
           { label: `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels`, value: (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) },
         ],
         partnerBreakdown: [
           { label: `${pc.partnerPlacements} Newsletter Placements`, value: partnerPV },
+          { label: 'Fresh Ad Copy (never repeated)', value: adCopy * pc.partnerPlacements },
           { label: 'Category Exclusivity (full contract)', value: partnerExcl },
           { label: `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels`, value: (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) },
           ...(pc.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: welcomeCV }] : []),
@@ -636,6 +641,7 @@
           recommended: false, hasTakeover: false,
           features: [
             `${pc.starterPlacements} newsletter placements (all 3 touchpoints)`,
+            "Fresh ad copy every placement — written by our team, never repeated",
             "Live performance dashboard",
           ],
         },
@@ -647,6 +653,7 @@
           recommended: true, hasTakeover: true,
           features: [
             `${pc.growthPlacements} newsletter placements (all 3 touchpoints)`,
+            "Fresh ad copy every placement — written by our team, never repeated",
             "Category exclusivity for contract period",
             `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels (organic-style sponsored content)`,
             "Live dashboard + downloadable PDF reports",
@@ -660,6 +667,7 @@
           recommended: false, hasTakeover: true,
           features: [
             `${pc.partnerPlacements} newsletter placements (all 3 touchpoints)`,
+            "Fresh ad copy every placement — written by our team, never repeated",
             "Category exclusivity for full contract",
             `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels (organic-style sponsored content)`,
             ...(pc.welcomeSequenceEnabled !== false ? ["1 welcome sequence integration"] : []),
