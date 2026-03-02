@@ -52,11 +52,6 @@ function getDefaults() {
     takeoverPremiumPct: 0.20,
     takeoverPerEmail: null,
 
-    // === STRATEGY CALLS ===
-    hourlyRate: 250,
-    growthCallHours: 0.5,
-    partnerCallHours: 1.0,
-
     // === PRICE ROUNDING ===
     roundToNearest: 500,
 

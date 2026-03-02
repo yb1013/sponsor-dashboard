@@ -89,7 +89,6 @@
       monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2,
       stageMonthlyFlat: 500, partnerStageMonths: 1,
       takeoverPremiumPct: 0.20, takeoverPerEmail: null,
-      hourlyRate: 250, growthCallHours: 0.5, partnerCallHours: 1.0,
       roundToNearest: 500,
       starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
       starterAdjustmentFactor: 1.0,
@@ -116,12 +115,10 @@
       const welcomeMonthly = Math.max((pc.monthlyNewSubscribers / 1000) * (pc.anchorCPM * pc.welcomeCPMMultiplier), pc.welcomeMonthlyFloor);
       const welcomeCV = welcomeMonthly * pc.partnerWelcomeMonths;
       const stageCV = pc.stageMonthlyFlat * pc.partnerStageMonths;
-      const growthCallVal = pc.hourlyRate * pc.growthCallHours;
-      const partnerCallVal = pc.hourlyRate * pc.partnerCallHours;
       const takeoverPerEmail = pc.takeoverPerEmail || Math.ceil((anchorPricePerPlacement * pc.takeoverPremiumPct) / 25) * 25;
       const starterAV = starterPV;
-      const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) + growthCallVal;
-      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice + partnerCallVal;
+      const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice);
+      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice;
       const r = pc.roundToNearest || 1;
       const starterPrice = pc.starterPriceOverride || Math.round((starterPV * (1 - pc.starterDiscountPct)) / r) * r;
       const growthPrice = pc.growthPriceOverride || Math.round((growthPV * (1 - pc.growthDiscountPct)) / r) * r;
@@ -141,7 +138,6 @@
           { label: `${pc.growthPlacements} Newsletter Placements`, value: growthPV },
           { label: 'Category Exclusivity', value: growthExcl },
           { label: `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels`, value: (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice) },
-          { label: 'Mid-Campaign Strategy Call', value: growthCallVal },
         ],
         partnerBreakdown: [
           { label: `${pc.partnerPlacements} Newsletter Placements`, value: partnerPV },
@@ -150,7 +146,6 @@
           { label: 'Welcome Sequence Integration', value: welcomeCV },
           { label: 'Stage-Based Sequence Sponsorship', value: stageCV },
           { label: '1 Dedicated Send', value: dedicatedSendPrice },
-          { label: 'Strategy Calls with Danielle', value: partnerCallVal },
         ],
       };
     }
@@ -635,7 +630,6 @@
             "Category exclusivity for contract period",
             `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels (organic-style sponsored content)`,
             "Live dashboard + downloadable PDF reports",
-            "Mid-campaign strategy call with Danielle",
           ],
         },
         {
@@ -652,7 +646,7 @@
             "1 stage-based sequence sponsorship",
             "1 dedicated send (entire email is your content)",
             "Live dashboard + quarterly PDF reports",
-            "Strategy calls with Danielle",
+            "Dedicated onboarding & priority support",
           ],
         },
       ];
@@ -818,7 +812,9 @@
     }
 
     // ─── How It Works (Phone Mockup) ──────────────────────────────
-    function HowItWorks({ config, isMobile }) {
+    function HowItWorks({ config, stats, isMobile, pricingConfig }) {
+      const pc = pricingConfig || DEFAULT_PRICING;
+      const readerCount = Math.floor(((stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000)) / 1000) * 1000;
       const [currentTP, setCurrentTP] = useState(0);
       const width = useWindowWidth();
       const isTabletOrBelow = width < 768;
@@ -837,7 +833,7 @@
       const tpBg = (i, defaultBg) => currentTP === i ? C.accentLight : defaultBg;
 
       const callouts = [
-        { label: "Touchpoint 1", title: "Featured Banner", desc: "Your brand logo at the very top of every email. The first thing 31,000+ readers see." },
+        { label: "Touchpoint 1", title: "Featured Banner", desc: `Your brand logo at the very top of every email. The first thing ${num(readerCount)}+ readers see.` },
         { label: "Touchpoint 2", title: "Promotional Intro", desc: "A one-line mention woven naturally into the newsletter opening. Feels editorial, not like an ad. Readers click because they're curious." },
         { label: "Touchpoint 3", title: "Main Ad Placement", desc: "Your headline, image, 100 words of copy, and a call-to-action button. This is where conversions happen." },
       ];
@@ -1306,14 +1302,13 @@
           },
           partner: {
             name: "Partner", tagline: "For brands that want to become synonymous with The Mommy.", placements: 24, price: 15000,
-            features: ["Exclusive placement (sole sponsor per issue)", "Primary placement on every send", "Category exclusivity for the full year", "4 Instagram posts + 4 Instagram stories", "Welcome sequence integration", "1 dedicated send (entire email is your content)", "Live performance dashboard + quarterly reports", "Direct access for campaign strategy"],
+            features: ["Exclusive placement (sole sponsor per issue)", "Primary placement on every send", "Category exclusivity for the full year", "4 Instagram posts + 4 Instagram stories", "Welcome sequence integration", "1 dedicated send (entire email is your content)", "Live performance dashboard + quarterly reports", "Dedicated onboarding & priority support"],
             includeTakeoverOption: true, takeoverPrice: 19800,
             valueStack: [
               { label: "24 Newsletter Placements", value: 18000 }, { label: "Exclusive Placement", value: 2400 },
               { label: "Primary Placement", value: 2400 }, { label: "Category Exclusivity (full year)", value: 3000 },
               { label: "4 IG Posts + 4 IG Stories", value: 1600 }, { label: "Welcome Sequence Integration", value: 1500 },
               { label: "1 Dedicated Send", value: 1500 }, { label: "Dashboard + Quarterly Reports", value: 500 },
-              { label: "Campaign Strategy Access", value: 500 },
             ],
           },
         },
@@ -1344,7 +1339,7 @@
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
-          <HowItWorks config={cfg} isMobile={isMobile} />
+          <HowItWorks config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
           <Guarantee config={cfg} pricing={pricing} pricingConfig={pc} />
           <Founder />

@@ -128,9 +128,6 @@ const DEFAULT_CONFIG = {
   partnerStageMonths: 1,
   takeoverPremiumPct: 0.20,
   takeoverPerEmail: null,
-  hourlyRate: 250,
-  growthCallHours: 0.5,
-  partnerCallHours: 1.0,
   roundToNearest: 500,
   starterPriceOverride: null,
   growthPriceOverride: null,
@@ -179,9 +176,6 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
 
   const stageContractValue = config.stageMonthlyFlat * config.partnerStageMonths;
 
-  const growthCallValue = config.hourlyRate * config.growthCallHours;
-  const partnerCallValue = config.hourlyRate * config.partnerCallHours;
-
   const takeoverPerEmail = config.takeoverPerEmail ||
     Math.round(anchorPricePerPlacement * config.takeoverPremiumPct);
 
@@ -189,16 +183,14 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
   const growthAnchorValue = growthPlacementValue
     + growthExclusivity
     + (config.growthIGReels * igReelPrice)
-    + (config.growthFBReels * fbReelPrice)
-    + growthCallValue;
+    + (config.growthFBReels * fbReelPrice);
   const partnerAnchorValue = partnerPlacementValue
     + partnerExclusivity
     + (config.partnerIGReels * igReelPrice)
     + (config.partnerFBReels * fbReelPrice)
     + welcomeContractValue
     + stageContractValue
-    + dedicatedSendPrice
-    + partnerCallValue;
+    + dedicatedSendPrice;
 
   const roundTo = config.roundToNearest || 1;
 
@@ -231,7 +223,7 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     anchorPricePerPlacement, exclusivityPerPlacement,
     igReelPrice, fbReelPrice, dedicatedSendPrice,
     welcomeMonthly, welcomeContractValue, stageContractValue,
-    growthCallValue, partnerCallValue, takeoverPerEmail,
+    takeoverPerEmail,
     starterBreakdown: [
       { label: `${config.starterPlacements} Newsletter Placements`, value: starterPlacementValue },
     ],
@@ -239,7 +231,6 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
       { label: `${config.growthPlacements} Newsletter Placements`, value: growthPlacementValue },
       { label: 'Category Exclusivity', value: growthExclusivity },
       { label: `${config.growthIGReels} IG Reels + ${config.growthFBReels} FB Reels`, value: (config.growthIGReels * igReelPrice) + (config.growthFBReels * fbReelPrice) },
-      { label: 'Mid-Campaign Strategy Call', value: growthCallValue },
     ],
     partnerBreakdown: [
       { label: `${config.partnerPlacements} Newsletter Placements`, value: partnerPlacementValue },
@@ -248,7 +239,6 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
       { label: 'Welcome Sequence Integration', value: welcomeContractValue },
       { label: 'Stage-Based Sequence Sponsorship', value: stageContractValue },
       { label: '1 Dedicated Send', value: dedicatedSendPrice },
-      { label: 'Strategy Calls with Danielle', value: partnerCallValue },
     ],
   };
 }
@@ -614,15 +604,6 @@ function AdminApp({ token: initialToken }) {
             <div className="hint" style={{ marginTop: 8 }}>Per-email price: {money(pricing.takeoverPerEmail)}</div>
           </div>
 
-          {/* Strategy Calls */}
-          <div className="card">
-            <h3>Strategy Calls</h3>
-            <div className="field-row">
-              <NumField label="Hourly Rate" value={config.hourlyRate} onChange={v => update("hourlyRate", v)} step={25} min={0} suffix="$" />
-              <NumField label="Growth Hours" value={config.growthCallHours} onChange={v => update("growthCallHours", v)} step={0.25} min={0} />
-              <NumField label="Partner Hours" value={config.partnerCallHours} onChange={v => update("partnerCallHours", v)} step={0.25} min={0} />
-            </div>
-          </div>
 
           {/* Rounding */}
           <div className="card">
