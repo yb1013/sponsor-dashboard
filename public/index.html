@@ -688,6 +688,7 @@
                       <InquiryCard key={inq.id} inq={inq} isMobile={isMobile} tierLabel={tierLabel} statusColor={statusColor}
                         onDismiss={() => dismissInquiry(inq)}
                         onConvert={() => { setConvertInquiry(inq); setModal("convertInquiry"); }}
+                        onMoveToNew={() => patchInquiry(inq.id, { status: "new", dismissedAt: null })}
                       />
                     ))}
                   </div>
@@ -1720,7 +1721,7 @@
       return (<div style={{ textAlign: "center" }}><p style={{ fontFamily: MONO, fontSize: mob ? 16 : 20, fontWeight: 600, color }}>{value}</p><p style={{ fontSize: mob ? 11 : 10, color: C.dim, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 4 }}>{label}</p></div>);
     }
     // ─── Inquiry Card ──────────────────────────────────────────
-    function InquiryCard({ inq, isMobile, tierLabel, statusColor, onDismiss, onConvert }) {
+    function InquiryCard({ inq, isMobile, tierLabel, statusColor, onDismiss, onConvert, onMoveToNew }) {
       const [expanded, setExpanded] = useState(false);
       const status = inq.status || "new";
       const dotColor = statusColor[status] || C.dim;
@@ -1740,11 +1741,17 @@
                 <p style={{ fontSize: 15, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</p>
               </div>
               <p style={{ fontSize: 13, color: C.muted, fontFamily: MONO, marginBottom: 8 }}>{inq.email}</p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: inq.takeover && inq.takeoverTotal ? 4 : 8 }}>
                 {tierStr && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.accentDim, color: C.accent, fontWeight: 600 }}>{tierStr}{fmtPrice ? ` · ${fmtPrice}` : ""}</span>}
                 {fmtOpens && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.purpleDim, color: C.purple, fontWeight: 600 }}>{fmtOpens} opens</span>}
-                {inq.takeover && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.amberDim, color: C.amber, fontWeight: 600 }}>Takeover</span>}
+                {inq.takeover && !inq.takeoverTotal && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.amberDim, color: C.amber, fontWeight: 600 }}>Takeover</span>}
               </div>
+              {inq.takeover && inq.takeoverTotal && (
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: C.amberDim, color: C.amber, fontWeight: 600 }}>Newsletter Takeover · ${ Number(inq.takeoverTotal).toLocaleString("en-US") }</span>
+                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginTop: 4 }}>Total: ${ (Number(inq.price || 0) + Number(inq.takeoverTotal)).toLocaleString("en-US") }</p>
+                </div>
+              )}
               {inq.message && (
                 <div onClick={() => setExpanded(!expanded)} style={{ cursor: "pointer" }}>
                   <p style={{ fontSize: 13, color: C.muted, fontStyle: "italic", lineHeight: 1.5, ...(!expanded ? { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) }}>"{inq.message}"</p>
@@ -1759,6 +1766,11 @@
               <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-start" }}>
                 <button onClick={onDismiss} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, transition: "all 0.15s" }}>Dismiss</button>
                 <button onClick={onConvert} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", background: C.accent, border: "none", color: C.white, transition: "all 0.15s" }}>Convert to Sponsor</button>
+              </div>
+            )}
+            {status === "dismissed" && (
+              <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-start" }}>
+                <button onClick={onMoveToNew} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, transition: "all 0.15s" }}>Move to New</button>
               </div>
             )}
           </div>
