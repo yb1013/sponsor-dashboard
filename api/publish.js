@@ -1,4 +1,4 @@
-import { verifyToken } from "./verify.js";
+import { verifyToken } from "./_verify.js";
 import { Redis } from "@upstash/redis";
 
 export default async function handler(req, res) {

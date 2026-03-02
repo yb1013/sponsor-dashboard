@@ -1,4 +1,4 @@
-import { createToken } from "./verify.js";
+import { createToken } from "./_verify.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {

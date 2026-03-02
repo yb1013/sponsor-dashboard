@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { verifyToken } from "./verify.js";
+import { verifyToken } from "./_verify.js";
 
 const KV_KEY = "pricing_assumptions";
 
