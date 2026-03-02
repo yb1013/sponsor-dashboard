@@ -88,6 +88,7 @@
       dedicatedSendMultiplier: 1.5,
       monthlyNewSubscribers: 10000, welcomeCPMMultiplier: 2.0, welcomeMonthlyFloor: 750, partnerWelcomeMonths: 2,
       stageMonthlyFlat: 500, partnerStageMonths: 1,
+      audiencePollValue: 1000,
       takeoverPremiumPct: 0.20, takeoverPerEmail: null,
       roundToNearest: 500,
       starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
@@ -118,7 +119,7 @@
       const takeoverPerEmail = pc.takeoverPerEmail || Math.ceil((anchorPricePerPlacement * pc.takeoverPremiumPct) / 25) * 25;
       const starterAV = starterPV;
       const growthAV = growthPV + growthExcl + (pc.growthIGReels * igReelPrice) + (pc.growthFBReels * fbReelPrice);
-      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice;
+      const partnerAV = partnerPV + partnerExcl + (pc.partnerIGReels * igReelPrice) + (pc.partnerFBReels * fbReelPrice) + welcomeCV + stageCV + dedicatedSendPrice + (pc.audiencePollValue || 0);
       const r = pc.roundToNearest || 1;
       const starterPrice = pc.starterPriceOverride || Math.round((starterPV * (1 - pc.starterDiscountPct)) / r) * r;
       const growthPrice = pc.growthPriceOverride || Math.round((growthPV * (1 - pc.growthDiscountPct)) / r) * r;
@@ -146,6 +147,7 @@
           { label: 'Welcome Sequence Integration', value: welcomeCV },
           { label: 'Stage-Based Sequence Sponsorship', value: stageCV },
           { label: '1 Dedicated Send', value: dedicatedSendPrice },
+          { label: 'Custom Audience Poll + Insights Report', value: pc.audiencePollValue || 0 },
         ],
       };
     }

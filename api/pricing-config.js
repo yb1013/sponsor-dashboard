@@ -48,6 +48,9 @@ function getDefaults() {
     stageMonthlyFlat: 500,
     partnerStageMonths: 1,
 
+    // === CUSTOM AUDIENCE POLL ===
+    audiencePollValue: 1000,
+
     // === NEWSLETTER TAKEOVER ===
     takeoverPremiumPct: 0.20,
     takeoverPerEmail: null,

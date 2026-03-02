@@ -126,6 +126,7 @@ const DEFAULT_CONFIG = {
   partnerWelcomeMonths: 2,
   stageMonthlyFlat: 500,
   partnerStageMonths: 1,
+  audiencePollValue: 1000,
   takeoverPremiumPct: 0.20,
   takeoverPerEmail: null,
   roundToNearest: 500,
@@ -190,7 +191,8 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     + (config.partnerFBReels * fbReelPrice)
     + welcomeContractValue
     + stageContractValue
-    + dedicatedSendPrice;
+    + dedicatedSendPrice
+    + (config.audiencePollValue || 0);
 
   const roundTo = config.roundToNearest || 1;
 
@@ -239,6 +241,7 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
       { label: 'Welcome Sequence Integration', value: welcomeContractValue },
       { label: 'Stage-Based Sequence Sponsorship', value: stageContractValue },
       { label: '1 Dedicated Send', value: dedicatedSendPrice },
+      { label: 'Custom Audience Poll + Insights Report', value: config.audiencePollValue || 0 },
     ],
   };
 }
@@ -604,6 +607,13 @@ function AdminApp({ token: initialToken }) {
             <div className="hint" style={{ marginTop: 8 }}>Per-email price: {money(pricing.takeoverPerEmail)}</div>
           </div>
 
+
+          {/* Custom Audience Poll */}
+          <div className="card">
+            <h3>Custom Audience Poll</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>Partner only. Value shown in Partner breakdown.</div>
+            <NumField label="Poll Value" hint="Flat dollar value added to Partner anchor value" value={config.audiencePollValue} onChange={v => update("audiencePollValue", v)} step={100} min={0} suffix="$" />
+          </div>
 
           {/* Rounding */}
           <div className="card">
