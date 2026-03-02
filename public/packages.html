@@ -972,8 +972,8 @@
 
     // ─── Lock-In Messaging ────────────────────────────────────────
     function LockIn({ config, stats, isMobile, pricingConfig }) {
-      const subs = (stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000);
       const pc = pricingConfig || DEFAULT_PRICING;
+      const subs = (stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000);
       const nextMilestone = pc.nextMilestone || 40000;
       const hasNext = subs < nextMilestone;
       const progressPct = hasNext ? Math.min(Math.round((subs / nextMilestone) * 100), 99) : 100;
