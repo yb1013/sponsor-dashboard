@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,35 +11,256 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body { background: #FFFFFF; color: #1A1A2E; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; font-size: 16px; line-height: 1.6; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-in { animation: fadeIn 0.4s ease-out both; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-    @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-    .section.section-hidden { opacity: 0; transform: translateY(30px); transition: opacity 0.8s ease, transform 0.8s ease; }
-    .section.section-hidden.section-visible { opacity: 1; transform: translateY(0); }
-    @keyframes hero-drift { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 33% { transform: translate(2%, -1%) rotate(1deg); } 66% { transform: translate(-1%, 1%) rotate(-0.5deg); } }
-    @keyframes float-1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-20px, 15px); } }
-    @keyframes float-2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(15px, -10px); } }
-    @keyframes float-3 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10px, 20px); } }
-    @keyframes stat-enter { to { opacity: 1; transform: translateY(0); } }
-    body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #E8909C, #D4707E, #E8909C); z-index: 9999; }
-    .live-dot { display: inline-block; width: 6px; height: 6px; background: #22C55E; border-radius: 50%; margin-left: 8px; vertical-align: middle; animation: live-pulse 2s ease-in-out infinite; }
-    @keyframes live-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); } }
-    .progress-fill { position: relative; border-radius: 8px; height: 100%; background: linear-gradient(90deg, #E8909C, #D4707E); box-shadow: 0 0 12px rgba(232, 144, 156, 0.3); transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1); }
-    .progress-fill::after { content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background: #E8909C; border-radius: 50%; box-shadow: 0 0 8px rgba(232, 144, 156, 0.5); animation: bar-pulse 2s ease-in-out infinite; }
-    @keyframes bar-pulse { 0%, 100% { transform: translateY(-50%) scale(1); opacity: 1; box-shadow: 0 0 8px rgba(232, 144, 156, 0.5); } 50% { transform: translateY(-50%) scale(1.4); opacity: 0.6; box-shadow: 0 0 16px rgba(232, 144, 156, 0.3); } }
-    ::selection { background: #E8909C33; }
-    input:focus, textarea:focus { border-color: #E8909C !important; box-shadow: 0 0 0 3px #E8909C22 !important; outline: none; }
-    .odometer-container { display: inline-flex; overflow: hidden; line-height: 1; font-variant-numeric: tabular-nums; }
-    .odometer-digit { display: inline-block; position: relative; overflow: hidden; height: 1.15em; }
-    .odometer-digit-inner { display: block; transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1); }
-    .odometer-separator { display: inline-block; width: 0.3em; text-align: center; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: #FFFFFF;
+      color: #1A1A2E;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.4s ease-out both;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-100%);
+      }
+
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    @keyframes ticker-scroll {
+      0% {
+        transform: translateX(0);
+      }
+
+      100% {
+        transform: translateX(-50%);
+      }
+    }
+
+    .section.section-hidden {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .section.section-hidden.section-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes hero-drift {
+
+      0%,
+      100% {
+        transform: translate(0, 0) rotate(0deg);
+      }
+
+      33% {
+        transform: translate(2%, -1%) rotate(1deg);
+      }
+
+      66% {
+        transform: translate(-1%, 1%) rotate(-0.5deg);
+      }
+    }
+
+    @keyframes float-1 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(-20px, 15px);
+      }
+    }
+
+    @keyframes float-2 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(15px, -10px);
+      }
+    }
+
+    @keyframes float-3 {
+
+      0%,
+      100% {
+        transform: translate(0, 0);
+      }
+
+      50% {
+        transform: translate(-10px, 20px);
+      }
+    }
+
+    @keyframes stat-enter {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #E8909C, #D4707E, #E8909C);
+      z-index: 9999;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #22C55E;
+      border-radius: 50%;
+      margin-left: 8px;
+      vertical-align: middle;
+      animation: live-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+      }
+
+      50% {
+        opacity: 0.7;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0);
+      }
+    }
+
+    .progress-fill {
+      position: relative;
+      border-radius: 8px;
+      height: 100%;
+      background: linear-gradient(90deg, #E8909C, #D4707E);
+      box-shadow: 0 0 12px rgba(232, 144, 156, 0.3);
+      transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      right: -5px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 10px;
+      height: 10px;
+      background: #E8909C;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(232, 144, 156, 0.5);
+      animation: bar-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes bar-pulse {
+
+      0%,
+      100% {
+        transform: translateY(-50%) scale(1);
+        opacity: 1;
+        box-shadow: 0 0 8px rgba(232, 144, 156, 0.5);
+      }
+
+      50% {
+        transform: translateY(-50%) scale(1.4);
+        opacity: 0.6;
+        box-shadow: 0 0 16px rgba(232, 144, 156, 0.3);
+      }
+    }
+
+    ::selection {
+      background: #E8909C33;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: #E8909C !important;
+      box-shadow: 0 0 0 3px #E8909C22 !important;
+      outline: none;
+    }
+
+    .odometer-container {
+      display: inline-flex;
+      overflow: hidden;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .odometer-digit {
+      display: inline-block;
+      position: relative;
+      overflow: hidden;
+      height: 1.15em;
+    }
+
+    .odometer-digit-inner {
+      display: block;
+      transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    .odometer-separator {
+      display: inline-block;
+      width: 0.3em;
+      text-align: center;
+    }
   </style>
 </head>
+
 <body>
   <div id="root"></div>
   <script type="text/babel">
@@ -379,8 +601,8 @@
               animation: "ticker-scroll 45s linear infinite",
               whiteSpace: "nowrap",
             }}
-            onMouseEnter={e => e.currentTarget.style.animationPlayState = "paused"}
-            onMouseLeave={e => e.currentTarget.style.animationPlayState = "running"}
+              onMouseEnter={e => e.currentTarget.style.animationPlayState = "paused"}
+              onMouseLeave={e => e.currentTarget.style.animationPlayState = "running"}
             >
               {renderBrands()}
               {renderBrands()}
@@ -574,56 +796,56 @@
           <div style={{ position: "relative", maxWidth: 960, margin: "0 auto" }}>
             {/* Ambient blue glow */}
             <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "80%", height: "80%", background: "radial-gradient(ellipse, rgba(79, 143, 247, 0.15) 0%, transparent 70%)", filter: "blur(40px)", zIndex: 0, pointerEvents: "none" }} />
-          <div style={{
-            background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 24 : 48,
-            color: "#E2E8F0", position: "relative", overflow: "hidden",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT, zIndex: 1,
-          }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden" }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)", animation: "shimmer 8s ease-in-out infinite" }} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#4A5A72", marginBottom: 4 }}>Campaign Performance Report</div>
-              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff" }}>Sample Partner</div>
-            </div>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 13, color: "#4A5A72" }}>Seen by</div>
-              <div style={{ fontSize: isMobile ? 40 : 52, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
-              <div style={{ fontSize: 13, color: "#4A5A72" }}>readers</div>
-            </div>
-            <div style={{ marginBottom: 20, textAlign: "center" }}>
-              <svg width="100%" height={isMobile ? 70 : 100} viewBox="0 0 400 80" preserveAspectRatio="none">
-                <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" /><stop offset="100%" stopColor="#4F8FF7" stopOpacity="0" /></linearGradient></defs>
-                <polygon points="0,70 60,62 120,55 180,42 240,33 300,20 360,8 360,80 0,80" fill="url(#chartGrad)" />
-                <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div style={{ display: "flex", flexDirection: isSmall ? "column" : "row", gap: 12, marginBottom: 16 }}>
-              {[
-                { label: "Total Opens", value: "198,500", color: "#F97316" },
-                { label: "Total Clicks", value: "2,623", color: "#22C55E" },
-                { label: "Click-Through Rate", value: "1.32%", color: "#EAB308" },
-              ].map((s, i) => (
-                <div key={i} style={{ flex: 1, background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : "16px", borderTop: `2px solid ${s.color}` }}>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#4A5A72" }}>{s.label}</div>
-                  <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: s.color, fontFamily: MONO }}>{s.value}</div>
+            <div style={{
+              background: "#0A0E1A", borderRadius: 16, padding: isMobile ? 24 : 48,
+              color: "#E2E8F0", position: "relative", overflow: "hidden",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: FONT, zIndex: 1,
+            }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)", animation: "shimmer 8s ease-in-out infinite" }} />
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#4A5A72", marginBottom: 4 }}>Campaign Performance Report</div>
+                <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#fff" }}>Sample Partner</div>
+              </div>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 13, color: "#4A5A72" }}>Seen by</div>
+                <div style={{ fontSize: isMobile ? 40 : 52, fontWeight: 700, color: "#4F8FF7", fontFamily: MONO }}>198,500</div>
+                <div style={{ fontSize: 13, color: "#4A5A72" }}>readers</div>
+              </div>
+              <div style={{ marginBottom: 20, textAlign: "center" }}>
+                <svg width="100%" height={isMobile ? 70 : 100} viewBox="0 0 400 80" preserveAspectRatio="none">
+                  <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4F8FF7" stopOpacity="0.3" /><stop offset="100%" stopColor="#4F8FF7" stopOpacity="0" /></linearGradient></defs>
+                  <polygon points="0,70 60,62 120,55 180,42 240,33 300,20 360,8 360,80 0,80" fill="url(#chartGrad)" />
+                  <polyline points="0,70 60,62 120,55 180,42 240,33 300,20 360,8" fill="none" stroke="#4F8FF7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div style={{ display: "flex", flexDirection: isSmall ? "column" : "row", gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: "Total Opens", value: "198,500", color: "#F97316" },
+                  { label: "Total Clicks", value: "2,623", color: "#22C55E" },
+                  { label: "Click-Through Rate", value: "1.32%", color: "#EAB308" },
+                ].map((s, i) => (
+                  <div key={i} style={{ flex: 1, background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : "16px", borderTop: `2px solid ${s.color}` }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#4A5A72" }}>{s.label}</div>
+                    <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700, color: s.color, fontFamily: MONO }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: "#4A5A72" }}>Campaign Progress</span>
+                  <span style={{ fontSize: 12, color: "#E2E8F0" }}>7 of 12 emails sent</span>
                 </div>
-              ))}
-            </div>
-            <div style={{ background: "#0F1420", border: "1px solid #1E2A3A", borderRadius: 10, padding: isMobile ? "12px 14px" : 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: "#4A5A72" }}>Campaign Progress</span>
-                <span style={{ fontSize: 12, color: "#E2E8F0" }}>7 of 12 emails sent</span>
+                <div style={{ background: "#1E2A3A", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                  <div style={{ background: "linear-gradient(90deg, #4F8FF7, #22C55E)", width: "58%", height: "100%", borderRadius: 6 }} />
+                </div>
               </div>
-              <div style={{ background: "#1E2A3A", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                <div style={{ background: "linear-gradient(90deg, #4F8FF7, #22C55E)", width: "58%", height: "100%", borderRadius: 6 }} />
+              <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Primary Placement</span>
+                <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Category Exclusivity</span>
               </div>
             </div>
-            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Primary Placement</span>
-              <span style={{ fontSize: 11, color: "#C084FC", border: "1px solid rgba(124,58,237,0.2)", padding: "4px 10px", borderRadius: 20 }}>Category Exclusivity</span>
-            </div>
-          </div>
           </div>{/* end dashboard wrapper */}
           <div style={{ textAlign: "center", marginTop: 56 }}>
             <a href="/s/demo" target="_blank" rel="noopener noreferrer" style={{
@@ -797,55 +1019,55 @@
                     {/* Card footer — pushed to bottom */}
                     <div style={{ marginTop: "auto" }}>
 
-                    {/* Collapsible Value Stack */}
-                    {tier.breakdown.length > 0 && (
-                      <>
-                        <button onClick={() => setValueStackOpen(s => ({ ...s, [key]: !s[key] }))} style={{
-                          background: "none", border: "none", padding: "8px 0", fontSize: 13, fontWeight: 600,
-                          color: C.accent, cursor: "pointer", fontFamily: FONT, textAlign: "left", marginBottom: 8,
-                        }}>
-                          {isVSOpen ? "Hide value breakdown \u25B4" : "See value breakdown \u25BE"}
-                        </button>
-                        <div style={{ maxHeight: isVSOpen ? 400 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
-                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginBottom: 12 }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 10 }}>Value Breakdown</p>
-                            {tier.breakdown.map((v, i) => (
-                              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: C.textSecondary, borderBottom: i < tier.breakdown.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
-                                <span>{v.label}</span>
-                                <span style={{ fontWeight: 600, color: C.text }}>{money(v.value)}</span>
+                      {/* Collapsible Value Stack */}
+                      {tier.breakdown.length > 0 && (
+                        <>
+                          <button onClick={() => setValueStackOpen(s => ({ ...s, [key]: !s[key] }))} style={{
+                            background: "none", border: "none", padding: "8px 0", fontSize: 13, fontWeight: 600,
+                            color: C.accent, cursor: "pointer", fontFamily: FONT, textAlign: "left", marginBottom: 8,
+                          }}>
+                            {isVSOpen ? "Hide value breakdown \u25B4" : "See value breakdown \u25BE"}
+                          </button>
+                          <div style={{ maxHeight: isVSOpen ? 400 : 0, overflow: "hidden", transition: "max-height 0.3s ease" }}>
+                            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginBottom: 12 }}>
+                              <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: C.muted, marginBottom: 10 }}>Value Breakdown</p>
+                              {tier.breakdown.map((v, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 13, color: C.textSecondary, borderBottom: i < tier.breakdown.length - 1 ? `1px solid ${C.borderLight}` : "none" }}>
+                                  <span>{v.label}</span>
+                                  <span style={{ fontWeight: 600, color: C.text }}>{money(v.value)}</span>
+                                </div>
+                              ))}
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
+                                <span>Total Value</span>
+                                <span>{money(tier.anchorValue)}</span>
                               </div>
-                            ))}
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, textDecoration: "line-through" }}>
-                              <span>Total Value</span>
-                              <span>{money(tier.anchorValue)}</span>
                             </div>
                           </div>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
 
-                    {/* Takeover Toggle */}
-                    {tier.hasTakeover && (
-                      <div style={{
-                        padding: "14px 16px", borderRadius: 12, marginTop: 8, cursor: "pointer", transition: "all 0.15s",
-                        border: `1px solid ${isTakeover ? C.accent : C.border}`,
-                        background: isTakeover ? C.accentLight : "transparent",
-                      }} onClick={() => setTakeoverState(s => ({ ...s, [key]: !s[key] }))}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: isTakeover ? C.accentDark : C.text }}>Newsletter Takeover</span>
-                            <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>+{money(pricing.takeoverPerEmail)}/email</span>
+                      {/* Takeover Toggle */}
+                      {tier.hasTakeover && (
+                        <div style={{
+                          padding: "14px 16px", borderRadius: 12, marginTop: 8, cursor: "pointer", transition: "all 0.15s",
+                          border: `1px solid ${isTakeover ? C.accent : C.border}`,
+                          background: isTakeover ? C.accentLight : "transparent",
+                        }} onClick={() => setTakeoverState(s => ({ ...s, [key]: !s[key] }))}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: isTakeover ? C.accentDark : C.text }}>Newsletter Takeover</span>
+                              <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>+{money(pricing.takeoverPerEmail)}/email</span>
+                            </div>
+                            <div style={{ width: 40, height: 22, borderRadius: 11, padding: 2, background: isTakeover ? C.accent : C.muted, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                              <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff", transform: isTakeover ? "translateX(18px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                            </div>
                           </div>
-                          <div style={{ width: 40, height: 22, borderRadius: 11, padding: 2, background: isTakeover ? C.accent : C.muted, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
-                            <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff", transform: isTakeover ? "translateX(18px)" : "translateX(0)", transition: "transform 0.15s" }} />
-                          </div>
+                          <p style={{ fontSize: 13, color: "#6A6A7A", fontStyle: "italic", marginTop: 6 }}>~32%+ higher engagement</p>
+                          {isTakeover && (
+                            <p style={{ fontSize: 13, color: C.muted, marginTop: 8, lineHeight: 1.4 }}>Sole sponsor per email &middot; ~32% higher engagement</p>
+                          )}
                         </div>
-                        <p style={{ fontSize: 13, color: "#6A6A7A", fontStyle: "italic", marginTop: 6 }}>~32%+ higher engagement</p>
-                        {isTakeover && (
-                          <p style={{ fontSize: 13, color: C.muted, marginTop: 8, lineHeight: 1.4 }}>Sole sponsor per email &middot; ~32% higher engagement</p>
-                        )}
-                      </div>
-                    )}
+                      )}
 
                     </div>{/* end card footer */}
                   </div>
@@ -1047,36 +1269,36 @@
       return (
         <Section bg="linear-gradient(180deg, #FFFBF5 0%, #FAF9F7 100%)">
           <div ref={sectionRef}>
-          <SectionTitle>Lock In Today's Rates</SectionTitle>
-          <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
-            <p style={{ fontSize: 16, color: C.text, marginBottom: 4 }}>
-              Current rates based on {num(subs)} subscribers.
-            </p>
-            {hasNext && (
-              <p style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 24 }}>
-                Next rate increase at {num(nextMilestone)}.
+            <SectionTitle>Lock In Today's Rates</SectionTitle>
+            <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
+              <p style={{ fontSize: 16, color: C.text, marginBottom: 4 }}>
+                Current rates based on {num(subs)} subscribers.
               </p>
-            )}
+              {hasNext && (
+                <p style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 24 }}>
+                  Next rate increase at {num(nextMilestone)}.
+                </p>
+              )}
 
-            {hasNext && (
-              <div style={{ maxWidth: 500, margin: "0 auto 24px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "visible" }}>
-                    <div className="progress-fill" style={{ width: barVisible ? `${progressPct}%` : "0%" }} />
+              {hasNext && (
+                <div style={{ maxWidth: 500, margin: "0 auto 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1, background: C.border, borderRadius: 8, height: 8, overflow: "visible" }}>
+                      <div className="progress-fill" style={{ width: barVisible ? `${progressPct}%` : "0%" }} />
+                    </div>
+                    <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, flexShrink: 0 }}>{progressPct}%</span>
                   </div>
-                  <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, flexShrink: 0 }}>{progressPct}%</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, color: C.muted }}>
+                    <span>{num(subs)}</span>
+                    <span>{num(nextMilestone)}</span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, color: C.muted }}>
-                  <span>{num(subs)}</span>
-                  <span>{num(nextMilestone)}</span>
-                </div>
-              </div>
-            )}
+              )}
 
-            <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65 }}>
-              Sponsors who commit now keep today's rates even as our audience and rates grow.
-            </p>
-          </div>
+              <p style={{ fontSize: 16, color: C.textSecondary, lineHeight: 1.65 }}>
+                Sponsors who commit now keep today's rates even as our audience and rates grow.
+              </p>
+            </div>
           </div>
         </Section>
       );
@@ -1155,11 +1377,15 @@
         e.preventDefault();
         if (!email) return;
         setSending(true);
+        const pc = pricingConfig || DEFAULT_PRICING;
+        const prices = { starter: pricing.starterPrice, growth: pricing.growthPrice, partner: pricing.partnerPrice };
+        const impressions = { starter: pricing.starterImpressions, growth: pricing.growthImpressions, partner: pricing.partnerImpressions };
+        const placements = { starter: pc.starterPlacements, growth: pc.growthPlacements, partner: pc.partnerPlacements };
         try {
           await fetch("/api/inquiry", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, company, tier, takeover, message }),
+            body: JSON.stringify({ name, email, company, tier, takeover, message, price: prices[tier], guaranteedOpens: Math.floor(impressions[tier] / 10000) * 10000, placements: placements[tier] }),
           });
           setSent(true);
         } catch {
@@ -1286,7 +1512,7 @@
               const parsed = JSON.parse(cached);
               const age = Date.now() - new Date(parsed.fetchedAt).getTime();
               if (age < 3600000) { if (mounted) setStats(parsed); }
-            } catch {}
+            } catch { }
           }
           const [statsRes, configRes, pricingRes, opensRes] = await Promise.allSettled([
             fetch("/api/stats").then(r => r.ok ? r.json() : null),
@@ -1387,8 +1613,8 @@
           <Demographics config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
-          <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
           <HowItWorks config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
+          <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />
           <LockIn config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} avgOpens={avgOpens} />
           <Guarantee config={cfg} pricing={pricing} pricingConfig={pc} />
           <Founder />
@@ -1430,4 +1656,5 @@
     });
   </script>
 </body>
+
 </html>

@@ -1,7 +1,38 @@
 import { Redis } from "@upstash/redis";
+import { Resend } from "resend";
 import { verifyToken } from "./_verify.js";
 
 const KV_KEY = "inquiries";
+
+function buildNotificationEmail({ name, email, company, tier, takeover, message, price, guaranteedOpens, placements }) {
+  const tierName = { starter: "Starter", growth: "Growth", partner: "Partner" }[tier] || tier;
+  const fmtPrice = price ? `$${Number(price).toLocaleString("en-US")}` : "N/A";
+  const fmtOpens = guaranteedOpens ? `${Number(guaranteedOpens).toLocaleString("en-US")}+` : "N/A";
+
+  let body = `New Partnership Inquiry\n\n`;
+  body += `Name: ${name || "—"}\n`;
+  body += `Email: ${email}\n`;
+  body += `Company: ${company || "—"}\n\n`;
+  body += `Package: ${tierName} — ${fmtPrice}\n`;
+  body += `Placements: ${placements || "—"}\n`;
+  body += `Guaranteed Opens: ${fmtOpens}\n`;
+  if (takeover) body += `Newsletter Takeover: Yes\n`;
+  if (message) body += `\nMessage:\n"${message}"\n`;
+  body += `\n—\nSubmitted ${new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "long", timeStyle: "short" })} ET`;
+
+  const html = body
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+    .replace(/"([^"]*?)"/g, "&ldquo;$1&rdquo;");
+
+  return {
+    subject: `New Sponsor Inquiry — ${company || name || email} (${tierName})`,
+    text: body,
+    html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.7; color: #1a1a2e;">${html}</div>`,
+  };
+}
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,7 +47,7 @@ export default async function handler(req, res) {
   });
 
   if (req.method === "POST") {
-    const { name, email, company, tier, takeover, message } = req.body;
+    const { name, email, company, tier, takeover, message, price, guaranteedOpens, placements } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
 
     const inquiry = {
@@ -27,6 +58,9 @@ export default async function handler(req, res) {
       tier: tier || "",
       takeover: !!takeover,
       message: message || "",
+      price: price || null,
+      guaranteedOpens: guaranteedOpens || null,
+      placements: placements || null,
       createdAt: new Date().toISOString(),
     };
 
@@ -35,10 +69,29 @@ export default async function handler(req, res) {
       const list = Array.isArray(existing) ? existing : [];
       list.unshift(inquiry);
       await redis.set(KV_KEY, JSON.stringify(list));
-      return res.status(200).json({ ok: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
+
+    // Send email notification — don't block the response on failure
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const { subject, text, html } = buildNotificationEmail(req.body);
+        await resend.emails.send({
+          from: "The Mommy Newsletter <notifications@themommy.news>",
+          to: "matt@themommy.news",
+          replyTo: email,
+          subject,
+          text,
+          html,
+        });
+      } catch (e) {
+        console.error("Email notification failed:", e);
+      }
+    }
+
+    return res.status(200).json({ ok: true });
   }
 
   if (req.method === "GET") {
