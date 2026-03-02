@@ -4,7 +4,7 @@ import { verifyToken } from "./_verify.js";
 
 const KV_KEY = "inquiries";
 
-function buildNotificationEmail({ name, email, company, tier, takeover, message, price, guaranteedOpens, placements }) {
+function buildNotificationEmail({ name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail }) {
   const tierName = { starter: "Starter", growth: "Growth", partner: "Partner" }[tier] || tier;
   const fmtPrice = price ? `$${Number(price).toLocaleString("en-US")}` : "N/A";
   const fmtOpens = guaranteedOpens ? `${Number(guaranteedOpens).toLocaleString("en-US")}+` : "N/A";
@@ -16,7 +16,10 @@ function buildNotificationEmail({ name, email, company, tier, takeover, message,
   body += `Package: ${tierName} — ${fmtPrice}\n`;
   body += `Placements: ${placements || "—"}\n`;
   body += `Guaranteed Opens: ${fmtOpens}\n`;
-  if (takeover) body += `Newsletter Takeover: Yes\n`;
+  if (takeover) {
+    const fmtTakeover = takeoverPerEmail ? `$${Number(takeoverPerEmail).toLocaleString("en-US")}` : "price TBD";
+    body += `Newsletter Takeover: +${fmtTakeover}/email (was selected)\n`;
+  }
   if (message) body += `\nMessage:\n"${message}"\n`;
   body += `\n—\nSubmitted ${new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "long", timeStyle: "short" })} ET`;
 
@@ -47,7 +50,7 @@ export default async function handler(req, res) {
   });
 
   if (req.method === "POST") {
-    const { name, email, company, tier, takeover, message, price, guaranteedOpens, placements } = req.body;
+    const { name, email, company, tier, takeover, message, price, guaranteedOpens, placements, takeoverPerEmail } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
 
     const inquiry = {
@@ -61,6 +64,7 @@ export default async function handler(req, res) {
       price: price || null,
       guaranteedOpens: guaranteedOpens || null,
       placements: placements || null,
+      takeoverPerEmail: takeoverPerEmail || null,
       createdAt: new Date().toISOString(),
     };
 

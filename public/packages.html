@@ -1354,7 +1354,7 @@
       const [name, setName] = useState("");
       const [email, setEmail] = useState("");
       const [company, setCompany] = useState("");
-      const [message, setMessage] = useState("");
+      const [message, setMessage] = useState("I'm interested in learning more about sponsoring The Mommy. Please send availability and next steps.");
       const [sending, setSending] = useState(false);
       const [sent, setSent] = useState(false);
       const formRef = useRef(null);
@@ -1385,7 +1385,7 @@
           await fetch("/api/inquiry", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, company, tier, takeover, message, price: prices[tier], guaranteedOpens: Math.floor(impressions[tier] / 10000) * 10000, placements: placements[tier] }),
+            body: JSON.stringify({ name, email, company, tier, takeover, message, price: prices[tier], guaranteedOpens: Math.floor(impressions[tier] / 10000) * 10000, placements: placements[tier], takeoverPerEmail: pricing.takeoverPerEmail }),
           });
           setSent(true);
         } catch {
@@ -1474,7 +1474,7 @@
 
     // ─── Footer ───────────────────────────────────────────────────
     function Footer({ config }) {
-      const contactEmail = config.contactEmail || "hello@themommy.news";
+      const contactEmail = config.contactEmail || "matt@themommy.news";
       return (
         <section style={{ padding: "72px 24px 48px", textAlign: "center", background: C.bg }}>
           <p style={{ fontSize: 18, color: C.text, fontWeight: 600, marginBottom: 8 }}>Managing multiple brands or need something different?</p>
