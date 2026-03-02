@@ -263,7 +263,7 @@
       const momsStatRef = useRef(null);
       const odometerInitRef = useRef(false);
       const engagedMoms = (stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000);
-      const headlineNum = Math.floor(engagedMoms / 1000) * 1000;
+
 
       useEffect(() => {
         if (!stats?.engagedMoms || !momsStatRef.current || odometerInitRef.current) return;
@@ -295,9 +295,12 @@
           {/* Content */}
           <div style={{ maxWidth: 860, margin: "0 auto", position: "relative", zIndex: 1 }} className="fade-in">
             <p style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 3, color: C.muted, marginBottom: 24 }}>The Mommy Newsletter</p>
-            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 40px" }}>
-              Your Brand Introduced by{isMobile ? " " : <br />}a Voice {num(headlineNum)}+ Moms Trust
+            <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.5, color: C.text, maxWidth: 600, margin: "0 auto 16px" }}>
+              Trusted by Moms.{isMobile ? " " : <br />}Built for Brands.
             </h1>
+            <p style={{ fontSize: isMobile ? 16 : 18, color: C.textSecondary, maxWidth: 480, margin: "0 auto 40px", lineHeight: 1.5 }}>
+              Premium placement, brand-safe creative, and transparent reporting.
+            </p>
             <div style={{
               display: "flex",
               justifyContent: "center",
