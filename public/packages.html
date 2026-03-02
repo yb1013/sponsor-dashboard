@@ -610,8 +610,6 @@
           recommended: false, hasTakeover: false,
           features: [
             `${pc.starterPlacements} newsletter placements (all 3 touchpoints)`,
-            `Guaranteed ${num(Math.floor(pricing.starterImpressions / 10000) * 10000)}+ reader impressions`,
-            "If we don't hit it, we keep running free.",
             "Live performance dashboard",
           ],
         },
@@ -623,8 +621,6 @@
           recommended: true, hasTakeover: true,
           features: [
             `${pc.growthPlacements} newsletter placements (all 3 touchpoints)`,
-            `Guaranteed ${num(Math.floor(pricing.growthImpressions / 10000) * 10000)}+ reader impressions`,
-            "If we don't hit it, we keep running free.",
             "Category exclusivity for contract period",
             `${pc.growthIGReels} IG Reels + ${pc.growthFBReels} FB Reels (organic-style sponsored content)`,
             "Live dashboard + downloadable PDF reports",
@@ -639,8 +635,6 @@
           recommended: false, hasTakeover: true,
           features: [
             `${pc.partnerPlacements} newsletter placements (all 3 touchpoints)`,
-            `Guaranteed ${num(Math.floor(pricing.partnerImpressions / 10000) * 10000)}+ reader impressions`,
-            "If we don't hit it, we keep running free.",
             "Category exclusivity for full contract",
             `${pc.partnerIGReels} IG Reels + ${pc.partnerFBReels} FB Reels (organic-style sponsored content)`,
             "1 welcome sequence integration",
@@ -706,7 +700,7 @@
                     <p style={{ fontSize: 14, fontWeight: 700, color: C.accent, marginBottom: 20 }}>{tier.placements} Newsletter Placements</p>
 
                     {/* Price */}
-                    <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 16, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB" }}>
+                    <div style={{ textAlign: "center", padding: "24px 0 20px", marginBottom: 0, borderRadius: 14, background: isRec ? C.accentLight : "#F9FAFB" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: isRec ? C.accent : key === "partner" ? "#1A1A2E" : C.muted, marginBottom: 6 }}>Your Investment</div>
                       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, transition: "all 0.2s" }}>{money(displayPrice)}</div>
                       {tier.savings > 0 && (
@@ -714,6 +708,13 @@
                           Save {money(tier.savings)}
                         </div>
                       )}
+                    </div>
+
+                    {/* Guarantee Block */}
+                    <div style={{ textAlign: "center", padding: "20px 0", borderTop: "1px solid #E8E8E8" }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#1A1A2E" }}>{num(tier.impressions)}+</div>
+                      <div style={{ fontSize: 13, color: "#8A8A9A", textTransform: "uppercase", letterSpacing: 1.5, marginTop: 4 }}>guaranteed reader impressions</div>
+                      <div style={{ fontSize: 13, color: "#6A6A7A", fontStyle: "italic", marginTop: 6 }}>If we don't hit it, we keep running free.</div>
                     </div>
 
                     {/* Get Started */}
@@ -733,9 +734,8 @@
                     {/* Features — flex: 1 to fill remaining space for equal-height cards */}
                     <div style={{ marginBottom: 16, flex: 1 }}>
                       {tier.features.map((f, i) => (
-                        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: f === "If we don't hit it, we keep running free." ? C.textSecondary : C.text, lineHeight: 1.5, fontStyle: f === "If we don't hit it, we keep running free." ? "italic" : "normal" }}>
-                          {f !== "If we don't hit it, we keep running free." && <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>}
-                          {f === "If we don't hit it, we keep running free." && <span style={{ flexShrink: 0, width: 16 }} />}
+                        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.5 }}>
+                          <span style={{ color: C.success, fontWeight: 700, flexShrink: 0 }}>&#10003;</span>
                           <span>{f}</span>
                         </div>
                       ))}
