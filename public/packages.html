@@ -92,10 +92,11 @@
       hourlyRate: 250, growthCallHours: 0.5, partnerCallHours: 1.0,
       roundToNearest: 500,
       starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null,
+      impressionAdjustmentFactor: 1.0,
       nextMilestone: 40000,
     };
 
-    function calculatePricing(pc, engagedMoms) {
+    function calculatePricing(pc, engagedMoms, avgOpensPerSend) {
       const anchorPricePerPlacement = (engagedMoms / 1000) * pc.anchorCPM;
       const starterPV = pc.starterPlacements * anchorPricePerPlacement;
       const growthPV = pc.growthPlacements * anchorPricePerPlacement;
@@ -123,7 +124,9 @@
         starterPrice, growthPrice, partnerPrice,
         starterSavings: starterAV - starterPrice, growthSavings: growthAV - growthPrice, partnerSavings: partnerAV - partnerPrice,
         starterAnchorValue: starterAV, growthAnchorValue: growthAV, partnerAnchorValue: partnerAV,
-        starterImpressions: engagedMoms * pc.starterPlacements, growthImpressions: engagedMoms * pc.growthPlacements, partnerImpressions: engagedMoms * pc.partnerPlacements,
+        starterImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.starterPlacements,
+        growthImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.growthPlacements,
+        partnerImpressions: (avgOpensPerSend ? avgOpensPerSend * (pc.impressionAdjustmentFactor || 1.0) : engagedMoms) * pc.partnerPlacements,
         anchorPricePerPlacement, takeoverPerEmail,
         starterBreakdown: [
           { label: `${pc.starterPlacements} Newsletter Placements`, value: starterPV },
@@ -1215,6 +1218,7 @@
       const [stats, setStats] = useState(null);
       const [config, setConfig] = useState(null);
       const [pricingConfig, setPricingConfig] = useState(null);
+      const [opensData, setOpensData] = useState(null);
       const [configIsLive, setConfigIsLive] = useState(false);
       const [loading, setLoading] = useState(true);
       const width = useWindowWidth();
@@ -1231,10 +1235,11 @@
               if (age < 3600000) { if (mounted) setStats(parsed); }
             } catch {}
           }
-          const [statsRes, configRes, pricingRes] = await Promise.allSettled([
+          const [statsRes, configRes, pricingRes, opensRes] = await Promise.allSettled([
             fetch("/api/stats").then(r => r.ok ? r.json() : null),
             fetch("/api/packages-config").then(r => r.ok ? r.json() : null),
             fetch("/api/pricing-config").then(r => r.ok ? r.json() : null),
+            fetch("/api/newsletter-opens").then(r => r.ok ? r.json() : null),
           ]);
           if (!mounted) return;
           if (statsRes.status === "fulfilled" && statsRes.value) {
@@ -1252,6 +1257,9 @@
           if (pricingRes.status === "fulfilled" && pricingRes.value) {
             const pc = typeof pricingRes.value === "string" ? JSON.parse(pricingRes.value) : pricingRes.value;
             setPricingConfig({ ...DEFAULT_PRICING, ...pc });
+          }
+          if (opensRes.status === "fulfilled" && opensRes.value) {
+            setOpensData(opensRes.value);
           }
           setLoading(false);
         }
@@ -1307,7 +1315,8 @@
 
       const pc = pricingConfig || DEFAULT_PRICING;
       const engagedMoms = (stats?.engagedMoms || cfg.engagedReaders) + 3000;
-      const pricing = calculatePricing(pc, engagedMoms);
+      const avgOpens = opensData?.avgOpensPerSend || null;
+      const pricing = calculatePricing(pc, engagedMoms, avgOpens);
 
       if (loading && !config) {
         return (

@@ -135,13 +135,14 @@ const DEFAULT_CONFIG = {
   starterPriceOverride: null,
   growthPriceOverride: null,
   partnerPriceOverride: null,
+  impressionAdjustmentFactor: 1.0,
   nextMilestone: 40000,
 };
 
 const money = (v) => "$" + Math.round(v || 0).toLocaleString();
 const num = (v) => (v || 0).toLocaleString();
 
-function calculatePricing(config, engagedMoms) {
+function calculatePricing(config, engagedMoms, avgOpensPerSend) {
   const anchorPricePerPlacement = (engagedMoms / 1000) * config.anchorCPM;
 
   const starterPlacementValue = config.starterPlacements * anchorPricePerPlacement;
@@ -206,9 +207,12 @@ function calculatePricing(config, engagedMoms) {
   const growthSavings = growthAnchorValue - growthPrice;
   const partnerSavings = partnerAnchorValue - partnerPrice;
 
-  const starterImpressions = engagedMoms * config.starterPlacements;
-  const growthImpressions = engagedMoms * config.growthPlacements;
-  const partnerImpressions = engagedMoms * config.partnerPlacements;
+  const impressionsPerSend = avgOpensPerSend
+    ? avgOpensPerSend * (config.impressionAdjustmentFactor || 1.0)
+    : engagedMoms;
+  const starterImpressions = impressionsPerSend * config.starterPlacements;
+  const growthImpressions = impressionsPerSend * config.growthPlacements;
+  const partnerImpressions = impressionsPerSend * config.partnerPlacements;
 
   return {
     starterPrice, growthPrice, partnerPrice,
@@ -339,17 +343,22 @@ function AdminApp({ token: initialToken }) {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [opensData, setOpensData] = useState(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/pricing-config").then(r => r.ok ? r.json() : null),
       fetch("/api/stats").then(r => r.ok ? r.json() : null),
-    ]).then(([pricingData, statsData]) => {
+      fetch("/api/newsletter-opens").then(r => r.ok ? r.json() : null),
+    ]).then(([pricingData, statsData, opensResult]) => {
       const cfg = pricingData || DEFAULT_CONFIG;
       setConfig({ ...DEFAULT_CONFIG, ...cfg });
       setSavedConfig({ ...DEFAULT_CONFIG, ...cfg });
       if (statsData?.engagedMoms) {
         setEngagedMoms(statsData.engagedMoms + 3000);
+      }
+      if (opensResult) {
+        setOpensData(opensResult);
       }
       setLoaded(true);
     });
@@ -395,11 +404,12 @@ function AdminApp({ token: initialToken }) {
   if (!token) return <LoginScreen onLogin={setToken} />;
   if (!loaded) return <div className="login-wrap"><p style={{ color: "#8A8D9A" }}>Loading...</p></div>;
 
-  const pricing = calculatePricing(config, engagedMoms);
+  const avgOpens = opensData?.avgOpensPerSend || null;
+  const pricing = calculatePricing(config, engagedMoms, avgOpens);
 
   const projections = [40000, 50000, 75000].map(subs => ({
     subs,
-    ...calculatePricing(config, subs),
+    ...calculatePricing(config, subs, avgOpens),
   }));
 
   return (
@@ -438,6 +448,42 @@ function AdminApp({ token: initialToken }) {
               <div className="stat-label">Per Placement</div>
               <div className="stat-value">{money(pricing.anchorPricePerPlacement)}</div>
             </div>
+          </div>
+
+          {/* Guaranteed Impressions (Live Data) */}
+          <div className="card">
+            <h3>Guaranteed Impressions (Live Data)</h3>
+            {opensData && opensData.posts && opensData.posts.length > 0 ? (
+              <>
+                <table style={{ width: "100%", fontSize: 12, marginBottom: 16, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #2A2D37" }}>
+                      <th style={{ textAlign: "left", padding: "6px 0", color: "#8A8D9A", fontWeight: 500 }}>Newsletter</th>
+                      <th style={{ textAlign: "right", padding: "6px 0", color: "#8A8D9A", fontWeight: 500 }}>Date</th>
+                      <th style={{ textAlign: "right", padding: "6px 0", color: "#8A8D9A", fontWeight: 500 }}>Opens</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {opensData.posts.map((p, i) => (
+                      <tr key={i} style={{ borderBottom: i < opensData.posts.length - 1 ? "1px solid #1A1C24" : "none" }}>
+                        <td style={{ padding: "6px 8px 6px 0", color: "#C0C2C9", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(p.title || "").slice(0, 40)}{(p.title || "").length > 40 ? "..." : ""}</td>
+                        <td style={{ padding: "6px 0", color: "#8A8D9A", textAlign: "right", whiteSpace: "nowrap" }}>{p.publish_date ? new Date(p.publish_date * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</td>
+                        <td style={{ padding: "6px 0", color: "#C0C2C9", textAlign: "right", fontWeight: 500 }}>{num(p.unique_opens)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Average opens per send: {num(opensData.avgOpensPerSend)}</div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: "#8A8D9A", marginBottom: 12 }}>Loading newsletter data...</div>
+            )}
+            <NumField label="Adjustment Factor" hint="Multiply average by this factor. 0.9 = conservative, 1.1 = growth forecast" value={config.impressionAdjustmentFactor} onChange={v => update("impressionAdjustmentFactor", v)} step={0.05} min={0.5} max={2.0} />
+            {opensData && (
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#E8909C", marginTop: 12 }}>
+                Guaranteed impressions per send: {num(Math.round(opensData.avgOpensPerSend * (config.impressionAdjustmentFactor || 1.0)))}
+              </div>
+            )}
           </div>
 
           {/* Core */}
