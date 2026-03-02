@@ -164,11 +164,24 @@
         p: !!pc.partnerPriceOverride,
       };
       if (skip.s && skip.g && skip.p) return null;
+
+      const priceJumped = (t) =>
+        (!skip.s && t.starterPrice > current.starterPrice) ||
+        (!skip.g && t.growthPrice > current.growthPrice) ||
+        (!skip.p && t.partnerPrice > current.partnerPrice);
+
+      if (avgOpens) {
+        for (let o = avgOpens + 10; o <= avgOpens + 100000; o += 10) {
+          if (priceJumped(calculatePricing(pc, currentEngagedMoms, o))) {
+            const subsEstimate = Math.round(currentEngagedMoms * (o / avgOpens));
+            return Math.floor(subsEstimate / 100) * 100;
+          }
+        }
+        return null;
+      }
+
       for (let e = currentEngagedMoms + 10; e <= currentEngagedMoms + 100000; e += 10) {
-        const t = calculatePricing(pc, e, avgOpens);
-        if ((!skip.s && t.starterPrice > current.starterPrice) ||
-            (!skip.g && t.growthPrice > current.growthPrice) ||
-            (!skip.p && t.partnerPrice > current.partnerPrice)) {
+        if (priceJumped(calculatePricing(pc, e, null))) {
           return Math.floor(e / 100) * 100;
         }
       }
