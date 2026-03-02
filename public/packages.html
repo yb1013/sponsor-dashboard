@@ -95,6 +95,10 @@
       starterAdjustmentFactor: 1.0,
       growthAdjustmentFactor: 1.0,
       partnerAdjustmentFactor: 1.0,
+      subscriberOffset: 3000,
+      displayOpenRate: 75,
+      displayRebookRate: 92,
+      displayTotalSubscribers: 120000,
       nextMilestone: 40000,
     };
 
@@ -221,17 +225,18 @@
     }
 
     // ─── Hero ─────────────────────────────────────────────────────
-    function Hero({ stats, config, isMobile }) {
+    function Hero({ stats, config, isMobile, pricingConfig }) {
+      const pc = pricingConfig || DEFAULT_PRICING;
       const momsStatRef = useRef(null);
       const odometerInitRef = useRef(false);
-      const engagedMoms = (stats?.engagedMoms || config.engagedReaders) + 3000;
+      const engagedMoms = (stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000);
       const headlineNum = Math.floor(engagedMoms / 1000) * 1000;
 
       useEffect(() => {
         if (!stats?.engagedMoms || !momsStatRef.current || odometerInitRef.current) return;
         odometerInitRef.current = true;
         const el = momsStatRef.current;
-        const displayVal = stats.engagedMoms + 3000;
+        const displayVal = stats.engagedMoms + (pc.subscriberOffset || 3000);
         const startVal = Math.floor(displayVal / 1000) * 1000;
         createOdometer(el, startVal);
         setTimeout(() => updateOdometer(el, displayVal), 200);
@@ -239,8 +244,8 @@
 
       const heroStats = [
         { label: "Moms Per Send", display: num(engagedMoms) },
-        { label: "Unique Open Rate", display: config.uniqueOpenRate + "%+" },
-        { label: "Would Sponsor Again", display: config.pavedRebookRate + "%" },
+        { label: "Unique Open Rate", display: (pc.displayOpenRate || config.uniqueOpenRate) + "%+" },
+        { label: "Would Sponsor Again", display: (pc.displayRebookRate || config.pavedRebookRate) + "%" },
       ];
       return (
         <section style={{ padding: isMobile ? "60px 24px 48px" : "100px 24px 80px", textAlign: "center", background: C.bg, position: "relative", overflow: "hidden" }}>
@@ -430,12 +435,13 @@
     }
 
     // ─── Demographics ─────────────────────────────────────────────
-    function Demographics({ config, stats, isMobile }) {
+    function Demographics({ config, stats, isMobile, pricingConfig }) {
+      const pc = pricingConfig || DEFAULT_PRICING;
       return (
         <Section bg={C.bgSubtle}>
           <SectionTitle>Who You're Reaching</SectionTitle>
           <p style={{ fontSize: 16, color: C.textSecondary, maxWidth: 600, margin: "-32px auto 48px", lineHeight: 1.65, textAlign: "center" }}>
-            From our community of <strong>{num(config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num((stats?.engagedMoms || config.engagedReaders) + 3000)}</strong> most engaged — the moms who consistently open, read, and act.
+            From our community of <strong>{num(pc.displayTotalSubscribers || config.totalSubscribers || 120000)}+</strong> subscribers, we send our 3× weekly newsletter to the <strong>{num((stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000))}</strong> most engaged — the moms who consistently open, read, and act.
           </p>
           <WorldMap isMobile={isMobile} />
           <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 24 }}>
@@ -805,7 +811,7 @@
             })}
           </div>
           <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 48 }}>
-            #1 Popular Family Newsletter on Paved &middot; #2 Most Reviewed &middot; 92% of advertisers rebook
+            #1 Popular Family Newsletter on Paved &middot; #2 Most Reviewed &middot; {pricingConfig?.displayRebookRate || 92}% of advertisers rebook
           </p>
         </Section>
       );
@@ -968,7 +974,7 @@
 
     // ─── Lock-In Messaging ────────────────────────────────────────
     function LockIn({ config, stats, isMobile, pricingConfig }) {
-      const subs = (stats?.engagedMoms || config.engagedReaders) + 3000;
+      const subs = (stats?.engagedMoms || config.engagedReaders) + (pc.subscriberOffset || 3000);
       const pc = pricingConfig || DEFAULT_PRICING;
       const nextMilestone = pc.nextMilestone || 40000;
       const hasNext = subs < nextMilestone;
@@ -1316,7 +1322,7 @@
       };
 
       const pc = pricingConfig || DEFAULT_PRICING;
-      const engagedMoms = (stats?.engagedMoms || cfg.engagedReaders) + 3000;
+      const engagedMoms = (stats?.engagedMoms || cfg.engagedReaders) + (pc.subscriberOffset || 3000);
       const avgOpens = opensData?.avgOpensPerSend || null;
       const pricing = calculatePricing(pc, engagedMoms, avgOpens);
 
@@ -1332,9 +1338,9 @@
 
       return (
         <div>
-          <Hero stats={stats} config={cfg} isMobile={isMobile} />
+          <Hero stats={stats} config={cfg} isMobile={isMobile} pricingConfig={pc} />
           <BrandTicker config={cfg} isMobile={isMobile} />
-          <Demographics config={cfg} stats={stats} isMobile={isMobile} />
+          <Demographics config={cfg} stats={stats} isMobile={isMobile} pricingConfig={pc} />
           <Testimonials config={cfg} isMobile={isMobile} />
           <DashboardPreview isMobile={isMobile} />
           <PricingSection config={cfg} stats={stats} isMobile={isMobile} pricing={pricing} pricingConfig={pc} />

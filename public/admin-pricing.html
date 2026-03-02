@@ -138,6 +138,10 @@ const DEFAULT_CONFIG = {
   starterAdjustmentFactor: 1.0,
   growthAdjustmentFactor: 1.0,
   partnerAdjustmentFactor: 1.0,
+  subscriberOffset: 3000,
+  displayOpenRate: 75,
+  displayRebookRate: 92,
+  displayTotalSubscribers: 120000,
   nextMilestone: 40000,
 };
 
@@ -360,7 +364,7 @@ function AdminApp({ token: initialToken }) {
       setConfig({ ...DEFAULT_CONFIG, ...cfg });
       setSavedConfig({ ...DEFAULT_CONFIG, ...cfg });
       if (statsData?.engagedMoms) {
-        setEngagedMoms(statsData.engagedMoms + 3000);
+        setEngagedMoms(statsData.engagedMoms + (cfg.subscriberOffset || 3000));
       }
       if (opensResult) {
         setOpensData(opensResult);
@@ -495,6 +499,15 @@ function AdminApp({ token: initialToken }) {
                 <div>Partner: {num(Math.round(opensData.avgOpensPerSend * (config.partnerAdjustmentFactor || 1.0) * config.partnerPlacements))}</div>
               </div>
             )}
+          </div>
+
+          {/* Page Display Numbers */}
+          <div className="card">
+            <h3>Page Display Numbers</h3>
+            <NumField label="Subscriber Offset" hint="Added to API subscriber count for 'Moms per send' display" value={config.subscriberOffset} onChange={v => update("subscriberOffset", v)} step={500} min={0} />
+            <NumField label="Unique Open Rate (%)" hint="Shown as 'XX%+ unique open rate' on packages page" value={config.displayOpenRate} onChange={v => update("displayOpenRate", v)} step={1} min={0} max={100} />
+            <NumField label="Would Sponsor Again (%)" hint="Shown as 'XX% would sponsor again' on packages page" value={config.displayRebookRate} onChange={v => update("displayRebookRate", v)} step={1} min={0} max={100} />
+            <NumField label="Total Subscribers" hint="Shown as 'XXX,000+ subscribers' on packages page" value={config.displayTotalSubscribers} onChange={v => update("displayTotalSubscribers", v)} step={1000} min={0} />
           </div>
 
           {/* Core */}

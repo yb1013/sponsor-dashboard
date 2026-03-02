@@ -70,6 +70,12 @@ function getDefaults() {
     growthAdjustmentFactor: 1.0,
     partnerAdjustmentFactor: 1.0,
 
+    // === PAGE DISPLAY NUMBERS ===
+    subscriberOffset: 3000,
+    displayOpenRate: 75,
+    displayRebookRate: 92,
+    displayTotalSubscribers: 120000,
+
     // === MILESTONE ===
     nextMilestone: 40000,
   };
