@@ -182,13 +182,13 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     Math.round(anchorPricePerPlacement * config.takeoverPremiumPct);
 
   const adCopy = (config.adCopyValuePerPlacement || 0);
-  const starterAnchorValue = starterPlacementValue + adCopy * config.starterPlacements;
-  const growthAnchorValue = growthPlacementValue
+  const starterAnchorValue = Math.round(starterPlacementValue + adCopy * config.starterPlacements);
+  const growthAnchorValue = Math.round(growthPlacementValue
     + growthExclusivity
     + (config.growthIGReels * igReelPrice)
     + (config.growthFBReels * fbReelPrice)
-    + adCopy * config.growthPlacements;
-  const partnerAnchorValue = partnerPlacementValue
+    + adCopy * config.growthPlacements);
+  const partnerAnchorValue = Math.round(partnerPlacementValue
     + partnerExclusivity
     + (config.partnerIGReels * igReelPrice)
     + (config.partnerFBReels * fbReelPrice)
@@ -196,7 +196,7 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     + stageContractValue
     + dedicatedSendPrice
     + (config.audiencePollValue || 0)
-    + adCopy * config.partnerPlacements;
+    + adCopy * config.partnerPlacements);
 
   const roundTo = config.roundToNearest || 1;
 
@@ -231,24 +231,24 @@ function calculatePricing(config, engagedMoms, avgOpensPerSend) {
     welcomeMonthly, welcomeContractValue, stageContractValue,
     takeoverPerEmail,
     starterBreakdown: [
-      { label: `${config.starterPlacements} Newsletter Placements`, value: starterPlacementValue },
-      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.starterPlacements },
+      { label: `${config.starterPlacements} Newsletter Placements`, value: Math.round(starterPlacementValue) },
+      { label: 'Fresh Ad Copy (never repeated)', value: Math.round(adCopy * config.starterPlacements) },
     ],
     growthBreakdown: [
-      { label: `${config.growthPlacements} Newsletter Placements`, value: growthPlacementValue },
-      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.growthPlacements },
-      { label: 'Category Exclusivity', value: growthExclusivity },
-      { label: `${config.growthIGReels} IG Reels + ${config.growthFBReels} FB Reels`, value: (config.growthIGReels * igReelPrice) + (config.growthFBReels * fbReelPrice) },
+      { label: `${config.growthPlacements} Newsletter Placements`, value: Math.round(growthPlacementValue) },
+      { label: 'Fresh Ad Copy (never repeated)', value: Math.round(adCopy * config.growthPlacements) },
+      { label: 'Category Exclusivity', value: Math.round(growthExclusivity) },
+      { label: `${config.growthIGReels} IG Reels + ${config.growthFBReels} FB Reels`, value: Math.round((config.growthIGReels * igReelPrice) + (config.growthFBReels * fbReelPrice)) },
     ],
     partnerBreakdown: [
-      { label: `${config.partnerPlacements} Newsletter Placements`, value: partnerPlacementValue },
-      { label: 'Fresh Ad Copy (never repeated)', value: adCopy * config.partnerPlacements },
-      { label: 'Category Exclusivity (full contract)', value: partnerExclusivity },
-      { label: `${config.partnerIGReels} IG Reels + ${config.partnerFBReels} FB Reels`, value: (config.partnerIGReels * igReelPrice) + (config.partnerFBReels * fbReelPrice) },
-      ...(config.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: welcomeContractValue }] : []),
-      { label: 'Stage-Based Sequence Sponsorship', value: stageContractValue },
-      { label: '1 Dedicated Send', value: dedicatedSendPrice },
-      { label: 'Custom Audience Poll + Insights Report', value: config.audiencePollValue || 0 },
+      { label: `${config.partnerPlacements} Newsletter Placements`, value: Math.round(partnerPlacementValue) },
+      { label: 'Fresh Ad Copy (never repeated)', value: Math.round(adCopy * config.partnerPlacements) },
+      { label: 'Category Exclusivity (full contract)', value: Math.round(partnerExclusivity) },
+      { label: `${config.partnerIGReels} IG Reels + ${config.partnerFBReels} FB Reels`, value: Math.round((config.partnerIGReels * igReelPrice) + (config.partnerFBReels * fbReelPrice)) },
+      ...(config.welcomeSequenceEnabled !== false ? [{ label: 'Welcome Sequence Integration', value: Math.round(welcomeContractValue) }] : []),
+      { label: 'Stage-Based Sequence Sponsorship', value: Math.round(stageContractValue) },
+      { label: '1 Dedicated Send', value: Math.round(dedicatedSendPrice) },
+      { label: 'Custom Audience Poll + Insights Report', value: Math.round(config.audiencePollValue || 0) },
     ],
   };
 }
