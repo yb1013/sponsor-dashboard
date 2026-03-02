@@ -140,7 +140,6 @@ const DEFAULT_CONFIG = {
   displayOpenRate: 75,
   displayRebookRate: 92,
   displayTotalSubscribers: 120000,
-  nextMilestone: 40000,
 };
 
 const money = (v) => "$" + Math.round(v || 0).toLocaleString();
@@ -632,11 +631,6 @@ function AdminApp({ token: initialToken }) {
             </div>
           </div>
 
-          {/* Milestone */}
-          <div className="card">
-            <h3>Progress Bar</h3>
-            <NumField label="Next Milestone" hint="Subscriber count for the progress bar target" value={config.nextMilestone} onChange={v => update("nextMilestone", v)} step={5000} min={0} />
-          </div>
         </div>
 
         {/* ─── Preview Panel ────────────────────────────────────── */}
