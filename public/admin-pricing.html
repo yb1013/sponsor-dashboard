@@ -352,10 +352,29 @@ function AdminApp({ token: initialToken }) {
   const [config, setConfig] = useState(null);
   const [savedConfig, setSavedConfig] = useState(null);
   const [engagedMoms, setEngagedMoms] = useState(29000);
+  const [engagedMomsDisplay, setEngagedMomsDisplay] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [opensData, setOpensData] = useState(null);
+
+  const handleResetHWM = async () => {
+    if (!confirm("Reset high-water mark? The display number will drop to the current live count on next fetch.")) return;
+    try {
+      const res = await fetch("/api/reset-high-water", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setEngagedMomsDisplay(null);
+        alert("High-water mark reset.");
+      } else {
+        alert("Failed to reset: " + (await res.json()).error);
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -368,6 +387,9 @@ function AdminApp({ token: initialToken }) {
       setSavedConfig({ ...DEFAULT_CONFIG, ...cfg });
       if (statsData?.engagedMoms) {
         setEngagedMoms(statsData.engagedMoms + (cfg.subscriberOffset || 3000));
+      }
+      if (statsData?.engagedMomsDisplay) {
+        setEngagedMomsDisplay(statsData.engagedMomsDisplay + (cfg.subscriberOffset || 3000));
       }
       if (opensResult) {
         setOpensData(opensResult);
@@ -451,6 +473,17 @@ function AdminApp({ token: initialToken }) {
             <div className="stat">
               <div className="stat-label">Avg Opens / Send (Live)</div>
               <div className="stat-value accent">{num(avgOpens || engagedMoms)}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Engaged Moms (live)</div>
+              <div className="stat-value">{num(engagedMoms)}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-label">Display (high water)</div>
+              <div className="stat-value" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {engagedMomsDisplay ? num(engagedMomsDisplay) : "—"}
+                {engagedMomsDisplay && <button onClick={handleResetHWM} style={{ fontSize: 10, padding: "2px 6px", background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5", borderRadius: 4, cursor: "pointer", lineHeight: 1.2 }}>Reset</button>}
+              </div>
             </div>
             <div className="stat">
               <div className="stat-label">Anchor CPM</div>

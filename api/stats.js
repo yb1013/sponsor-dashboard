@@ -1,3 +1,7 @@
+import { Redis } from "@upstash/redis";
+
+const HWM_KEY = "engaged_high_water_mark";
+
 async function getDormantCount(pubId, apiKey) {
   const headers = { Authorization: `Bearer ${apiKey}` };
 
@@ -116,14 +120,34 @@ export default async function handler(req, res) {
     const dormantCount = await getDormantCount(pubId, apiKey);
     const engagedMoms = dormantCount !== null ? activeSubscribers - dormantCount : null;
 
+    // High-water mark: display number never decreases
+    let engagedMomsDisplay = engagedMoms;
+    try {
+      const redis = new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      });
+      const stored = await redis.get(HWM_KEY);
+      const hwm = stored !== null ? Number(stored) : null;
+      if (engagedMoms !== null && (hwm === null || engagedMoms > hwm)) {
+        await redis.set(HWM_KEY, engagedMoms);
+        engagedMomsDisplay = engagedMoms;
+      } else if (hwm !== null) {
+        engagedMomsDisplay = Math.max(engagedMoms ?? 0, hwm);
+      }
+    } catch (e) {
+      console.log('[stats] High-water mark Redis error:', e.message);
+    }
+
     console.log('[stats] activeSubscribers:', activeSubscribers);
     console.log('[stats] dormantCount:', dormantCount);
-    console.log('[stats] engagedMoms:', engagedMoms);
+    console.log('[stats] engagedMoms:', engagedMoms, '| display (HWM):', engagedMomsDisplay);
 
     return res.status(200).json({
       activeSubscribers,
       dormantCount,
       engagedMoms,
+      engagedMomsDisplay,
       avgOpensPerSend: avgOpens,
       avgClicksPerSend: avgClicks,
       avgCtr,
