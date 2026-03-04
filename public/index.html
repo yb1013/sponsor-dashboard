@@ -2083,7 +2083,7 @@
     function DemoSponsorPage() {
       const [bannerVisible, setBannerVisible] = useState(true);
       const sponsor = { id: "demo", name: "Sample Partner", patterns: [], showCostToSponsor: true, oneOffShowCpm: false, oneOffShowCpc: false };
-      const config = { publicationName: "The Mommy", publicationUrl: "themommy.news", campaignUrl: "" };
+      const config = { publicationName: "The Mommy", publicationUrl: "themommy.news", campaignUrl: "https://themommy.news/advertise" };
       const activeContract = DEMO_CONTRACTS.find(c => c.isActive);
       const allRuns = [...DEMO_C1_RUNS, ...DEMO_C2_RUNS];
 
