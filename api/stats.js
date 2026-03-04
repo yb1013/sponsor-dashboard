@@ -1,15 +1,4 @@
-// ─── Dormant count cache (persists across warm invocations) ───
-let cachedDormantCount = null;
-let dormantCacheTimestamp = 0;
-const DORMANT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
 async function getDormantCount(pubId, apiKey) {
-  const now = Date.now();
-  if (cachedDormantCount !== null && (now - dormantCacheTimestamp) < DORMANT_CACHE_TTL) {
-    console.log('[stats] Using cached dormant count:', cachedDormantCount);
-    return cachedDormantCount;
-  }
-
   const headers = { Authorization: `Bearer ${apiKey}` };
 
   // Approach A: custom_fields bracket notation
@@ -22,10 +11,8 @@ async function getDormantCount(pubId, apiKey) {
     const data = await res.json();
     console.log('[stats] Approach A response:', JSON.stringify(data).slice(0, 500));
     if (data.total_results !== undefined) {
-      cachedDormantCount = data.total_results;
-      dormantCacheTimestamp = now;
-      console.log('[stats] Approach A worked! dormantCount:', cachedDormantCount);
-      return cachedDormantCount;
+      console.log('[stats] Approach A worked! dormantCount:', data.total_results);
+      return data.total_results;
     }
     console.log('[stats] Approach A: no total_results field');
   } catch (e) {
@@ -42,10 +29,8 @@ async function getDormantCount(pubId, apiKey) {
     const data = await res.json();
     console.log('[stats] Approach B response:', JSON.stringify(data).slice(0, 500));
     if (data.total_results !== undefined) {
-      cachedDormantCount = data.total_results;
-      dormantCacheTimestamp = now;
-      console.log('[stats] Approach B worked! dormantCount:', cachedDormantCount);
-      return cachedDormantCount;
+      console.log('[stats] Approach B worked! dormantCount:', data.total_results);
+      return data.total_results;
     }
     console.log('[stats] Approach B: no total_results field');
   } catch (e) {
@@ -67,10 +52,8 @@ async function getDormantCount(pubId, apiKey) {
     );
     if (dormantSegment) {
       const count = dormantSegment.total_results || dormantSegment.subscriber_count || dormantSegment.count || 0;
-      cachedDormantCount = count;
-      dormantCacheTimestamp = now;
       console.log('[stats] Approach C worked! Segment:', dormantSegment.name, 'dormantCount:', count);
-      return cachedDormantCount;
+      return count;
     }
     console.log('[stats] Approach C: no dormant segment found. Segments:', segments.map(s => s.name));
   } catch (e) {
