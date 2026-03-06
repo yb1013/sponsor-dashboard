@@ -38,8 +38,14 @@ export default async function handler(req, res) {
   if (action === "list" && req.method === "GET") {
     const index = await redis.get(indexKey(sponsorId));
     const items = index ? (typeof index === "string" ? JSON.parse(index) : index) : [];
-    // Only return placements visible to sponsor (not drafts)
+    // Exclude drafts; include placeholders and all other statuses
     const visible = items.filter(i => i.status !== "draft");
+    // Order by scheduledDate ascending
+    visible.sort((a, b) => {
+      const da = a.scheduledDate || "9999";
+      const db = b.scheduledDate || "9999";
+      return da.localeCompare(db);
+    });
     return res.status(200).json(visible);
   }
 
@@ -51,6 +57,11 @@ export default async function handler(req, res) {
     const placement = typeof pl === "string" ? JSON.parse(pl) : pl;
     // Don't expose admin notes to sponsor
     const { notes, ...safe } = placement;
+    // For placeholders, strip content fields
+    if (safe.status === "placeholder") {
+      safe.imageData = null;
+      safe.htmlContent = null;
+    }
     return res.status(200).json(safe);
   }
 
@@ -119,6 +130,9 @@ async function updateIndex(redis, sponsorId, placement) {
     completedAt: placement.completedAt,
     contractId: placement.contractId,
     contentType: placement.contentType || "image",
+    campaignName: placement.campaignName || null,
+    runNumber: placement.runNumber || null,
+    totalRuns: placement.totalRuns || null,
   };
   if (idx >= 0) items[idx] = entry;
   else items.push(entry);

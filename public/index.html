@@ -1807,6 +1807,14 @@
       const [newDate, setNewDate] = useState("");
       const [newHeadline, setNewHeadline] = useState("");
       const [newNotes, setNewNotes] = useState("");
+      const [selCampaign, setSelCampaign] = useState(null);
+      const [customCampaign, setCustomCampaign] = useState("");
+      const [selRunNumber, setSelRunNumber] = useState("");
+      const [showInitSchedule, setShowInitSchedule] = useState(false);
+      const [initStartDate, setInitStartDate] = useState("");
+      const [initFrequency, setInitFrequency] = useState("1x_week");
+      const [initSaving, setInitSaving] = useState(false);
+      const [editingPlaceholder, setEditingPlaceholder] = useState(null);
       const [imgError, setImgError] = useState(null);
       const [saving, setSaving] = useState(false);
       const [expandedId, setExpandedId] = useState(null);
@@ -1883,9 +1891,13 @@
         if (contentMode === "image" && !newImage) return;
         if (contentMode === "html" && !newHtml) return;
         setSaving(true);
-        const activeContract = contracts.find(c => c.isActive);
+        const cid = selCampaign?.id || null;
+        const cName = selCampaign?.name || customCampaign || null;
+        const rn = selRunNumber ? parseInt(selRunNumber, 10) : null;
+        const tr = selCampaign?.totalRuns || null;
         const body = {
-          sponsorId, shareToken, contractId: activeContract?.id || null,
+          sponsorId, shareToken, contractId: cid,
+          campaignName: cName, runNumber: rn, totalRuns: tr,
           scheduledDate: newDate || null, headline: newHeadline, notes: newNotes,
           contentType: contentMode, sendForReview,
         };
@@ -1894,6 +1906,45 @@
         try {
           await fetch("/api/placements?action=create", { method: "POST", headers, body: JSON.stringify(body) });
           setNewImage(null); setNewHtml(""); setNewPreviewUrl(""); setNewDate(""); setNewHeadline(""); setNewNotes(""); setHtmlWarning(null);
+          setSelCampaign(null); setCustomCampaign(""); setSelRunNumber("");
+          await fetchPlacements();
+        } catch {}
+        setSaving(false);
+      };
+
+      const initializeSchedule = async () => {
+        if (!selCampaign || !initStartDate) return;
+        setInitSaving(true);
+        try {
+          await fetch("/api/placements?action=initialize-schedule", {
+            method: "POST", headers,
+            body: JSON.stringify({
+              sponsorId, shareToken, contractId: selCampaign.id,
+              campaignName: selCampaign.name, totalRuns: selCampaign.totalRuns,
+              startDate: initStartDate, frequency: initFrequency,
+            }),
+          });
+          setShowInitSchedule(false); setInitStartDate(""); setInitFrequency("1x_week");
+          await fetchPlacements();
+        } catch {}
+        setInitSaving(false);
+      };
+
+      const fillPlaceholder = async (pl) => {
+        // Update a placeholder with content → transitions to draft
+        setSaving(true);
+        const body = { contentType: contentMode };
+        if (contentMode === "html") body.htmlContent = newHtml;
+        else { body.imageData = newImage; if (newPreviewUrl.trim()) body.previewUrl = newPreviewUrl.trim(); }
+        if (newHeadline) body.headline = newHeadline;
+        if (newNotes) body.notes = newNotes;
+        if (newDate) body.scheduledDate = newDate;
+        try {
+          await fetch(`/api/placements?action=update&sponsorId=${sponsorId}&placementId=${pl.placementId}`, {
+            method: "POST", headers, body: JSON.stringify(body),
+          });
+          setNewImage(null); setNewHtml(""); setNewPreviewUrl(""); setNewDate(""); setNewHeadline(""); setNewNotes(""); setHtmlWarning(null);
+          setEditingPlaceholder(null);
           await fetchPlacements();
         } catch {}
         setSaving(false);
@@ -1934,23 +1985,161 @@
         await fetchPlacements();
       };
 
-      const totalRuns = contracts.find(c => c.isActive)?.totalRuns || 0;
-      const counts = { draft: 0, pending_review: 0, changes_requested: 0, approved: 0, completed: 0 };
+      const counts = { placeholder: 0, draft: 0, pending_review: 0, changes_requested: 0, approved: 0, completed: 0 };
       placements.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
 
-      const filtered = statusFilter ? placements.filter(p => p.status === statusFilter) : placements;
-      const ordered = [...filtered].sort((a, b) => {
+      const statusLabel = { placeholder: "PLACEHOLDER", draft: "DRAFT", pending_review: "PENDING REVIEW", changes_requested: "CHANGES REQUESTED", approved: "APPROVED", completed: "COMPLETED" };
+      const statusIcon = { placeholder: "\u25CB", draft: "\u{1F4DD}", pending_review: "\u231B", changes_requested: "\u{1F534}", approved: "\u2713", completed: "\u2713" };
+      const statusColor = { placeholder: C.dim, draft: C.dim, pending_review: C.amber, changes_requested: C.red, approved: C.green, completed: C.dim };
+      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No date";
+
+      // Group placements by campaign
+      const campaignGroups = {};
+      const otherPlacements = [];
+      placements.forEach(p => {
+        if (p.contractId && contracts.some(c => c.id === p.contractId)) {
+          if (!campaignGroups[p.contractId]) campaignGroups[p.contractId] = [];
+          campaignGroups[p.contractId].push(p);
+        } else {
+          otherPlacements.push(p);
+        }
+      });
+      // Sort within each group by run number then date
+      Object.values(campaignGroups).forEach(arr => arr.sort((a, b) => (a.runNumber || 999) - (b.runNumber || 999)));
+      otherPlacements.sort((a, b) => {
         const pri = { changes_requested: 0, pending_review: 1, draft: 2, approved: 3, completed: 4 };
         return (pri[a.status] ?? 5) - (pri[b.status] ?? 5) || new Date(a.scheduledDate || 0) - new Date(b.scheduledDate || 0);
       });
 
-      const statusLabel = { draft: "DRAFT", pending_review: "PENDING REVIEW", changes_requested: "CHANGES REQUESTED", approved: "APPROVED", completed: "COMPLETED" };
-      const statusIcon = { draft: "\u{1F4DD}", pending_review: "\u231B", changes_requested: "\u{1F534}", approved: "\u2713", completed: "\u2713" };
-      const statusColor = { draft: C.dim, pending_review: C.amber, changes_requested: C.red, approved: C.green, completed: C.dim };
-      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No date";
+      // Campaign info for dropdowns
+      const campaignOptions = contracts.map(c => {
+        const used = placements.filter(p => p.contractId === c.id && p.status !== "placeholder").length;
+        return { id: c.id, name: c.name, totalRuns: c.totalRuns || 0, remaining: Math.max(0, (c.totalRuns || 0) - used), isActive: c.isActive };
+      });
+      const getUsedRuns = (contractId) => {
+        return placements.filter(p => p.contractId === contractId).map(p => ({
+          runNumber: p.runNumber, status: p.status, scheduledDate: p.scheduledDate, placementId: p.placementId,
+        }));
+      };
 
       const approvedIds = placements.filter(p => p.status === "approved").map(p => p.placementId);
       const anyBatchSelected = Object.keys(batchSelect).some(k => batchSelect[k]);
+
+      const renderPlacementCard = (p) => {
+        const sc = statusColor[p.status] || C.dim;
+        const full = expandedData[p.placementId];
+        const ri = replaceImage[p.placementId];
+        const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
+        const runLabel = p.runNumber ? `Run ${p.runNumber}${p.totalRuns ? ` of ${p.totalRuns}` : ""}` : (p.headline || "Untitled");
+        const isPlaceholder = p.status === "placeholder";
+
+        if (isPlaceholder) {
+          return (
+            <div key={p.placementId} onClick={() => {
+              setEditingPlaceholder(p);
+              setNewDate(p.scheduledDate || ""); setNewHeadline(p.headline || ""); setNewNotes("");
+              setSelCampaign(campaignOptions.find(c => c.id === p.contractId) || null);
+              setSelRunNumber(p.runNumber ? String(p.runNumber) : "");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }} style={{ background: C.card, borderRadius: 14, border: `2px dashed ${C.border}`, padding: isMobile ? 14 : 18, cursor: "pointer", opacity: 0.7 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 24, height: 24, borderRadius: 12, border: `2px dashed ${C.dim}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: C.dim }}>{runLabel}</p>
+                  <p style={{ fontSize: 12, color: C.dim }}>{fmtD(p.scheduledDate)} — <em>No creative yet — click to add content</em></p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div key={p.placementId} style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: isMobile ? 16 : 20, borderLeft: `3px solid ${sc}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: sc, fontSize: 13, fontWeight: 700 }}>{statusIcon[p.status]} {statusLabel[p.status]}</span>
+                {p.status === "pending_review" && p.submittedAt && <span style={{ fontSize: 11, color: C.dim }}>— Sent {new Date(p.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+                {p.status === "approved" && p.approvedAt && <span style={{ fontSize: 11, color: C.dim }}>— {new Date(p.approvedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+                {p.version > 1 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#3B82F6", fontWeight: 600 }}>v{p.version}</span>}
+              </div>
+              {p.status === "approved" && approvedIds.length > 1 && (
+                <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: C.dim }}>
+                  <input type="checkbox" checked={!!batchSelect[p.placementId]} onChange={e => setBatchSelect(s => ({ ...s, [p.placementId]: e.target.checked }))} />
+                </label>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 16, flexDirection: isMobile ? "column" : "row" }}>
+              {/* Thumbnail / content preview */}
+              <div style={{ flexShrink: 0 }}>
+                {(p.contentType === "html" || full?.contentType === "html") ? (
+                  <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}>
+                    <span style={{ fontSize: 24 }}>&#128196;</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: C.accent }}>Newsletter Content</span>
+                  </div>
+                ) : (ri || (full && full.imageData)) ? (
+                  <ImageViewer src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                ) : (
+                  <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                    <span style={{ fontSize: 11, color: C.dim }}>{full === undefined ? "Click to load" : "No image"}</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{runLabel}</p>
+                {p.campaignName && <p style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{p.campaignName}</p>}
+                <p style={{ fontSize: 12, color: C.dim, marginBottom: 8 }}>{fmtD(p.scheduledDate)}</p>
+
+                {/* Changes requested feedback */}
+                {p.status === "changes_requested" && lastChange && (
+                  <div style={{ background: C.redDim, borderRadius: 8, padding: 12, marginBottom: 12, border: `1px solid rgba(248,113,113,0.2)` }}>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: C.red, marginBottom: 4 }}>Sponsor feedback:</p>
+                    <p style={{ fontSize: 13, color: C.text, fontStyle: "italic" }}>"{lastChange.message}"</p>
+                  </div>
+                )}
+
+                {full?.notes && <p style={{ fontSize: 12, color: C.dim, fontStyle: "italic", marginBottom: 8 }}>Notes: {full.notes}</p>}
+
+                {/* Action buttons by status */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                  {p.status === "draft" && (
+                    <React.Fragment>
+                      <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Edit</Btn>
+                      <Btn onClick={() => doAction("submit", p.placementId)} color={C.white} bg={C.accent} small>Send for Review →</Btn>
+                      <Btn onClick={() => setConfirmDelete(p.placementId)} color={C.red} bg={C.redDim} small>Delete</Btn>
+                    </React.Fragment>
+                  )}
+                  {p.status === "pending_review" && (
+                    <Btn onClick={() => doAction("recall", p.placementId)} color={C.amber} bg={C.amberDim} small>Recall</Btn>
+                  )}
+                  {p.status === "changes_requested" && (
+                    <React.Fragment>
+                      {(p.contentType === "html" || full?.contentType === "html") ? (
+                        <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Replace Content</Btn>
+                      ) : (
+                        <Btn onClick={() => { if (!replaceRefs.current[p.placementId]) replaceRefs.current[p.placementId] = document.createElement("input"); const inp = replaceRefs.current[p.placementId]; inp.type = "file"; inp.accept = "image/*"; inp.onchange = (ev) => handleReplaceFile(p.placementId, ev.target.files[0]); inp.click(); }} color={C.accent} bg={C.accentDim} small>Replace Image</Btn>
+                      )}
+                      <Btn onClick={() => doResubmit(p.placementId)} color={C.white} bg={C.accent} small>Resubmit for Review →</Btn>
+                    </React.Fragment>
+                  )}
+                  {p.status === "approved" && (
+                    <Btn onClick={() => doAction("complete", p.placementId)} color={C.white} bg={C.green} small>Mark as Completed</Btn>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Delete confirmation */}
+            {confirmDelete === p.placementId && (
+              <div style={{ marginTop: 12, padding: 12, background: C.redDim, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: C.red }}>Delete this draft?</span>
+                <Btn onClick={() => { doAction("delete", p.placementId); setConfirmDelete(null); }} color={C.white} bg={C.red} small>Yes, Delete</Btn>
+                <Btn onClick={() => setConfirmDelete(null)} color={C.dim} bg={C.card} small>Cancel</Btn>
+              </div>
+            )}
+          </div>
+        );
+      };
 
       if (loading) return null;
 
@@ -1958,12 +2147,12 @@
         <div style={{ marginTop: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Placements{counts.changes_requested > 0 && <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 8, minWidth: 18, height: 18, borderRadius: 9, background: C.red, color: "#fff", fontSize: 10, fontWeight: 700, padding: "0 5px", lineHeight: 1 }}>{counts.changes_requested}</span>}</h3>
-            {totalRuns > 0 && <span style={{ fontSize: 12, color: C.dim }}>{placements.length} of {totalRuns} placements created</span>}
+            <span style={{ fontSize: 12, color: C.dim }}>{placements.length} placement{placements.length !== 1 ? "s" : ""}</span>
           </div>
 
           {/* Status pipeline */}
           <div style={{ display: "flex", gap: 0, marginBottom: 20, background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden", flexWrap: "wrap" }}>
-            {["draft", "pending_review", "changes_requested", "approved", "completed"].map((s, i, arr) => (
+            {["placeholder", "draft", "pending_review", "changes_requested", "approved", "completed"].map((s, i, arr) => (
               <button key={s} onClick={() => setStatusFilter(statusFilter === s ? null : s)} style={{
                 flex: 1, minWidth: isMobile ? "33%" : 0, padding: "10px 8px", background: statusFilter === s ? "rgba(79,143,247,0.1)" : "transparent",
                 border: "none", borderRight: i < arr.length - 1 && !isMobile ? `1px solid ${C.border}` : "none", cursor: "pointer", fontFamily: FONT, textAlign: "center",
@@ -2060,14 +2249,88 @@
               </div>
             )}
 
+            {/* Campaign + Run selectors */}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "3fr 2fr", gap: 12, marginTop: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Campaign</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    list="campaign-list"
+                    value={selCampaign ? `${selCampaign.name} — ${selCampaign.totalRuns} placements (${selCampaign.remaining} remaining)` : customCampaign}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const match = campaignOptions.find(c => val.startsWith(c.name + " —") || val === c.name);
+                      if (match) { setSelCampaign(match); setCustomCampaign(""); }
+                      else { setSelCampaign(null); setCustomCampaign(val); }
+                    }}
+                    onFocus={e => { if (selCampaign) { e.target.value = ""; e.target.select(); } }}
+                    placeholder="Select or type campaign name"
+                    style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }}
+                  />
+                  <datalist id="campaign-list">
+                    {campaignOptions.map(c => (
+                      <option key={c.id} value={`${c.name} — ${c.totalRuns} placements (${c.remaining} remaining)`} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Run #</label>
+                {selCampaign ? (
+                  <select value={selRunNumber} onChange={e => setSelRunNumber(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }}>
+                    <option value="">Select run</option>
+                    {Array.from({ length: selCampaign.totalRuns }, (_, i) => i + 1).map(n => {
+                      const used = getUsedRuns(selCampaign.id).find(r => r.runNumber === n);
+                      return <option key={n} value={n}>{n} of {selCampaign.totalRuns}{used ? ` (${fmtD(used.scheduledDate)} — ${statusLabel[used.status] || used.status})` : ""}</option>;
+                    })}
+                  </select>
+                ) : (
+                  <input type="number" min="1" value={selRunNumber} onChange={e => setSelRunNumber(e.target.value)} placeholder="#" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+                )}
+              </div>
+            </div>
+
+            {/* Initialize schedule button */}
+            {selCampaign && !campaignGroups[selCampaign.id]?.length && (
+              <div style={{ marginTop: 12 }}>
+                {!showInitSchedule ? (
+                  <button onClick={() => setShowInitSchedule(true)} style={{ padding: "6px 14px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.muted, cursor: "pointer", fontFamily: FONT }}>Initialize Schedule for This Campaign →</button>
+                ) : (
+                  <div style={{ padding: 16, background: C.bg, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Create placeholder dates for all {selCampaign.totalRuns} runs?</p>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Start date</label>
+                        <input type="date" value={initStartDate} onChange={e => setInitStartDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Frequency</label>
+                        <select value={initFrequency} onChange={e => setInitFrequency(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontFamily: FONT, fontSize: 13 }}>
+                          <option value="every_send">Every send (3x/week)</option>
+                          <option value="2x_week">2x per week</option>
+                          <option value="1x_week">1x per week</option>
+                          <option value="every_other_week">Every other week</option>
+                          <option value="1x_month">1x per month</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn onClick={initializeSchedule} color={C.white} bg={C.accent} disabled={initSaving || !initStartDate} small>{initSaving ? "Creating..." : "Create Placeholders"}</Btn>
+                      <Btn onClick={() => setShowInitSchedule(false)} color={C.dim} bg={C.card} small>Cancel</Btn>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 16 }}>
               <div>
                 <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Scheduled Date</label>
                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Headline</label>
-                <input value={newHeadline} onChange={e => setNewHeadline(e.target.value)} placeholder="Ad headline" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Headline (optional)</label>
+                <input value={newHeadline} onChange={e => setNewHeadline(e.target.value)} placeholder="Optional label" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
               </div>
             </div>
             <div style={{ marginTop: 12 }}>
@@ -2075,8 +2338,17 @@
               <input value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Internal notes" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <Btn onClick={() => createPlacement(false)} color={C.muted} bg={C.bg} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Save as Draft</Btn>
-              <Btn onClick={() => createPlacement(true)} color={C.white} bg={C.accent} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Send for Review →</Btn>
+              {editingPlaceholder ? (
+                <React.Fragment>
+                  <Btn onClick={() => fillPlaceholder(editingPlaceholder)} color={C.white} bg={C.accent} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Save Content to Placeholder</Btn>
+                  <Btn onClick={() => { setEditingPlaceholder(null); setNewImage(null); setNewHtml(""); setNewDate(""); setNewHeadline(""); setNewNotes(""); }} color={C.dim} bg={C.bg}>Cancel</Btn>
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <Btn onClick={() => createPlacement(false)} color={C.muted} bg={C.bg} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Save as Draft</Btn>
+                  <Btn onClick={() => createPlacement(true)} color={C.white} bg={C.accent} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Send for Review →</Btn>
+                </React.Fragment>
+              )}
             </div>
           </div>
 
@@ -2088,110 +2360,46 @@
             </div>
           )}
 
-          {/* Placement cards */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {ordered.map(p => {
-              const sc = statusColor[p.status];
-              const full = expandedData[p.placementId];
-              const isExpanded = expandedId === p.placementId;
-              const ri = replaceImage[p.placementId];
-              const ef = editFields[p.placementId] || {};
-              const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
-
-              return (
-                <div key={p.placementId} style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: isMobile ? 16 : 20, borderLeft: `3px solid ${sc}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: sc, fontSize: 13, fontWeight: 700 }}>{statusIcon[p.status]} {statusLabel[p.status]}</span>
-                      {p.status === "pending_review" && p.submittedAt && <span style={{ fontSize: 11, color: C.dim }}>— Sent {new Date(p.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
-                      {p.status === "approved" && p.approvedAt && <span style={{ fontSize: 11, color: C.dim }}>— {new Date(p.approvedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
-                      {p.version > 1 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#3B82F6", fontWeight: 600 }}>v{p.version}</span>}
-                    </div>
-                    {p.status === "approved" && approvedIds.length > 1 && (
-                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: C.dim }}>
-                        <input type="checkbox" checked={!!batchSelect[p.placementId]} onChange={e => setBatchSelect(s => ({ ...s, [p.placementId]: e.target.checked }))} />
-                      </label>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 16, flexDirection: isMobile ? "column" : "row" }}>
-                    {/* Thumbnail / content preview */}
-                    <div style={{ flexShrink: 0 }}>
-                      {(p.contentType === "html" || full?.contentType === "html") ? (
-                        <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}>
-                          <span style={{ fontSize: 24 }}>&#128196;</span>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: C.accent }}>Newsletter Content</span>
-                        </div>
-                      ) : (ri || (full && full.imageData)) ? (
-                        <ImageViewer src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}` }} />
-                      ) : (
-                        <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                          <span style={{ fontSize: 11, color: C.dim }}>{full === undefined ? "Click to load" : "No image"}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{fmtD(p.scheduledDate)}</p>
-                      <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{p.headline || "Untitled"}</p>
-
-                      {/* Changes requested feedback */}
-                      {p.status === "changes_requested" && lastChange && (
-                        <div style={{ background: C.redDim, borderRadius: 8, padding: 12, marginBottom: 12, border: `1px solid rgba(248,113,113,0.2)` }}>
-                          <p style={{ fontSize: 11, fontWeight: 600, color: C.red, marginBottom: 4 }}>Sponsor feedback:</p>
-                          <p style={{ fontSize: 13, color: C.text, fontStyle: "italic" }}>"{lastChange.message}"</p>
-                        </div>
-                      )}
-
-                      {full?.notes && <p style={{ fontSize: 12, color: C.dim, fontStyle: "italic", marginBottom: 8 }}>Notes: {full.notes}</p>}
-
-                      {/* Action buttons by status */}
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-                        {p.status === "draft" && (
-                          <React.Fragment>
-                            <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Edit</Btn>
-                            <Btn onClick={() => doAction("submit", p.placementId)} color={C.white} bg={C.accent} small>Send for Review →</Btn>
-                            <Btn onClick={() => setConfirmDelete(p.placementId)} color={C.red} bg={C.redDim} small>Delete</Btn>
-                          </React.Fragment>
-                        )}
-                        {p.status === "pending_review" && (
-                          <Btn onClick={() => doAction("recall", p.placementId)} color={C.amber} bg={C.amberDim} small>Recall</Btn>
-                        )}
-                        {p.status === "changes_requested" && (
-                          <React.Fragment>
-                            {(p.contentType === "html" || full?.contentType === "html") ? (
-                              <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Replace Content</Btn>
-                            ) : (
-                              <Btn onClick={() => { if (!replaceRefs.current[p.placementId]) replaceRefs.current[p.placementId] = document.createElement("input"); const inp = replaceRefs.current[p.placementId]; inp.type = "file"; inp.accept = "image/*"; inp.onchange = (ev) => handleReplaceFile(p.placementId, ev.target.files[0]); inp.click(); }} color={C.accent} bg={C.accentDim} small>Replace Image</Btn>
-                            )}
-                            <Btn onClick={() => doResubmit(p.placementId)} color={C.white} bg={C.accent} small>Resubmit for Review →</Btn>
-                          </React.Fragment>
-                        )}
-                        {p.status === "approved" && (
-                          <Btn onClick={() => doAction("complete", p.placementId)} color={C.white} bg={C.green} small>Mark as Completed</Btn>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Delete confirmation */}
-                  {confirmDelete === p.placementId && (
-                    <div style={{ marginTop: 12, padding: 12, background: C.redDim, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 13, color: C.red }}>Delete this draft?</span>
-                      <Btn onClick={() => { doAction("delete", p.placementId); setConfirmDelete(null); }} color={C.white} bg={C.red} small>Yes, Delete</Btn>
-                      <Btn onClick={() => setConfirmDelete(null)} color={C.dim} bg={C.card} small>Cancel</Btn>
-                    </div>
-                  )}
+          {/* Campaign-grouped placement cards */}
+          {contracts.map(c => {
+            const allItems = campaignGroups[c.id];
+            if (!allItems || allItems.length === 0) return null;
+            const items = statusFilter ? allItems.filter(p => p.status === statusFilter) : allItems;
+            if (items.length === 0) return null;
+            const filled = allItems.filter(p => p.status !== "placeholder").length;
+            return (
+              <div key={c.id} style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>{c.name}</p>
+                  <span style={{ fontSize: 12, color: C.dim }}>— {filled} of {c.totalRuns || allItems.length} runs filled</span>
                 </div>
-              );
-            })}
-          </div>
-          {ordered.length === 0 && <div style={{ textAlign: "center", padding: 32, background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}><p style={{ color: C.dim, fontSize: 13 }}>No placements yet</p></div>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {items.map(p => renderPlacementCard(p))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Other placements (no matching campaign) */}
+          {(() => {
+            const filteredOther = statusFilter ? otherPlacements.filter(p => p.status === statusFilter) : otherPlacements;
+            return filteredOther.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              {Object.keys(campaignGroups).length > 0 && <p style={{ fontSize: 14, fontWeight: 700, color: C.muted, marginBottom: 10 }}>Other Placements</p>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredOther.map(p => renderPlacementCard(p))}
+              </div>
+            </div>
+          );
+          })()}
+
+          {placements.length === 0 && <div style={{ textAlign: "center", padding: 32, background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}><p style={{ color: C.dim, fontSize: 13 }}>No placements yet</p></div>}
         </div>
       );
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // SPONSOR PLACEMENTS (sponsor-facing Placements tab)
+    // SPONSOR PLACEMENTS (sponsor-facing Placements tab) — Timeline
     // ═══════════════════════════════════════════════════════════════
     function SponsorPlacements({ shareToken, isMobile }) {
       const [placements, setPlacements] = useState([]);
@@ -2203,9 +2411,8 @@
       const [approving, setApproving] = useState(null);
       const [submittingChange, setSubmittingChange] = useState(null);
       const [toast, setToast] = useState(null);
-      const [lightbox, setLightbox] = useState(null);
-      const [showAllCompleted, setShowAllCompleted] = useState(false);
-      const [fadingOut, setFadingOut] = useState(null);
+      const [expanded, setExpanded] = useState({});
+      const [selectedCampaign, setSelectedCampaign] = useState("all");
 
       const fetchList = async () => {
         try {
@@ -2226,11 +2433,16 @@
 
       useEffect(() => { fetchList(); }, []);
 
-      // Auto-fetch content for review items
-      const reviewItems = placements.filter(p => p.status === "pending_review");
-      useEffect(() => { reviewItems.forEach(p => fetchFull(p.placementId)); }, [reviewItems.map(p => p.placementId + p.version).join(",")]);
+      // Auto-fetch + auto-expand review items
+      const reviewItems = placements.filter(p => p.status === "pending_review" || p.status === "changes_requested");
+      useEffect(() => {
+        reviewItems.forEach(p => fetchFull(p.placementId));
+        const autoExpand = {};
+        reviewItems.forEach(p => { autoExpand[p.placementId] = true; });
+        setExpanded(prev => ({ ...prev, ...autoExpand }));
+      }, [reviewItems.map(p => p.placementId + p.version).join(",")]);
 
-      // Listen for iframe height messages (HTML placements)
+      // Listen for iframe height messages
       useEffect(() => {
         const handler = (e) => {
           if (e.data?.type === "iframeHeight" && e.data.id && e.data.height) {
@@ -2247,11 +2459,10 @@
         try {
           const res = await fetch(`/api/sponsor-placements?action=approve&token=${shareToken}&placementId=${pid}`, { method: "POST", headers: { "Content-Type": "application/json" } });
           if (res.ok) {
-            setFadingOut(pid);
             setConfirmApprove(null);
             setToast("Approved!");
             setTimeout(() => setToast(null), 2500);
-            setTimeout(async () => { setFadingOut(null); await fetchList(); }, 600);
+            setTimeout(async () => { await fetchList(); }, 400);
           }
         } catch {}
         setApproving(null);
@@ -2274,220 +2485,232 @@
         setSubmittingChange(null);
       };
 
+      const toggleExpand = (pid) => {
+        setExpanded(prev => ({ ...prev, [pid]: !prev[pid] }));
+        if (!fullData[pid]) fetchFull(pid);
+      };
+
       if (loading) return <div style={{ textAlign: "center", padding: 40, color: C.dim }}><p>Loading...</p></div>;
+
+      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "";
+
+      // Campaigns for selector
+      const campaigns = {};
+      placements.forEach(p => {
+        if (p.contractId && p.campaignName) {
+          if (!campaigns[p.contractId]) campaigns[p.contractId] = { name: p.campaignName, totalRuns: p.totalRuns || 0, contractId: p.contractId };
+        }
+      });
+      const campaignList = Object.values(campaigns);
+      const showCampaignSelector = campaignList.length > 1;
+
+      // Filter placements by selected campaign
+      const filtered = selectedCampaign === "all" ? placements : placements.filter(p => p.contractId === selectedCampaign);
+
+      // Review count for banner
+      const needsReview = filtered.filter(p => p.status === "pending_review" || p.status === "changes_requested");
+
+      // Progress per campaign
+      const getProgress = (items) => {
+        const c = { completed: 0, approved: 0, pending_review: 0, changes_requested: 0, placeholder: 0 };
+        items.forEach(p => { if (c[p.status] !== undefined) c[p.status]++; });
+        return c;
+      };
+
       if (placements.length === 0) return (
         <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
-          <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.6 }}>No placements yet. Your first placement will appear here when it's ready for review.</p>
+          <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.6 }}>No placements scheduled yet. Your sponsorship manager will add them as send dates approach.</p>
         </div>
       );
 
-      const review = placements.filter(p => p.status === "pending_review").sort((a, b) => new Date(a.scheduledDate || "9999") - new Date(b.scheduledDate || "9999"));
-      const upcoming = placements.filter(p => p.status === "approved").sort((a, b) => new Date(a.scheduledDate || "9999") - new Date(b.scheduledDate || "9999"));
-      const changesReq = placements.filter(p => p.status === "changes_requested");
-      const completed = placements.filter(p => p.status === "completed").sort((a, b) => new Date(b.scheduledDate || 0) - new Date(a.scheduledDate || 0));
-      const visibleCompleted = showAllCompleted ? completed : completed.slice(0, 6);
-      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+      // Status styling
+      const rowIcon = (status) => {
+        if (status === "completed") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#22C55E", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, flexShrink: 0 }}>&#10003;</span>;
+        if (status === "pending_review" || status === "changes_requested") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#E8909C", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, flexShrink: 0 }}>!</span>;
+        if (status === "approved") return <span style={{ width: 24, height: 24, borderRadius: 12, border: "2px solid #3B82F6", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#3B82F6", fontSize: 13, flexShrink: 0 }}>&#10003;</span>;
+        return <span style={{ width: 24, height: 24, borderRadius: 12, border: "2px dashed #D1D5DB", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} />;
+      };
+      const rowLabel = (status) => {
+        if (status === "completed") return <span style={{ fontSize: 13, color: "#6B7280" }}>Completed</span>;
+        if (status === "pending_review" || status === "changes_requested") return <span style={{ fontSize: 13, color: "#E8909C", fontWeight: 700 }}>Needs Your Review</span>;
+        if (status === "approved") return <span style={{ fontSize: 13, color: "#3B82F6" }}>Approved — Scheduled</span>;
+        return <span style={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic" }}>Creative coming soon</span>;
+      };
+      const rowBg = (status) => {
+        if (status === "pending_review" || status === "changes_requested") return "#FDF2F4";
+        return "#fff";
+      };
+
+      const renderContent = (p) => {
+        const full = fullData[p.placementId];
+        const isReview = p.status === "pending_review" || p.status === "changes_requested";
+        const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
+        const showChanges = showChangeForm === p.placementId;
+
+        return (
+          <div style={{ maxWidth: 600, margin: "16px auto 0", paddingBottom: 8 }}>
+            {/* Content: HTML iframe or Image */}
+            {(full?.contentType === "html" && full?.htmlContent) ? (
+              <div style={{ marginBottom: 12, position: "relative" }}>
+                {p.version > 1 && <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1 }}>Updated v{p.version}</span>}
+                <iframe sandbox="allow-scripts allow-popups allow-popups-to-navigate-user-activation" srcDoc={buildSrcdocHtml(full.htmlContent, p.placementId)} style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 8, minHeight: 400, display: "block" }} data-placement-id={p.placementId} />
+              </div>
+            ) : full?.imageData ? (
+              <div style={{ marginBottom: 12 }}>
+                <ImageViewer src={full.imageData} style={{ width: "100%", maxWidth: 480 }}>
+                  {p.version > 1 && <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1, pointerEvents: "none" }}>Updated v{p.version}</span>}
+                </ImageViewer>
+                {full.previewUrl && <a href={full.previewUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 12px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13, color: "#666", textDecoration: "none", fontFamily: FONT }}>View Web Preview &#8599;</a>}
+              </div>
+            ) : (
+              <div style={{ width: "100%", height: 200, background: "#F3F4F6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <span style={{ color: "#9CA3AF", fontSize: 13 }}>Loading content...</span>
+              </div>
+            )}
+
+            {/* Resubmission note */}
+            {p.version > 1 && lastChange?.message && (
+              <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 13 }}>
+                <p style={{ color: "#3B82F6", fontWeight: 600, marginBottom: 4 }}>Updated based on your feedback</p>
+                <p style={{ color: "#6B7280", fontStyle: "italic" }}>Your previous note: "{lastChange.message}"</p>
+              </div>
+            )}
+
+            {/* Approve / Request Changes — only for review items */}
+            {isReview && (
+              <div>
+                {confirmApprove === p.placementId ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, color: "#374151" }}>Approve this placement?</span>
+                    <button onClick={() => handleApprove(p.placementId)} disabled={approving === p.placementId} style={{ padding: "8px 20px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{approving === p.placementId ? "Approving..." : "Yes, Approve"}</button>
+                    <button onClick={() => setConfirmApprove(null)} style={{ padding: "8px 16px", background: "none", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 14, color: "#6B7280", cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
+                    <button onClick={() => setConfirmApprove(p.placementId)} style={{ padding: "10px 24px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Approve &#10003;</button>
+                    <button onClick={() => setShowChangeForm(showChanges ? null : p.placementId)} style={{ padding: "10px 24px", background: "none", border: "1px solid #6B7280", borderRadius: 8, fontSize: 14, color: "#374151", cursor: "pointer", fontFamily: FONT }}>Request Changes</button>
+                  </div>
+                )}
+                {showChanges && (
+                  <div style={{ marginTop: 16 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 8 }}>What would you like changed?</p>
+                    <textarea value={changeFeedback[p.placementId] || ""} onChange={e => setChangeFeedback(f => ({ ...f, [p.placementId]: e.target.value }))} placeholder="Describe the changes needed" rows={3} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #D1D5DB", fontFamily: FONT, fontSize: 14, resize: "vertical", color: "#111827" }} />
+                    <button onClick={() => handleRequestChanges(p.placementId)} disabled={submittingChange === p.placementId || !(changeFeedback[p.placementId] || "").trim()} style={{ marginTop: 8, padding: "10px 20px", background: "#E8909C", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT, opacity: (changeFeedback[p.placementId] || "").trim() ? 1 : 0.5 }}>{submittingChange === p.placementId ? "Submitting..." : "Submit Feedback"}</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      };
 
       return (
         <div>
           {/* Toast */}
           {toast && <div className="fade-in" style={{ position: "fixed", top: 24, right: 24, background: "#22C55E", color: "#fff", padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>{toast}</div>}
 
-          {/* Zone 1: Needs Your Review */}
-          <div style={{ marginBottom: 40 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Needs Your Review</h2>
-              {review.length > 0 && <span style={{ fontSize: 13, color: C.dim }}>{review.length} item{review.length !== 1 ? "s" : ""}</span>}
+          {/* Campaign Selector */}
+          {showCampaignSelector && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+              <button onClick={() => setSelectedCampaign("all")} style={{ padding: "6px 16px", borderRadius: 20, border: `1px solid ${selectedCampaign === "all" ? "#E8909C" : "#D1D5DB"}`, background: selectedCampaign === "all" ? "#FDF2F4" : "#fff", color: selectedCampaign === "all" ? "#E8909C" : "#6B7280", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>All Campaigns</button>
+              {campaignList.map(c => (
+                <button key={c.contractId} onClick={() => setSelectedCampaign(c.contractId)} style={{ padding: "6px 16px", borderRadius: 20, border: `1px solid ${selectedCampaign === c.contractId ? "#E8909C" : "#D1D5DB"}`, background: selectedCampaign === c.contractId ? "#FDF2F4" : "#fff", color: selectedCampaign === c.contractId ? "#E8909C" : "#6B7280", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>{c.name} ({c.totalRuns} runs)</button>
+              ))}
             </div>
+          )}
 
-            {review.length === 0 && changesReq.length === 0 ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", background: "rgba(34,197,94,0.06)", borderRadius: 10, border: "1px solid rgba(34,197,94,0.15)" }}>
-                <span style={{ color: "#22C55E", fontSize: 18 }}>&#10003;</span>
-                <span style={{ fontSize: 14, color: C.muted }}>You're all caught up — no placements need your review right now.</span>
+          {/* Action Banner */}
+          {needsReview.length > 0 && (
+            <div style={{ background: "#FDF2F4", borderLeft: "3px solid #E8909C", borderRadius: 8, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{needsReview.length} placement{needsReview.length !== 1 ? "s" : ""} need{needsReview.length === 1 ? "s" : ""} your review</span>
+              <a href="#" onClick={e => { e.preventDefault(); const el = document.querySelector("[data-review-row]"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }} style={{ fontSize: 13, color: "#E8909C", fontWeight: 600, textDecoration: "none", fontFamily: FONT }}>Review Now ↓</a>
+            </div>
+          )}
+
+          {/* Campaign Progress Summary */}
+          {(selectedCampaign === "all" ? campaignList : campaignList.filter(c => c.contractId === selectedCampaign)).map(c => {
+            const items = placements.filter(p => p.contractId === c.contractId);
+            const prog = getProgress(items);
+            const total = c.totalRuns || items.length;
+            const completedCount = prog.completed;
+            const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+            return (
+              <div key={c.contractId} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{c.name}</p>
+                <div style={{ height: 6, background: "#F3F4F6", borderRadius: 3, marginBottom: 8, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: pct + "%", background: "#22C55E", borderRadius: 3, transition: "width 0.3s" }} />
+                </div>
+                <p style={{ fontSize: 13, color: "#6B7280" }}>
+                  {completedCount} of {total} completed
+                  {prog.approved > 0 && <span> · {prog.approved} approved</span>}
+                  {(prog.pending_review + prog.changes_requested) > 0 && <span> · {prog.pending_review + prog.changes_requested} needs review</span>}
+                  {prog.placeholder > 0 && <span> · {prog.placeholder} remaining</span>}
+                </p>
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {review.map(p => {
-                  const full = fullData[p.placementId];
-                  const isFading = fadingOut === p.placementId;
-                  const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
-                  const showChanges = showChangeForm === p.placementId;
+            );
+          })}
 
-                  return (
-                    <div key={p.placementId} className="fade-in" style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: isMobile ? 16 : 24, opacity: isFading ? 0 : 1, transform: isFading ? "translateY(-10px)" : "none", transition: "opacity 0.4s, transform 0.4s" }}>
-                      {/* Content: HTML iframe or Image */}
-                      {(full?.contentType === "html" && full?.htmlContent) ? (
-                        <div style={{ marginBottom: 16, position: "relative" }}>
-                          {p.version > 1 && (
-                            <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1 }}>Updated v{p.version}</span>
-                          )}
-                          <iframe
-                            sandbox="allow-scripts allow-popups allow-popups-to-navigate-user-activation"
-                            srcDoc={buildSrcdocHtml(full.htmlContent, p.placementId)}
-                            style={{ width: "100%", maxWidth: 600, border: "1px solid #E5E7EB", borderRadius: 8, minHeight: 400, display: "block" }}
-                            data-placement-id={p.placementId}
-                          />
-                        </div>
-                      ) : full?.imageData ? (
-                        <div style={{ marginBottom: 16 }}>
-                          <ImageViewer src={full.imageData} style={{ width: "100%", maxWidth: 480 }}>
-                            {p.version > 1 && (
-                              <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1, pointerEvents: "none" }}>Updated v{p.version}</span>
-                            )}
-                          </ImageViewer>
-                          {full.previewUrl && (
-                            <a href={full.previewUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 12px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13, color: "#666", textDecoration: "none", fontFamily: FONT }}>View Web Preview &#8599;</a>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ width: "100%", maxWidth: 480, height: 200, background: "#F3F4F6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                          <span style={{ color: "#9CA3AF", fontSize: 13 }}>Loading content...</span>
-                        </div>
-                      )}
-
-                      {/* Resubmission note */}
-                      {p.version > 1 && lastChange?.message && (
-                        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 13 }}>
-                          <p style={{ color: "#3B82F6", fontWeight: 600, marginBottom: 4 }}>Updated based on your feedback</p>
-                          <p style={{ color: "#6B7280", fontStyle: "italic" }}>Your previous note: "{lastChange.message}"</p>
-                        </div>
-                      )}
-
-                      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{fmtD(p.scheduledDate)}</p>
-                      <p style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>{p.headline || "Untitled"}</p>
-
-                      {/* Approve / Request Changes */}
-                      {confirmApprove === p.placementId ? (
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 14, color: "#374151" }}>Approve this placement for {fmtD(p.scheduledDate)}?</span>
-                          <button onClick={() => handleApprove(p.placementId)} disabled={approving === p.placementId} style={{ padding: "8px 20px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{approving === p.placementId ? "Approving..." : "Yes, Approve"}</button>
-                          <button onClick={() => setConfirmApprove(null)} style={{ padding: "8px 16px", background: "none", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 14, color: "#6B7280", cursor: "pointer", fontFamily: FONT }}>Cancel</button>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
-                          <button onClick={() => setConfirmApprove(p.placementId)} style={{ padding: "10px 24px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT, flex: isMobile ? undefined : "none" }}>Approve &#10003;</button>
-                          <button onClick={() => setShowChangeForm(showChanges ? null : p.placementId)} style={{ padding: "10px 24px", background: "none", border: "1px solid #6B7280", borderRadius: 8, fontSize: 14, color: "#374151", cursor: "pointer", fontFamily: FONT, transition: "border-color 0.15s, color 0.15s" }}>Request Changes</button>
-                        </div>
-                      )}
-
-                      {/* Change request textarea */}
-                      {showChanges && (
-                        <div style={{ marginTop: 16, overflow: "hidden", transition: "max-height 0.3s" }}>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 8 }}>What would you like changed?</p>
-                          <textarea value={changeFeedback[p.placementId] || ""} onChange={e => setChangeFeedback(f => ({ ...f, [p.placementId]: e.target.value }))} placeholder="Describe the changes needed" rows={3} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #D1D5DB", fontFamily: FONT, fontSize: 14, resize: "vertical", color: "#111827" }} />
-                          <button onClick={() => handleRequestChanges(p.placementId)} disabled={submittingChange === p.placementId || !(changeFeedback[p.placementId] || "").trim()} style={{ marginTop: 8, padding: "10px 20px", background: "#E8909C", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT, opacity: (changeFeedback[p.placementId] || "").trim() ? 1 : 0.5 }}>{submittingChange === p.placementId ? "Submitting..." : "Submit Feedback"}</button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Timeline */}
+          <div style={{ position: "relative", paddingLeft: isMobile ? 0 : 36 }}>
+            {/* Vertical line */}
+            {!isMobile && filtered.length > 1 && (
+              <div style={{ position: "absolute", left: 11, top: 12, bottom: 12, width: 1, background: "#E5E7EB" }} />
             )}
-          </div>
 
-          {/* Zone 2: Upcoming (approved) */}
-          {upcoming.length > 0 && (
-            <div style={{ marginBottom: 40 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Upcoming</h2>
-                <span style={{ fontSize: 13, color: C.dim }}>{upcoming.length} placement{upcoming.length !== 1 ? "s" : ""}</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
-                {upcoming.map(p => {
-                  const full = fullData[p.placementId];
-                  const isHtml = p.contentType === "html" || full?.contentType === "html";
-                  return (
-                    <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer", transition: "box-shadow 0.15s" }}>
-                      {isHtml ? (
-                        <div style={{ width: "100%", height: 100, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 6, marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                          <span style={{ fontSize: 20 }}>&#128196;</span>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: "#E8909C" }}>Newsletter Preview</span>
-                        </div>
-                      ) : full?.imageData ? (
-                        <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
-                      ) : (
-                        <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontSize: 10, color: "#9CA3AF" }}>Click to load</span>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
-                        <span style={{ fontSize: 12, color: "#6B7280" }}>{p.scheduledDate ? new Date(p.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
-                        <span style={{ color: "#22C55E", fontSize: 12, fontWeight: 700 }}>&#10003;</span>
+            {filtered.map((p, idx) => {
+              const isReview = p.status === "pending_review" || p.status === "changes_requested";
+              const isPlaceholder = p.status === "placeholder";
+              const isExp = !!expanded[p.placementId];
+              const canExpand = !isPlaceholder;
+              const runLabel = p.runNumber ? `Run ${p.runNumber}${p.totalRuns ? ` of ${p.totalRuns}` : ""}` : (p.headline || "Untitled");
+
+              return (
+                <div key={p.placementId} data-review-row={isReview ? "true" : undefined} style={{ position: "relative", marginBottom: 2 }}>
+                  {/* Row header */}
+                  <div
+                    onClick={() => canExpand && toggleExpand(p.placementId)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: isMobile ? 10 : 12, padding: isMobile ? "12px 12px" : "12px 16px",
+                      background: rowBg(p.status), borderRadius: 8, cursor: canExpand ? "pointer" : "default",
+                      border: isReview ? "1px solid rgba(232,144,156,0.3)" : "1px solid transparent",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={e => { if (canExpand) e.currentTarget.style.background = isReview ? "#FBEAED" : "#F9FAFB"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = rowBg(p.status); }}
+                  >
+                    {!isMobile && <div style={{ position: "absolute", left: -36, top: "50%", transform: "translateY(-50%)" }}>{rowIcon(p.status)}</div>}
+                    {isMobile && rowIcon(p.status)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: isPlaceholder ? "#9CA3AF" : "#111827" }}>{runLabel}</span>
+                        <span style={{ fontSize: 12, color: "#9CA3AF" }}>·</span>
+                        <span style={{ fontSize: 13, color: "#6B7280" }}>{fmtD(p.scheduledDate)}</span>
+                        <span style={{ fontSize: 12, color: "#9CA3AF" }}>·</span>
+                        {rowLabel(p.status)}
+                        {p.version > 1 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#3B82F6", fontWeight: 600 }}>v{p.version}</span>}
                       </div>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline || "Untitled"}</p>
+                      {p.campaignName && !p.runNumber && <p style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>{p.campaignName}</p>}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Zone 3: Completed */}
-          {completed.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Completed</h2>
-                <span style={{ fontSize: 13, color: C.dim }}>{completed.length} placement{completed.length !== 1 ? "s" : ""}</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, opacity: 0.7 }}>
-                {visibleCompleted.map(p => {
-                  const full = fullData[p.placementId];
-                  const isHtml = p.contentType === "html" || full?.contentType === "html";
-                  return (
-                    <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer" }}>
-                      {isHtml ? (
-                        <div style={{ width: "100%", height: 100, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 6, marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                          <span style={{ fontSize: 20 }}>&#128196;</span>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: "#E8909C" }}>Newsletter Preview</span>
-                        </div>
-                      ) : full?.imageData ? (
-                        <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
-                      ) : (
-                        <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontSize: 10, color: "#9CA3AF" }}>Click to load</span>
-                        </div>
-                      )}
-                      <p style={{ fontSize: 12, color: "#6B7280" }}>{p.scheduledDate ? new Date(p.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</p>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline || "Untitled"}</p>
-                    </div>
-                  );
-                })}
-              </div>
-              {completed.length > 6 && !showAllCompleted && (
-                <button onClick={() => setShowAllCompleted(true)} style={{ display: "block", margin: "12px auto 0", padding: "8px 20px", background: "none", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, color: "#6B7280", cursor: "pointer", fontFamily: FONT }}>Show More ({completed.length - 6} more)</button>
-              )}
-            </div>
-          )}
-
-          {/* Lightbox */}
-          {lightbox && (
-            <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
-              <div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: "#fff", borderRadius: 16, padding: isMobile ? 16 : 24, maxWidth: 600, width: "100%", maxHeight: "90vh", overflow: "auto", position: "relative" }}>
-                <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, color: "#6B7280", cursor: "pointer" }}>&#10005;</button>
-                {(lightbox.contentType === "html" && lightbox.htmlContent) ? (
-                  <div style={{ marginBottom: 16 }}>
-                    <iframe
-                      sandbox="allow-scripts allow-popups allow-popups-to-navigate-user-activation"
-                      srcDoc={buildSrcdocHtml(lightbox.htmlContent, "lightbox")}
-                      style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 8, minHeight: 300, display: "block" }}
-                      data-placement-id="lightbox"
-                    />
-                  </div>
-                ) : lightbox.imageData ? (
-                  <div style={{ marginBottom: 16 }}>
-                    <ImageViewer src={lightbox.imageData} style={{ width: "100%", borderRadius: 8 }} />
-                    {lightbox.previewUrl && (
-                      <a href={lightbox.previewUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 12px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13, color: "#666", textDecoration: "none", fontFamily: FONT }}>View Web Preview &#8599;</a>
+                    {canExpand && (
+                      <span style={{ fontSize: 12, color: "#9CA3AF", flexShrink: 0 }}>{isExp ? "▲" : "▼"}</span>
                     )}
                   </div>
-                ) : null}
-                <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{lightbox.scheduledDate ? new Date(lightbox.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}</p>
-                <p style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{lightbox.headline || "Untitled"}</p>
-                {lightbox.approvedAt && <p style={{ fontSize: 13, color: "#22C55E" }}>Approved on {new Date(lightbox.approvedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
-                {lightbox.completedAt && <p style={{ fontSize: 13, color: "#6B7280" }}>Completed {new Date(lightbox.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
-              </div>
-            </div>
-          )}
+
+                  {/* Expanded content */}
+                  {isExp && canExpand && (
+                    <div style={{ padding: isMobile ? "0 12px 12px" : "0 16px 16px", background: rowBg(p.status), borderRadius: "0 0 8px 8px", marginTop: -2 }}>
+                      {renderContent(p)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom contact */}
+          <p style={{ textAlign: "center", fontSize: 13, color: "#9CA3AF", marginTop: 32, lineHeight: 1.6 }}>
+            Questions about your placements? Reach out to Danielle at <a href="mailto:danielle@themommy.news" style={{ color: "#E8909C", textDecoration: "none" }}>danielle@themommy.news</a>
+          </p>
         </div>
       );
     }
