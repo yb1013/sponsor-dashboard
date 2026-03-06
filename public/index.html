@@ -1808,6 +1808,26 @@
 
       const headers = { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
 
+      // Global paste listener for HTML paste mode
+      useEffect(() => {
+        if (contentMode !== "html" || newHtml) return;
+        const handler = (e) => {
+          // Don't capture if user is typing in an input/textarea
+          const tag = document.activeElement?.tagName;
+          if (tag === "INPUT" || tag === "TEXTAREA") return;
+          e.preventDefault();
+          const html = e.clipboardData.getData("text/html");
+          const text = e.clipboardData.getData("text/plain");
+          if (html && html.trim().length > 10) {
+            setNewHtml(sanitizeHtml(html)); setHtmlWarning(null);
+          } else if (text) {
+            setHtmlWarning("Only plain text was captured. Try selecting the content directly from the browser preview of your newsletter (not the Beehiiv editor) and copying again.");
+          }
+        };
+        document.addEventListener("paste", handler);
+        return () => document.removeEventListener("paste", handler);
+      }, [contentMode, newHtml]);
+
       const fetchPlacements = async () => {
         try {
           const res = await fetch(`/api/placements?action=list&sponsorId=${sponsorId}`, { headers });
@@ -1953,31 +1973,13 @@
               <div>
                 {!newHtml ? (
                   <div
-                    contentEditable="true"
-                    suppressContentEditableWarning={true}
-                    onPaste={(e) => {
-                      e.preventDefault();
-                      const html = e.clipboardData.getData("text/html");
-                      const text = e.clipboardData.getData("text/plain");
-                      if (html && html.trim().length > 10) {
-                        setNewHtml(sanitizeHtml(html)); setHtmlWarning(null);
-                      } else if (text) {
-                        setHtmlWarning("Only plain text was captured. Try selecting the content directly from the browser preview of your newsletter (not the Beehiiv editor) and copying again.");
-                      }
-                      e.target.textContent = "";
-                    }}
-                    onInput={(e) => { e.target.textContent = ""; }}
-                    onKeyDown={(e) => { if (!(e.ctrlKey || e.metaKey)) e.preventDefault(); }}
                     style={{
-                      border: `2px dashed ${C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
-                      cursor: "text", outline: "none", transition: "border-color 0.15s, background 0.15s",
-                      caretColor: "transparent", userSelect: "none",
+                      border: `2px dashed #E8909C`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
+                      background: "rgba(232,144,156,0.05)",
                     }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "#E8909C"; e.currentTarget.style.background = "rgba(232,144,156,0.05)"; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = "transparent"; e.currentTarget.textContent = ""; }}
                   >
-                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4, pointerEvents: "none" }}>Click here, then paste your newsletter content (Ctrl+V)</p>
-                    <p style={{ color: C.dim, fontSize: 12, pointerEvents: "none" }}>HTML from the browser preview of your newsletter</p>
+                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Paste your newsletter content anywhere on this page (Ctrl+V)</p>
+                    <p style={{ color: C.dim, fontSize: 12 }}>Copy from the browser preview of your newsletter, then press Ctrl+V</p>
                   </div>
                 ) : (
                   <div>
