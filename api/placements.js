@@ -42,11 +42,16 @@ export default async function handler(req, res) {
 
   // ─── Create new placement ─────────────────────────────
   if (action === "create" && req.method === "POST") {
-    const { sponsorId: sid, shareToken: sToken, contractId, scheduledDate, headline, notes, imageData, sendForReview } = req.body;
+    const { sponsorId: sid, shareToken: sToken, contractId, scheduledDate, headline, notes, imageData, sendForReview, contentType, htmlContent, previewUrl } = req.body;
     if (!sid) return res.status(400).json({ error: "sponsorId required" });
 
     // Store share token → sponsor ID mapping for sponsor-side lookups
     if (sToken) await redis.set(`placements-map:${sToken}`, sid);
+
+    const ct = contentType === "html" ? "html" : "image";
+    if (ct === "html" && !htmlContent) return res.status(400).json({ error: "htmlContent required for HTML placements" });
+    if (ct === "image" && !imageData) return res.status(400).json({ error: "imageData required for image placements" });
+    if (previewUrl && !/^https?:\/\//.test(previewUrl)) return res.status(400).json({ error: "previewUrl must start with http:// or https://" });
 
     const id = uid();
     const now = new Date().toISOString();
@@ -54,7 +59,10 @@ export default async function handler(req, res) {
     const placement = {
       placementId: id, sponsorId: sid, contractId: contractId || null,
       scheduledDate: scheduledDate || null, headline: headline || "",
-      notes: notes || "", imageData: imageData || null,
+      notes: notes || "", contentType: ct,
+      imageData: ct === "image" ? imageData : null,
+      htmlContent: ct === "html" ? htmlContent : null,
+      previewUrl: (ct === "image" && previewUrl) ? previewUrl : null,
       status, version: 1, createdAt: now,
       submittedAt: sendForReview ? now : null,
       reviewedAt: null, approvedAt: null, completedAt: null,
@@ -63,7 +71,7 @@ export default async function handler(req, res) {
 
     await redis.set(placementKey(sid, id), JSON.stringify(placement));
     await updateIndex(redis, sid, placement);
-    return res.status(200).json({ ok: true, placement: { ...placement, imageData: undefined } });
+    return res.status(200).json({ ok: true, placement: { ...placement, imageData: undefined, htmlContent: undefined } });
   }
 
   // ─── Update placement (edit details / replace image) ──
@@ -73,11 +81,14 @@ export default async function handler(req, res) {
     if (!existing) return res.status(404).json({ error: "Placement not found" });
     const pl = typeof existing === "string" ? JSON.parse(existing) : existing;
 
-    const { scheduledDate, headline, notes, imageData } = req.body;
+    const { scheduledDate, headline, notes, imageData, contentType, htmlContent, previewUrl } = req.body;
     if (scheduledDate !== undefined) pl.scheduledDate = scheduledDate;
     if (headline !== undefined) pl.headline = headline;
     if (notes !== undefined) pl.notes = notes;
     if (imageData !== undefined) pl.imageData = imageData;
+    if (contentType !== undefined) pl.contentType = contentType;
+    if (htmlContent !== undefined) pl.htmlContent = htmlContent;
+    if (previewUrl !== undefined) pl.previewUrl = previewUrl;
 
     await redis.set(placementKey(sponsorId, placementId), JSON.stringify(pl));
     await updateIndex(redis, sponsorId, pl);
@@ -106,8 +117,10 @@ export default async function handler(req, res) {
     if (!existing) return res.status(404).json({ error: "Placement not found" });
     const pl = typeof existing === "string" ? JSON.parse(existing) : existing;
 
-    const { imageData, headline, notes } = req.body;
+    const { imageData, headline, notes, htmlContent, previewUrl } = req.body;
     if (imageData !== undefined) pl.imageData = imageData;
+    if (htmlContent !== undefined) pl.htmlContent = htmlContent;
+    if (previewUrl !== undefined) pl.previewUrl = previewUrl;
     if (headline !== undefined) pl.headline = headline;
     if (notes !== undefined) pl.notes = notes;
 
@@ -227,6 +240,7 @@ async function updateIndex(redis, sponsorId, placement) {
     approvedAt: placement.approvedAt,
     completedAt: placement.completedAt,
     contractId: placement.contractId,
+    contentType: placement.contentType || "image",
   };
   if (idx >= 0) items[idx] = entry;
   else items.push(entry);

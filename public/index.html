@@ -1759,11 +1759,37 @@
       });
     }
 
+    function sanitizeHtml(html) {
+      const allowed = new Set(["IMG","A","TABLE","THEAD","TBODY","TFOOT","TR","TD","TH","DIV","SPAN","P","H1","H2","H3","H4","H5","H6","BR","HR","STRONG","EM","B","I","U","UL","OL","LI","STYLE","CENTER","SECTION","HEADER","FOOTER","FIGURE","FIGCAPTION","BLOCKQUOTE","SUP","SUB"]);
+      const allowedAttrs = new Set(["style","class","href","src","alt","width","height","colspan","rowspan","align","valign","border","cellpadding","cellspacing","target","title","id"]);
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const walk = (node) => {
+        if (node.nodeType === 1) {
+          if (node.tagName === "SCRIPT") { node.remove(); return; }
+          if (!allowed.has(node.tagName)) {
+            while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+            node.remove(); return;
+          }
+          [...node.attributes].forEach(a => {
+            if (a.name.startsWith("on")) node.removeAttribute(a.name);
+            else if (!allowedAttrs.has(a.name)) node.removeAttribute(a.name);
+          });
+        }
+        [...(node.childNodes || [])].forEach(walk);
+      };
+      walk(doc.body);
+      return doc.body.innerHTML;
+    }
+
     function AdminPlacements({ sponsorId, shareToken, contracts, authToken, isMobile }) {
       const [placements, setPlacements] = useState([]);
       const [loading, setLoading] = useState(true);
       const [statusFilter, setStatusFilter] = useState(null);
+      const [contentMode, setContentMode] = useState("html");
       const [newImage, setNewImage] = useState(null);
+      const [newHtml, setNewHtml] = useState("");
+      const [newPreviewUrl, setNewPreviewUrl] = useState("");
+      const [htmlWarning, setHtmlWarning] = useState(null);
       const [newDate, setNewDate] = useState("");
       const [newHeadline, setNewHeadline] = useState("");
       const [newNotes, setNewNotes] = useState("");
@@ -1772,6 +1798,7 @@
       const [expandedId, setExpandedId] = useState(null);
       const [expandedData, setExpandedData] = useState({});
       const [replaceImage, setReplaceImage] = useState({});
+      const [replaceHtml, setReplaceHtml] = useState({});
       const [editFields, setEditFields] = useState({});
       const [batchSelect, setBatchSelect] = useState({});
       const [confirmDelete, setConfirmDelete] = useState(null);
@@ -1807,15 +1834,20 @@
       const handleDrop = (e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
 
       const createPlacement = async (sendForReview) => {
-        if (!newImage) return;
+        if (contentMode === "image" && !newImage) return;
+        if (contentMode === "html" && !newHtml) return;
         setSaving(true);
         const activeContract = contracts.find(c => c.isActive);
+        const body = {
+          sponsorId, shareToken, contractId: activeContract?.id || null,
+          scheduledDate: newDate || null, headline: newHeadline, notes: newNotes,
+          contentType: contentMode, sendForReview,
+        };
+        if (contentMode === "html") body.htmlContent = newHtml;
+        else { body.imageData = newImage; if (newPreviewUrl.trim()) body.previewUrl = newPreviewUrl.trim(); }
         try {
-          await fetch("/api/placements?action=create", {
-            method: "POST", headers,
-            body: JSON.stringify({ sponsorId, shareToken, contractId: activeContract?.id || null, scheduledDate: newDate || null, headline: newHeadline, notes: newNotes, imageData: newImage, sendForReview }),
-          });
-          setNewImage(null); setNewDate(""); setNewHeadline(""); setNewNotes("");
+          await fetch("/api/placements?action=create", { method: "POST", headers, body: JSON.stringify(body) });
+          setNewImage(null); setNewHtml(""); setNewPreviewUrl(""); setNewDate(""); setNewHeadline(""); setNewNotes(""); setHtmlWarning(null);
           await fetchPlacements();
         } catch {}
         setSaving(false);
@@ -1837,11 +1869,13 @@
       const doResubmit = async (pid) => {
         const body = {};
         if (replaceImage[pid]) body.imageData = replaceImage[pid];
+        if (replaceHtml[pid]) body.htmlContent = replaceHtml[pid];
         const ef = editFields[pid];
         if (ef?.headline !== undefined) body.headline = ef.headline;
         if (ef?.notes !== undefined) body.notes = ef.notes;
         await fetch(`/api/placements?action=resubmit&sponsorId=${sponsorId}&placementId=${pid}`, { method: "POST", headers, body: JSON.stringify(body) });
         setReplaceImage(p => { const n = { ...p }; delete n[pid]; return n; });
+        setReplaceHtml(p => { const n = { ...p }; delete n[pid]; return n; });
         setEditFields(p => { const n = { ...p }; delete n[pid]; return n; });
         await fetchPlacements();
       };
@@ -1897,29 +1931,99 @@
           {/* New placement form */}
           <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: isMobile ? 16 : 24, marginBottom: 24 }}>
             <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>+ New Placement</p>
-            {!newImage ? (
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileRef.current?.click()}
-                style={{
-                  border: `2px dashed ${dragOver ? C.accent : C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
-                  cursor: "pointer", transition: "border-color 0.15s", background: dragOver ? "rgba(79,143,247,0.05)" : "transparent",
-                }}
-              >
-                <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Drag & drop placement image here</p>
-                <p style={{ color: C.dim, fontSize: 12 }}>or click to browse</p>
-                <p style={{ color: C.dim, fontSize: 11, marginTop: 8 }}>PNG, JPG — will be compressed to JPEG</p>
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleFile(e.target.files[0])} />
-              </div>
-            ) : (
-              <div style={{ marginBottom: 16 }}>
-                <ImageViewer src={newImage} style={{ maxWidth: 400, width: "100%", borderRadius: 10, border: `1px solid ${C.border}` }} />
-                <button onClick={() => setNewImage(null)} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12 }}>Remove image</button>
+
+            {/* Content mode toggle */}
+            <div style={{ display: "flex", gap: 0, marginBottom: 16, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              {[["html", "Paste Newsletter Content"], ["image", "Upload Image"]].map(([m, label]) => (
+                <button key={m} onClick={() => {
+                  if (m === contentMode) return;
+                  if ((contentMode === "html" && newHtml) || (contentMode === "image" && newImage)) {
+                    if (!confirm("Switching modes will clear the current content. Continue?")) return;
+                  }
+                  setContentMode(m); setNewImage(null); setNewHtml(""); setNewPreviewUrl(""); setHtmlWarning(null); setImgError(null);
+                }} style={{
+                  flex: 1, padding: "8px 12px", border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600,
+                  background: contentMode === m ? C.accent : "transparent", color: contentMode === m ? "#fff" : C.dim, transition: "all 0.15s",
+                }}>{label}</button>
+              ))}
+            </div>
+
+            {/* Mode A: Paste HTML */}
+            {contentMode === "html" && (
+              <div>
+                {!newHtml ? (
+                  <div
+                    tabIndex={0}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const html = e.clipboardData.getData("text/html");
+                      const text = e.clipboardData.getData("text/plain");
+                      if (html && html.trim().length > 10) {
+                        setNewHtml(sanitizeHtml(html)); setHtmlWarning(null);
+                      } else if (text) {
+                        setHtmlWarning("Only plain text was captured. Try selecting the content directly from the browser preview of your newsletter (not the Beehiiv editor) and copying again.");
+                      }
+                    }}
+                    style={{
+                      border: `2px dashed ${C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
+                      cursor: "text", outline: "none", transition: "border-color 0.15s, background 0.15s",
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = "#E8909C"; e.target.style.background = "rgba(232,144,156,0.05)"; }}
+                    onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.background = "transparent"; }}
+                  >
+                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Click here, then paste your newsletter content (Ctrl+V)</p>
+                    <p style={{ color: C.dim, fontSize: 12 }}>HTML from the browser preview of your newsletter</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.greenDim, borderRadius: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>Newsletter content pasted &#10003;</span>
+                      <button onClick={() => { setNewHtml(""); setHtmlWarning(null); }} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 11 }}>Clear</button>
+                      <button onClick={() => { setNewHtml(""); setHtmlWarning(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 11 }}>Replace</button>
+                    </div>
+                    <div style={{ maxWidth: 600, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", background: "#fff", padding: 16, maxHeight: 400, overflowY: "auto", pointerEvents: "none" }}>
+                      <div dangerouslySetInnerHTML={{ __html: newHtml }} />
+                    </div>
+                  </div>
+                )}
+                {htmlWarning && <p style={{ color: C.amber, fontSize: 12, marginTop: 8 }}>{htmlWarning}</p>}
               </div>
             )}
-            {imgError && <p style={{ color: C.red, fontSize: 13, marginTop: 8 }}>{imgError}</p>}
+
+            {/* Mode B: Upload Image */}
+            {contentMode === "image" && (
+              <div>
+                {!newImage ? (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileRef.current?.click()}
+                    style={{
+                      border: `2px dashed ${dragOver ? C.accent : C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
+                      cursor: "pointer", transition: "border-color 0.15s", background: dragOver ? "rgba(79,143,247,0.05)" : "transparent",
+                    }}
+                  >
+                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Drag & drop placement image here</p>
+                    <p style={{ color: C.dim, fontSize: 12 }}>or click to browse</p>
+                    <p style={{ color: C.dim, fontSize: 11, marginTop: 8 }}>PNG, JPG — will be compressed to JPEG</p>
+                    <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleFile(e.target.files[0])} />
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 16 }}>
+                    <ImageViewer src={newImage} style={{ maxWidth: 400, width: "100%", borderRadius: 10, border: `1px solid ${C.border}` }} />
+                    <button onClick={() => setNewImage(null)} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12 }}>Remove image</button>
+                  </div>
+                )}
+                {imgError && <p style={{ color: C.red, fontSize: 13, marginTop: 8 }}>{imgError}</p>}
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Web Preview URL (optional)</label>
+                  <input value={newPreviewUrl} onChange={e => setNewPreviewUrl(e.target.value)} placeholder="https://www.beehiiv.com/..." style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+                  <p style={{ fontSize: 10, color: C.dim, marginTop: 3 }}>Link to the newsletter web preview so the sponsor can click through links</p>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 16 }}>
               <div>
                 <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Scheduled Date</label>
@@ -1935,8 +2039,8 @@
               <input value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Internal notes" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <Btn onClick={() => createPlacement(false)} color={C.muted} bg={C.bg} disabled={saving || !newImage}>Save as Draft</Btn>
-              <Btn onClick={() => createPlacement(true)} color={C.white} bg={C.accent} disabled={saving || !newImage}>Send for Review →</Btn>
+              <Btn onClick={() => createPlacement(false)} color={C.muted} bg={C.bg} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Save as Draft</Btn>
+              <Btn onClick={() => createPlacement(true)} color={C.white} bg={C.accent} disabled={saving || (contentMode === "image" ? !newImage : !newHtml)}>Send for Review →</Btn>
             </div>
           </div>
 
@@ -1975,9 +2079,14 @@
                   </div>
 
                   <div style={{ display: "flex", gap: 16, flexDirection: isMobile ? "column" : "row" }}>
-                    {/* Thumbnail / image */}
+                    {/* Thumbnail / content preview */}
                     <div style={{ flexShrink: 0 }}>
-                      {(ri || (full && full.imageData)) ? (
+                      {(p.contentType === "html" || full?.contentType === "html") ? (
+                        <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}>
+                          <span style={{ fontSize: 24 }}>&#128196;</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: C.accent }}>Newsletter Content</span>
+                        </div>
+                      ) : (ri || (full && full.imageData)) ? (
                         <ImageViewer src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}` }} />
                       ) : (
                         <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
@@ -2013,7 +2122,11 @@
                         )}
                         {p.status === "changes_requested" && (
                           <React.Fragment>
-                            <Btn onClick={() => { if (!replaceRefs.current[p.placementId]) replaceRefs.current[p.placementId] = document.createElement("input"); const inp = replaceRefs.current[p.placementId]; inp.type = "file"; inp.accept = "image/*"; inp.onchange = (ev) => handleReplaceFile(p.placementId, ev.target.files[0]); inp.click(); }} color={C.accent} bg={C.accentDim} small>Replace Image</Btn>
+                            {(p.contentType === "html" || full?.contentType === "html") ? (
+                              <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Replace Content</Btn>
+                            ) : (
+                              <Btn onClick={() => { if (!replaceRefs.current[p.placementId]) replaceRefs.current[p.placementId] = document.createElement("input"); const inp = replaceRefs.current[p.placementId]; inp.type = "file"; inp.accept = "image/*"; inp.onchange = (ev) => handleReplaceFile(p.placementId, ev.target.files[0]); inp.click(); }} color={C.accent} bg={C.accentDim} small>Replace Image</Btn>
+                            )}
                             <Btn onClick={() => doResubmit(p.placementId)} color={C.white} bg={C.accent} small>Resubmit for Review →</Btn>
                           </React.Fragment>
                         )}
@@ -2077,9 +2190,21 @@
 
       useEffect(() => { fetchList(); }, []);
 
-      // Auto-fetch images for review items
+      // Auto-fetch content for review items
       const reviewItems = placements.filter(p => p.status === "pending_review");
       useEffect(() => { reviewItems.forEach(p => fetchFull(p.placementId)); }, [reviewItems.map(p => p.placementId + p.version).join(",")]);
+
+      // Listen for iframe height messages (HTML placements)
+      useEffect(() => {
+        const handler = (e) => {
+          if (e.data?.type === "iframeHeight" && e.data.id && e.data.height) {
+            const iframe = document.querySelector(`iframe[data-placement-id="${e.data.id}"]`);
+            if (iframe) iframe.style.height = (e.data.height + 32) + "px";
+          }
+        };
+        window.addEventListener("message", handler);
+        return () => window.removeEventListener("message", handler);
+      }, []);
 
       const handleApprove = async (pid) => {
         setApproving(pid);
@@ -2154,18 +2279,33 @@
 
                   return (
                     <div key={p.placementId} className="fade-in" style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: isMobile ? 16 : 24, opacity: isFading ? 0 : 1, transform: isFading ? "translateY(-10px)" : "none", transition: "opacity 0.4s, transform 0.4s" }}>
-                      {/* Image */}
-                      {full?.imageData ? (
+                      {/* Content: HTML iframe or Image */}
+                      {(full?.contentType === "html" && full?.htmlContent) ? (
+                        <div style={{ marginBottom: 16, position: "relative" }}>
+                          {p.version > 1 && (
+                            <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1 }}>Updated v{p.version}</span>
+                          )}
+                          <iframe
+                            sandbox="allow-scripts allow-popups allow-popups-to-navigate-user-activation"
+                            srcDoc={'<!DOCTYPE html><html><head><base target="_blank"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;}img{max-width:100%;height:auto;}</style></head><body>' + full.htmlContent + '<script>window.addEventListener("load",function(){window.parent.postMessage({type:"iframeHeight",id:"' + p.placementId + '",height:document.body.scrollHeight},"*");});new ResizeObserver(function(){window.parent.postMessage({type:"iframeHeight",id:"' + p.placementId + '",height:document.body.scrollHeight},"*");}).observe(document.body);<\/script></body></html>'}
+                            style={{ width: "100%", maxWidth: 600, border: "1px solid #E5E7EB", borderRadius: 8, minHeight: 400, display: "block" }}
+                            data-placement-id={p.placementId}
+                          />
+                        </div>
+                      ) : full?.imageData ? (
                         <div style={{ marginBottom: 16 }}>
                           <ImageViewer src={full.imageData} style={{ width: "100%", maxWidth: 480 }}>
                             {p.version > 1 && (
                               <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1, pointerEvents: "none" }}>Updated v{p.version}</span>
                             )}
                           </ImageViewer>
+                          {full.previewUrl && (
+                            <a href={full.previewUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 12px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13, color: "#666", textDecoration: "none", fontFamily: FONT }}>View Web Preview &#8599;</a>
+                          )}
                         </div>
                       ) : (
                         <div style={{ width: "100%", maxWidth: 480, height: 200, background: "#F3F4F6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                          <span style={{ color: "#9CA3AF", fontSize: 13 }}>Loading image...</span>
+                          <span style={{ color: "#9CA3AF", fontSize: 13 }}>Loading content...</span>
                         </div>
                       )}
 
@@ -2219,9 +2359,15 @@
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
                 {upcoming.map(p => {
                   const full = fullData[p.placementId];
+                  const isHtml = p.contentType === "html" || full?.contentType === "html";
                   return (
                     <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer", transition: "box-shadow 0.15s" }}>
-                      {full?.imageData ? (
+                      {isHtml ? (
+                        <div style={{ width: "100%", height: 100, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 6, marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                          <span style={{ fontSize: 20 }}>&#128196;</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: "#E8909C" }}>Newsletter Preview</span>
+                        </div>
+                      ) : full?.imageData ? (
                         <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
                       ) : (
                         <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2250,9 +2396,15 @@
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, opacity: 0.7 }}>
                 {visibleCompleted.map(p => {
                   const full = fullData[p.placementId];
+                  const isHtml = p.contentType === "html" || full?.contentType === "html";
                   return (
                     <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer" }}>
-                      {full?.imageData ? (
+                      {isHtml ? (
+                        <div style={{ width: "100%", height: 100, background: "linear-gradient(135deg, #fdf2f4, #f0f4ff)", borderRadius: 6, marginBottom: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                          <span style={{ fontSize: 20 }}>&#128196;</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: "#E8909C" }}>Newsletter Preview</span>
+                        </div>
+                      ) : full?.imageData ? (
                         <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
                       ) : (
                         <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2276,7 +2428,23 @@
             <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
               <div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: "#fff", borderRadius: 16, padding: isMobile ? 16 : 24, maxWidth: 600, width: "100%", maxHeight: "90vh", overflow: "auto", position: "relative" }}>
                 <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, color: "#6B7280", cursor: "pointer" }}>&#10005;</button>
-                {lightbox.imageData && <ImageViewer src={lightbox.imageData} style={{ width: "100%", borderRadius: 8, marginBottom: 16 }} />}
+                {(lightbox.contentType === "html" && lightbox.htmlContent) ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <iframe
+                      sandbox="allow-scripts allow-popups allow-popups-to-navigate-user-activation"
+                      srcDoc={'<!DOCTYPE html><html><head><base target="_blank"><style>body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}img{max-width:100%;height:auto;}</style></head><body>' + lightbox.htmlContent + '<script>window.addEventListener("load",function(){window.parent.postMessage({type:"iframeHeight",id:"lightbox",height:document.body.scrollHeight},"*");});new ResizeObserver(function(){window.parent.postMessage({type:"iframeHeight",id:"lightbox",height:document.body.scrollHeight},"*");}).observe(document.body);<\/script></body></html>'}
+                      style={{ width: "100%", border: "1px solid #E5E7EB", borderRadius: 8, minHeight: 300, display: "block" }}
+                      data-placement-id="lightbox"
+                    />
+                  </div>
+                ) : lightbox.imageData ? (
+                  <div style={{ marginBottom: 16 }}>
+                    <ImageViewer src={lightbox.imageData} style={{ width: "100%", borderRadius: 8 }} />
+                    {lightbox.previewUrl && (
+                      <a href={lightbox.previewUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8, padding: "6px 12px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13, color: "#666", textDecoration: "none", fontFamily: FONT }}>View Web Preview &#8599;</a>
+                    )}
+                  </div>
+                ) : null}
                 <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{lightbox.scheduledDate ? new Date(lightbox.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}</p>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{lightbox.headline || "Untitled"}</p>
                 {lightbox.approvedAt && <p style={{ fontSize: 13, color: "#22C55E" }}>Approved on {new Date(lightbox.approvedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}

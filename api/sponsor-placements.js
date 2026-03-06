@@ -118,6 +118,7 @@ async function updateIndex(redis, sponsorId, placement) {
     approvedAt: placement.approvedAt,
     completedAt: placement.completedAt,
     contractId: placement.contractId,
+    contentType: placement.contentType || "image",
   };
   if (idx >= 0) items[idx] = entry;
   else items.push(entry);
