@@ -980,14 +980,14 @@
                   );
                 })()}
 
-                {/* Reports placeholder */}
+                {/* Audience Intelligence Reports placeholder */}
                 <div style={{ marginTop: 32 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Reports</h3>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Audience Intelligence Reports</h3>
                     <Btn disabled color={C.dim} bg={C.card} small>+ Upload Report</Btn>
                   </div>
                   <div style={{ textAlign: "center", padding: "32px 24px", background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}>
-                    <p style={{ color: C.dim, fontSize: 13 }}>Report uploads coming soon</p>
+                    <p style={{ color: C.dim, fontSize: 13 }}>Partner-tier report uploads coming soon</p>
                   </div>
                 </div>
               </div>
@@ -2038,9 +2038,24 @@
             </React.Fragment>}
 
             {/* ─── Polls Tab ────────────────────────────────── */}
-            {activeTab === "polls" && !isDemo && !onBack && (
-              <SponsorPollPicker shareToken={shareToken} contract={vContract} isMobile={isMobile} />
-            )}
+            {activeTab === "polls" && !isDemo && !onBack && (() => {
+              const tier = (vContract?.packageTier || "custom").toLowerCase();
+              const hasPollAccess = tier === "growth" || tier === "partner";
+              if (!hasPollAccess) return (
+                <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Custom Audience Insight Polls</h2>
+                  <p style={{ fontSize: 15, color: C.muted, maxWidth: 460, margin: "0 auto", lineHeight: 1.6 }}>
+                    Audience insight polls let you ask our readers a custom question and get real data back — perfect for validating messaging, understanding purchase intent, or shaping your next campaign.
+                  </p>
+                  <p style={{ fontSize: 14, color: C.dim, marginTop: 16, maxWidth: 400, margin: "16px auto 0" }}>
+                    This feature is available on <span style={{ color: "#E8909C", fontWeight: 600 }}>Growth</span> and <span style={{ color: "#E8909C", fontWeight: 600 }}>Partner</span> packages.
+                  </p>
+                  {config.campaignUrl && <a href={config.campaignUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 20, padding: "10px 24px", background: "#E8909C", color: "#fff", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", fontFamily: FONT }}>Explore Packages →</a>}
+                </div>
+              );
+              return <SponsorPollPicker shareToken={shareToken} contract={vContract} isMobile={isMobile} />;
+            })()}
 
             {/* ─── Placements Tab ──────────────────────────── */}
             {activeTab === "placements" && !isDemo && !onBack && (
@@ -2052,13 +2067,33 @@
             )}
 
             {/* ─── Reports Tab ─────────────────────────────── */}
-            {activeTab === "reports" && !isDemo && !onBack && (
-              <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Reports</h2>
-                <p style={{ fontSize: 15, color: C.muted, maxWidth: 400, margin: "0 auto" }}>Download campaign reports and audience insights. This feature is coming soon.</p>
-              </div>
-            )}
+            {activeTab === "reports" && !isDemo && !onBack && (() => {
+              const tier = (vContract?.packageTier || "custom").toLowerCase();
+              const isPartner = tier === "partner";
+              if (!isPartner) return (
+                <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📈</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Audience Intelligence Reports</h2>
+                  <p style={{ fontSize: 15, color: C.muted, maxWidth: 460, margin: "0 auto", lineHeight: 1.6 }}>
+                    Get quarterly and annual deep-dive reports with custom audience insights — demographics, engagement trends, purchase behavior, and strategic recommendations tailored to your brand.
+                  </p>
+                  <p style={{ fontSize: 14, color: C.dim, marginTop: 16, maxWidth: 400, margin: "16px auto 0" }}>
+                    This feature is exclusive to <span style={{ color: "#E8909C", fontWeight: 600 }}>Partner</span> packages.
+                  </p>
+                  {config.campaignUrl && <a href={config.campaignUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 20, padding: "10px 24px", background: "#E8909C", color: "#fff", borderRadius: 10, fontSize: 14, fontWeight: 600, textDecoration: "none", fontFamily: FONT }}>Explore Packages →</a>}
+                </div>
+              );
+              return (
+                <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📈</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>Audience Intelligence Reports</h2>
+                  <p style={{ fontSize: 15, color: C.muted, maxWidth: 460, margin: "0 auto", lineHeight: 1.6 }}>
+                    Your quarterly and annual audience intelligence reports will appear here — including custom insights, engagement trends, and strategic recommendations for your campaigns.
+                  </p>
+                  <p style={{ fontSize: 13, color: C.dim, marginTop: 16 }}>Coming soon</p>
+                </div>
+              );
+            })()}
 
             <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
               {vRuns.length > 0 && (activeTab === "performance" || isDemo || onBack) && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
