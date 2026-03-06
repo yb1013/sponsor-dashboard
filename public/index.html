@@ -325,14 +325,30 @@
       }, []);
 
       // Sponsor CRUD
-      const addSponsor = (name, patterns, contractData) => {
+      const addSponsor = async (name, patterns, contractData) => {
         const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString(), shareToken: uid() + uid() };
         saveSp([...sponsors, s]);
+        let ncId = null;
         if (contractData) {
           const updated = contracts.map(c => c.sponsorId === s.id ? { ...c, isActive: false } : c);
           const nc = { id: uid(), sponsorId: s.id, name: contractData.contractName, totalPrice: contractData.totalPrice, totalRuns: contractData.totalRuns, startDate: contractData.startDate, endDate: contractData.endDate, packageTier: contractData.packageTier || "custom", pollsIncluded: contractData.pollsIncluded || 0, takeoverIncluded: contractData.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
           saveCt([...updated, nc]);
           setSelContract(nc.id);
+          ncId = nc.id;
+          // Confirm schedule if provided
+          if (contractData.schedule && authToken) {
+            try {
+              await fetch("/api/placements?action=confirm-schedule", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sponsorId: s.id, contractId: nc.id, campaignName: contractData.contractName,
+                  totalRuns: contractData.totalRuns, sponsorName: name, shareToken: s.shareToken,
+                  schedule: contractData.schedule,
+                }),
+              });
+            } catch {}
+          }
         }
         setSel(s.id);
         setModal(null);
@@ -790,6 +806,7 @@
                   onEditContract={(ct) => { setSelContract(ct.id); setModal("editContract"); }}
                   sponsor={sponsor}
                   onUpdateSponsor={(fields) => updateSponsor(sponsor.id, fields)}
+                  authToken={authToken}
                 />
 
                 {/* Sync Controls */}
@@ -981,7 +998,7 @@
                 })()}
 
                 {/* Placements */}
-                <AdminPlacements sponsorId={sel} shareToken={sponsor.shareToken} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
+                <AdminPlacements sponsorId={sel} shareToken={sponsor.shareToken} sponsorName={sponsor.name} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
 
                 {/* Audience Intelligence Reports placeholder */}
                 <div style={{ marginTop: 32 }}>
@@ -998,18 +1015,32 @@
           </main>
 
           {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} authToken={authToken} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
-          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} pricingCfg={pricingCfg} /></Overlay>}
+          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} pricingCfg={pricingCfg} authToken={authToken} /></Overlay>}
           {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
           {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "editContract" && viewingContract && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={viewingContract} onSave={d => updateContract(viewingContract.id, d)} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "convertInquiry" && convertInquiry && (
             <Overlay onClose={() => { setModal(null); setConvertInquiry(null); }}>
-              <ConvertInquiryForm inquiry={convertInquiry} pricingCfg={pricingCfg} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
+              <ConvertInquiryForm inquiry={convertInquiry} pricingCfg={pricingCfg} authToken={authToken} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
                 const newSponsor = { id: uid(), name: data.sponsorName, urlPatterns: [], created: new Date().toISOString(), shareToken: uid() + uid() };
                 saveSp([...sponsors, newSponsor]);
                 const updated = contracts.map(c => c.sponsorId === newSponsor.id ? { ...c, isActive: false } : c);
                 const nc = { id: uid(), sponsorId: newSponsor.id, name: data.contractName, totalPrice: data.totalPrice, totalRuns: data.totalRuns, startDate: data.startDate, endDate: data.endDate, packageTier: data.packageTier || "custom", pollsIncluded: data.pollsIncluded || 0, takeoverIncluded: data.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
                 saveCt([...updated, nc]);
+                // Confirm schedule if provided
+                if (data.schedule && authToken) {
+                  try {
+                    await fetch("/api/placements?action=confirm-schedule", {
+                      method: "POST",
+                      headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        sponsorId: newSponsor.id, contractId: nc.id, campaignName: data.contractName,
+                        totalRuns: data.totalRuns, sponsorName: data.sponsorName, shareToken: newSponsor.shareToken,
+                        schedule: data.schedule,
+                      }),
+                    });
+                  } catch {}
+                }
                 await patchInquiry(convertInquiry.id, { status: "converted", convertedTo: data.sponsorName, convertedAt: new Date().toISOString() });
                 setSel(newSponsor.id);
                 setSelContract(nc.id);
@@ -1398,9 +1429,18 @@
     // ═══════════════════════════════════════════════════════════════
     // CONTRACT MANAGER
     // ═══════════════════════════════════════════════════════════════
-    function ContractManager({ sponsorId, contracts, activeContract, viewingContract, runs, onActivate, onSelect, onClearFilter, onDelete, onSetModal, onEditContract, sponsor, onUpdateSponsor }) {
+    function ContractManager({ sponsorId, contracts, activeContract, viewingContract, runs, onActivate, onSelect, onClearFilter, onDelete, onSetModal, onEditContract, sponsor, onUpdateSponsor, authToken }) {
       const mob = useWindowWidth() <= MOBILE;
       const unassignedCount = runs.filter(r => !r.contractId || !contracts.find(c => c.id === r.contractId)).length;
+
+      // Fetch placement index for progress tracking
+      const [placementsIdx, setPlacementsIdx] = useState([]);
+      useEffect(() => {
+        if (!authToken || !sponsorId) return;
+        fetch(`/api/placements?action=list&sponsorId=${sponsorId}`, { headers: { Authorization: `Bearer ${authToken}` } })
+          .then(r => r.ok ? r.json() : []).then(setPlacementsIdx).catch(() => {});
+      }, [sponsorId, authToken]);
+
       return (
         <div style={{ marginBottom: 20, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: contracts.length > 0 || unassignedCount > 0 ? 12 : 0 }}>
@@ -1416,9 +1456,16 @@
           )}
 
           {contracts.map(ct => {
-            const assigned = runs.filter(r => r.contractId === ct.id).length;
-            const remaining = ct.totalRuns - assigned;
-            const pctVal = ct.totalRuns > 0 ? Math.min((assigned / ct.totalRuns) * 100, 100) : 0;
+            // Use placement data for progress if available
+            const ctPlacements = placementsIdx.filter(p => p.contractId === ct.id);
+            const completedCount = ctPlacements.filter(p => p.status === "completed").length;
+            const approvedCount = ctPlacements.filter(p => p.status === "approved").length;
+            const reviewCount = ctPlacements.filter(p => p.status === "pending_review" || p.status === "changes_requested").length;
+            const hasPlacementData = ctPlacements.length > 0;
+
+            const assigned = hasPlacementData ? ctPlacements.filter(p => p.status !== "placeholder").length : runs.filter(r => r.contractId === ct.id).length;
+            const remaining = ct.totalRuns - (hasPlacementData ? completedCount : assigned);
+            const pctVal = ct.totalRuns > 0 ? Math.min(((hasPlacementData ? completedCount : assigned) / ct.totalRuns) * 100, 100) : 0;
             const barColor = remaining <= 0 ? C.red : remaining === 1 ? C.amber : C.green;
             const isViewing = viewingContract && viewingContract.id === ct.id;
             return (
@@ -1442,12 +1489,20 @@
                     <Btn onClick={() => onDelete(ct.id)} color={C.red} bg={C.redDim} small>×</Btn>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: mob ? 8 : 12, fontSize: 11, color: C.dim, marginBottom: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: mob ? 8 : 12, fontSize: 11, color: C.dim, marginBottom: 4, flexWrap: "wrap" }}>
                   {ct.totalPrice > 0 && <span style={{ fontFamily: MONO }}>{money(ct.totalPrice)}</span>}
-                  <span>{assigned} / {ct.totalRuns} runs</span>
+                  <span style={{ fontWeight: 600 }}>{hasPlacementData ? `${completedCount} of ${ct.totalRuns} placements completed` : `${assigned} / ${ct.totalRuns} runs`}</span>
                   {ct.startDate && <span>{fmtDate(ct.startDate)} — {fmtDate(ct.endDate)}</span>}
                   {(() => { const cpm = ct.showCpmToSponsor ?? ct.showPricingToSponsor; const cpc = ct.showCpcToSponsor ?? ct.showPricingToSponsor; return (cpm || cpc) ? <span style={{ color: C.purple }}>{cpm && cpc ? "CPM + CPC visible" : cpm ? "CPM visible" : "CPC visible"}</span> : null; })()}
                 </div>
+                {hasPlacementData && (approvedCount > 0 || reviewCount > 0) && (
+                  <div style={{ fontSize: 10, color: C.dim, marginBottom: 4 }}>
+                    {approvedCount > 0 && <span>{approvedCount} approved</span>}
+                    {approvedCount > 0 && reviewCount > 0 && <span> · </span>}
+                    {reviewCount > 0 && <span>{reviewCount} in review</span>}
+                    {remaining > 0 && <span> · {remaining} remaining</span>}
+                  </div>
+                )}
                 <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${pctVal}%`, background: barColor, borderRadius: 2, transition: "width 0.3s" }} />
                 </div>
@@ -1795,7 +1850,7 @@
       return '<!DOCTYPE html><html><head>' + baseTag + '<style>body{margin:0 auto;padding:16px;max-width:600px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}table{max-width:100%!important;margin-left:auto!important;margin-right:auto!important;}td{text-align:inherit!important;}img{max-width:100%!important;height:auto!important;}a{max-width:100%!important;}a[style*="background"]{display:inline-block!important;}' + pointerRule + '</style></head><body>' + htmlContent + '<script>window.addEventListener("load",function(){window.parent.postMessage({type:"iframeHeight",id:"' + iframeId + '",height:document.body.scrollHeight},"*");});new ResizeObserver(function(){window.parent.postMessage({type:"iframeHeight",id:"' + iframeId + '",height:document.body.scrollHeight},"*");}).observe(document.body);<\/script></body></html>';
     }
 
-    function AdminPlacements({ sponsorId, shareToken, contracts, authToken, isMobile }) {
+    function AdminPlacements({ sponsorId, shareToken, sponsorName, contracts, authToken, isMobile }) {
       const [placements, setPlacements] = useState([]);
       const [loading, setLoading] = useState(true);
       const [statusFilter, setStatusFilter] = useState(null);
@@ -1825,6 +1880,14 @@
       const [batchSelect, setBatchSelect] = useState({});
       const [confirmDelete, setConfirmDelete] = useState(null);
       const [dragOver, setDragOver] = useState(false);
+      const [showGenSchedule, setShowGenSchedule] = useState(false);
+      const [genSchedContract, setGenSchedContract] = useState(null);
+      const [genSchedStartDate, setGenSchedStartDate] = useState("");
+      const [genSchedDay, setGenSchedDay] = useState("monday");
+      const [genSchedInProgress, setGenSchedInProgress] = useState(false);
+      const [genSchedCompleted, setGenSchedCompleted] = useState(0);
+      const [genSchedData, setGenSchedData] = useState(null);
+      const [genSchedSaving, setGenSchedSaving] = useState(false);
       const fileRef = React.useRef();
       const replaceRefs = React.useRef({});
 
@@ -2147,8 +2210,86 @@
         <div style={{ marginTop: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Placements{counts.changes_requested > 0 && <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 8, minWidth: 18, height: 18, borderRadius: 9, background: C.red, color: "#fff", fontSize: 10, fontWeight: 700, padding: "0 5px", lineHeight: 1 }}>{counts.changes_requested}</span>}</h3>
-            <span style={{ fontSize: 12, color: C.dim }}>{placements.length} placement{placements.length !== 1 ? "s" : ""}</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {contracts.some(c => c.isActive && c.totalRuns > placements.filter(p => p.contractId === c.id).length) && (
+                <Btn onClick={() => {
+                  const ac = contracts.find(c => c.isActive);
+                  if (ac) { setGenSchedContract(ac); setGenSchedStartDate(ac.startDate || new Date().toISOString().split("T")[0]); setShowGenSchedule(true); }
+                }} color={C.accent} bg={C.accentDim} small>Generate Schedule</Btn>
+              )}
+              <span style={{ fontSize: 12, color: C.dim }}>{placements.length} placement{placements.length !== 1 ? "s" : ""}</span>
+            </div>
           </div>
+
+          {/* Generate Schedule Modal */}
+          {showGenSchedule && genSchedContract && (
+            <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.accent}`, padding: isMobile ? 16 : 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <p style={{ fontSize: 14, fontWeight: 600 }}>Generate Schedule — {genSchedContract.name}</p>
+                <button onClick={() => { setShowGenSchedule(false); setGenSchedData(null); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 18 }}>&times;</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>First Placement Date</label>
+                  <input type="date" value={genSchedStartDate} onChange={e => setGenSchedStartDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Preferred Send Day</label>
+                  <select value={genSchedDay} onChange={e => setGenSchedDay(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }}>
+                    <option value="monday">Monday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="friday">Friday</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <button onClick={() => setGenSchedInProgress(!genSchedInProgress)} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                  background: genSchedInProgress ? C.amberDim : C.bg, border: `1px solid ${genSchedInProgress ? "rgba(251,191,36,0.3)" : C.border}`,
+                  borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+                }}>
+                  <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: genSchedInProgress ? C.amber : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: genSchedInProgress ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: genSchedInProgress ? C.amber : C.dim, fontFamily: FONT }}>Campaign already in progress?</span>
+                </button>
+                {genSchedInProgress && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 12, color: C.muted }}>Runs already completed:</label>
+                    <input type="number" min="0" max={Math.max(0, genSchedContract.totalRuns - 1)} value={genSchedCompleted} onChange={e => setGenSchedCompleted(parseInt(e.target.value) || 0)} style={{ width: 60, padding: "6px 8px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13 }} />
+                  </div>
+                )}
+              </div>
+              <SchedulePreview
+                totalPlacements={genSchedContract.totalRuns}
+                startDate={genSchedStartDate}
+                preferredWeekday={genSchedDay}
+                completedRuns={genSchedInProgress ? genSchedCompleted : 0}
+                authToken={authToken}
+                onScheduleChange={setGenSchedData}
+              />
+              {genSchedData && (
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <Btn onClick={async () => {
+                    setGenSchedSaving(true);
+                    try {
+                      await fetch("/api/placements?action=confirm-schedule", {
+                        method: "POST", headers,
+                        body: JSON.stringify({
+                          sponsorId, contractId: genSchedContract.id, campaignName: genSchedContract.name,
+                          totalRuns: genSchedContract.totalRuns, sponsorName, shareToken, schedule: genSchedData,
+                        }),
+                      });
+                      setShowGenSchedule(false); setGenSchedData(null);
+                      await fetchPlacements();
+                    } catch {}
+                    setGenSchedSaving(false);
+                  }} color={C.white} bg={C.accent} disabled={genSchedSaving}>{genSchedSaving ? "Creating..." : "Confirm Schedule"}</Btn>
+                  <Btn onClick={() => { setShowGenSchedule(false); setGenSchedData(null); }} color={C.dim} bg={C.card} small>Cancel</Btn>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Status pipeline */}
           <div style={{ display: "flex", gap: 0, marginBottom: 20, background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden", flexWrap: "wrap" }}>
@@ -3621,8 +3762,126 @@
       return d.toISOString().split("T")[0];
     }
 
+    // ─── Schedule Preview (shared by Add Sponsor + Convert Inquiry + standalone) ─────
+    function SchedulePreview({ totalPlacements, startDate, preferredWeekday, completedRuns, authToken, onScheduleChange, compact }) {
+      const [schedule, setSchedule] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [editingIdx, setEditingIdx] = useState(null);
+      const [editDate, setEditDate] = useState("");
+
+      const hdrs = { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
+
+      useEffect(() => {
+        if (!startDate || !totalPlacements || totalPlacements < 1) { setSchedule([]); return; }
+        const timer = setTimeout(async () => {
+          setLoading(true);
+          try {
+            const res = await fetch("/api/placements?action=generate-schedule", {
+              method: "POST", headers: hdrs,
+              body: JSON.stringify({ startDate, preferredWeekday: preferredWeekday || "monday", totalPlacements: parseInt(totalPlacements), completedRuns: parseInt(completedRuns) || 0 }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setSchedule(data.schedule);
+              if (onScheduleChange) onScheduleChange(data.schedule);
+            }
+          } catch {}
+          setLoading(false);
+        }, 400);
+        return () => clearTimeout(timer);
+      }, [startDate, preferredWeekday, totalPlacements, completedRuns]);
+
+      const updateDateInline = async (idx, newDate) => {
+        const updated = [...schedule];
+        const dow = new Date(newDate + "T00:00:00").getDay();
+        const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        updated[idx] = { ...updated[idx], date: newDate, weekday: weekdays[dow], edited: true };
+        updated[idx].nonSendDay = ![1, 3, 5].includes(dow);
+        updated[idx].duplicate = updated.some((s, i) => i !== idx && s.date === newDate);
+        try {
+          const res = await fetch(`/api/placements?action=get-density&date=${newDate}`, { headers: hdrs });
+          if (res.ok) updated[idx].density = await res.json();
+        } catch {}
+        setSchedule(updated);
+        if (onScheduleChange) onScheduleChange(updated);
+        setEditingIdx(null);
+      };
+
+      const densityDots = (d) => {
+        const t = d?.total || 0;
+        if (t === 0) return { color: C.dim, text: `(${t})`, dots: "" };
+        if (t <= 2) return { color: C.green, text: `(${t})`, dots: Array(t).fill("\u25CF").join("") };
+        if (t === 3) return { color: C.amber, text: `(${t})`, dots: "\u25CF\u25CF\u25CF" };
+        return { color: C.red, text: `(${t})`, dots: Array(Math.min(t, 5)).fill("\u25CF").join("") };
+      };
+
+      if (loading) return <p style={{ fontSize: 12, color: C.dim, padding: 12 }}>Generating schedule...</p>;
+      if (!schedule.length) return null;
+
+      const maxH = compact ? 300 : 400;
+      const thStyle = { padding: "8px 10px", textAlign: "left", color: C.dim, fontWeight: 600, fontSize: 10, textTransform: "uppercase" };
+      const tdStyle = { padding: "8px 10px" };
+      const cr = parseInt(completedRuns) || 0;
+
+      return (
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Schedule Preview</label>
+          <div style={{ maxHeight: maxH, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, background: C.bg }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <th style={thStyle}>#</th>
+                  <th style={thStyle}>Date</th>
+                  <th style={thStyle}>Day</th>
+                  <th style={thStyle}>Density</th>
+                  <th style={thStyle}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.map((s, i) => {
+                  const dd = densityDots(s.density);
+                  const isEditing = editingIdx === i;
+                  const statusText = s.preCompleted ? "Completed*" : (i === cr ? "\u2190 Current" : "Upcoming");
+                  const sc2 = s.preCompleted ? C.dim : (i === cr ? C.accent : C.muted);
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: s.edited ? "rgba(79,143,247,0.05)" : "transparent" }}>
+                      <td style={{ ...tdStyle, color: C.text, fontWeight: 600, fontFamily: MONO }}>{s.runNumber}</td>
+                      <td style={tdStyle}>
+                        {isEditing ? (
+                          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                            <input type="date" defaultValue={s.date} autoFocus onChange={e => setEditDate(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && editDate) updateDateInline(i, editDate); if (e.key === "Escape") setEditingIdx(null); }} style={{ padding: "4px 6px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontFamily: MONO, fontSize: 12 }} />
+                            <button onClick={() => editDate && updateDateInline(i, editDate)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 11, fontFamily: FONT }}>{"\u2713"}</button>
+                          </div>
+                        ) : (
+                          <span onClick={() => { setEditingIdx(i); setEditDate(s.date); }} style={{ cursor: "pointer", color: C.text, fontFamily: MONO, borderBottom: `1px dashed ${C.dim}` }}>
+                            {s.date ? new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "\u2014"}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...tdStyle, color: C.muted }}>{s.weekday || "\u2014"}</td>
+                      <td style={tdStyle}>
+                        <span style={{ color: dd.color, fontSize: 11 }}>{dd.dots} {dd.text}</span>
+                        {s.density?.sponsors?.length > 0 && <span style={{ fontSize: 10, color: C.dim, marginLeft: 4 }}>{s.density.sponsors.join(", ")}</span>}
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{ color: sc2, fontWeight: s.preCompleted ? 400 : 600, fontSize: 11 }}>{statusText}</span>
+                        {s.edited && <span style={{ fontSize: 9, color: C.accent, marginLeft: 4 }}>edited</span>}
+                        {s.nonSendDay && <span style={{ fontSize: 9, color: C.amber, marginLeft: 4 }}>non-send day</span>}
+                        {s.duplicate && <span style={{ fontSize: 9, color: C.red, marginLeft: 4 }}>duplicate</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {schedule.some(s => s.preCompleted) && <p style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>* Marked as completed (campaign in progress)</p>}
+        </div>
+      );
+    }
+
     // ─── Convert Inquiry Form ────────────────────────────────────
-    function ConvertInquiryForm({ inquiry, onConvert, onCancel, pricingCfg }) {
+    function ConvertInquiryForm({ inquiry, onConvert, onCancel, pricingCfg, authToken }) {
       const tierLabels = { starter: "Starter", growth: "Growth", partner: "Partner" };
       const tierMonths = { starter: 3, growth: 6, partner: 12 };
       const today = new Date().toISOString().split("T")[0];
@@ -3636,6 +3895,11 @@
       const [startDate, setStartDate] = useState(today);
       const [endDate, setEndDate] = useState("");
       const [takeover, setTakeover] = useState(inquiry.takeover || false);
+      // Schedule state
+      const [schedPreferredDay, setSchedPreferredDay] = useState("monday");
+      const [schedInProgress, setSchedInProgress] = useState(false);
+      const [schedCompletedRuns, setSchedCompletedRuns] = useState(0);
+      const [scheduleData, setScheduleData] = useState(null);
 
       const getTierConfig = (tier) => {
         if (!pricingCfg || tier === "custom") return null;
@@ -3663,6 +3927,7 @@
           setEndDate("");
           setTakeover(false);
         }
+        setScheduleData(null);
       };
 
       // Initialize from inquiry tier on mount
@@ -3685,6 +3950,16 @@
       const handleStartChange = (val) => {
         setStartDate(val);
         if (tc && val) setEndDate(calcEndDate(val, tc.months));
+      };
+
+      const doConvert = (withSchedule) => {
+        if (!sponsorName.trim()) return;
+        onConvert({
+          sponsorName: sponsorName.trim(), contractName: contractName.trim(), totalPrice: parseFloat(price) || 0,
+          totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null,
+          packageTier: pkgTier, pollsIncluded: tc ? tc.polls : 0, takeoverIncluded: takeover,
+          schedule: withSchedule ? scheduleData : null,
+        });
       };
 
       return (
@@ -3725,9 +4000,56 @@
               )}
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+
+          {/* Schedule Campaign section */}
+          {(parseInt(totalRuns) || 0) > 0 && startDate && (
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 8, marginBottom: 16 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Schedule Campaign</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Preferred Send Day</label>
+                  <select value={schedPreferredDay} onChange={e => setSchedPreferredDay(e.target.value)} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box" }}>
+                    <option value="monday">Monday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="friday">Friday</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <button onClick={() => setSchedInProgress(!schedInProgress)} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                  background: schedInProgress ? C.amberDim : C.bg, border: `1px solid ${schedInProgress ? "rgba(251,191,36,0.3)" : C.border}`,
+                  borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+                }}>
+                  <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: schedInProgress ? C.amber : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: schedInProgress ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: schedInProgress ? C.amber : C.dim, fontFamily: FONT }}>Campaign already in progress?</span>
+                </button>
+                {schedInProgress && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 12, color: C.muted }}>Runs already completed:</label>
+                    <input type="number" min="0" max={Math.max(0, (parseInt(totalRuns) || 1) - 1)} value={schedCompletedRuns} onChange={e => setSchedCompletedRuns(parseInt(e.target.value) || 0)} style={{ width: 60, padding: "6px 8px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13 }} />
+                  </div>
+                )}
+              </div>
+              <SchedulePreview
+                totalPlacements={parseInt(totalRuns) || 0}
+                startDate={startDate}
+                preferredWeekday={schedPreferredDay}
+                completedRuns={schedInProgress ? schedCompletedRuns : 0}
+                authToken={authToken}
+                onScheduleChange={setScheduleData}
+                compact={true}
+              />
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8, flexWrap: "wrap" }}>
+            <button onClick={() => doConvert(false)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12, textDecoration: "underline" }}>Skip Scheduling</button>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => sponsorName.trim() && onConvert({ sponsorName: sponsorName.trim(), contractName: contractName.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, packageTier: pkgTier, pollsIncluded: tc ? tc.polls : 0, takeoverIncluded: takeover })} color={C.white} bg={C.accent} disabled={!sponsorName.trim()}>Convert</Btn>
+            <Btn onClick={() => doConvert(!!scheduleData)} color={C.white} bg={C.accent} disabled={!sponsorName.trim()}>{scheduleData ? "Confirm Schedule & Convert" : "Convert"}</Btn>
           </div>
         </div>
       );
@@ -3799,7 +4121,7 @@
       );
     }
 
-    function AddSponsorForm({ onSave, onCancel, pricingCfg }) {
+    function AddSponsorForm({ onSave, onCancel, pricingCfg, authToken }) {
       const [name, setName] = useState("");
       const [patterns, setPatterns] = useState([""]);
       const [pkgTier, setPkgTier] = useState("custom");
@@ -3810,6 +4132,11 @@
       const [startDate, setStartDate] = useState("");
       const [endDate, setEndDate] = useState("");
       const [takeover, setTakeover] = useState(false);
+      // Schedule state
+      const [schedPreferredDay, setSchedPreferredDay] = useState("monday");
+      const [schedInProgress, setSchedInProgress] = useState(false);
+      const [schedCompletedRuns, setSchedCompletedRuns] = useState(0);
+      const [scheduleData, setScheduleData] = useState(null);
 
       const updatePat = (i, val) => { const p = [...patterns]; p[i] = val; setPatterns(p); };
       const addPat = () => setPatterns([...patterns, ""]);
@@ -3837,6 +4164,7 @@
         } else {
           setContractName(""); setPrice(""); setTotalRuns(""); setEndDate(""); setTakeover(false);
         }
+        setScheduleData(null);
       };
 
       const tc = getTierConfig(pkgTier);
@@ -3847,7 +4175,7 @@
         if (tc && val) setEndDate(calcEndDate(val, tc.months));
       };
 
-      const handleSave = () => {
+      const handleSave = (withSchedule) => {
         if (!name.trim()) return;
         const contractData = (pkgTier !== "custom" || contractName.trim()) ? {
           contractName: contractName.trim() || (name.trim() + " Contract"),
@@ -3858,6 +4186,7 @@
           packageTier: pkgTier,
           pollsIncluded: tc ? tc.polls : 0,
           takeoverIncluded: takeover,
+          schedule: withSchedule ? scheduleData : null,
         } : null;
         onSave(name.trim(), patterns.filter(p => p.trim()), contractData);
       };
@@ -3914,9 +4243,54 @@
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          {/* Schedule Campaign section */}
+          {pkgTier !== "custom" && (parseInt(totalRuns) || 0) > 0 && startDate && (
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 16 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Schedule Campaign</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Preferred Send Day</label>
+                  <select value={schedPreferredDay} onChange={e => setSchedPreferredDay(e.target.value)} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box" }}>
+                    <option value="monday">Monday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="friday">Friday</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <button onClick={() => setSchedInProgress(!schedInProgress)} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
+                  background: schedInProgress ? C.amberDim : C.bg, border: `1px solid ${schedInProgress ? "rgba(251,191,36,0.3)" : C.border}`,
+                  borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
+                }}>
+                  <div style={{ width: 32, height: 18, borderRadius: 9, padding: 2, background: schedInProgress ? C.amber : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 7, background: "#fff", transform: schedInProgress ? "translateX(14px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: schedInProgress ? C.amber : C.dim, fontFamily: FONT }}>Campaign already in progress?</span>
+                </button>
+                {schedInProgress && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 12, color: C.muted }}>Runs already completed:</label>
+                    <input type="number" min="0" max={Math.max(0, (parseInt(totalRuns) || 1) - 1)} value={schedCompletedRuns} onChange={e => setSchedCompletedRuns(parseInt(e.target.value) || 0)} style={{ width: 60, padding: "6px 8px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13 }} />
+                  </div>
+                )}
+              </div>
+              <SchedulePreview
+                totalPlacements={parseInt(totalRuns) || 0}
+                startDate={startDate}
+                preferredWeekday={schedPreferredDay}
+                completedRuns={schedInProgress ? schedCompletedRuns : 0}
+                authToken={authToken}
+                onScheduleChange={setScheduleData}
+              />
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {scheduleData && <button onClick={() => handleSave(false)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12, textDecoration: "underline" }}>Skip Scheduling</button>}
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={handleSave} color={C.white} bg={C.accent} disabled={!name.trim()}>Add</Btn>
+            <Btn onClick={() => handleSave(!!scheduleData)} color={C.white} bg={C.accent} disabled={!name.trim()}>{scheduleData ? "Confirm Schedule & Create Sponsor" : "Add"}</Btn>
           </div>
         </div>
       );
