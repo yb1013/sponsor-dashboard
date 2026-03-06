@@ -980,6 +980,9 @@
                   );
                 })()}
 
+                {/* Placements */}
+                <AdminPlacements sponsorId={sel} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
+
                 {/* Audience Intelligence Reports placeholder */}
                 <div style={{ marginTop: 32 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -1585,6 +1588,563 @@
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════
+    // ADMIN PLACEMENTS (admin sponsor detail page)
+    // ═══════════════════════════════════════════════════════════════
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const MAX_W = 800;
+            let w = img.width, h = img.height;
+            if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+            const sizeKB = Math.round((dataUrl.length * 3) / 4 / 1024);
+            if (sizeKB > 900) reject(new Error("Image is too large. Please use a smaller or lower-resolution screenshot."));
+            else resolve(dataUrl);
+          };
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function AdminPlacements({ sponsorId, contracts, authToken, isMobile }) {
+      const [placements, setPlacements] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [statusFilter, setStatusFilter] = useState(null);
+      const [newImage, setNewImage] = useState(null);
+      const [newDate, setNewDate] = useState("");
+      const [newHeadline, setNewHeadline] = useState("");
+      const [newNotes, setNewNotes] = useState("");
+      const [imgError, setImgError] = useState(null);
+      const [saving, setSaving] = useState(false);
+      const [expandedId, setExpandedId] = useState(null);
+      const [expandedData, setExpandedData] = useState({});
+      const [replaceImage, setReplaceImage] = useState({});
+      const [editFields, setEditFields] = useState({});
+      const [batchSelect, setBatchSelect] = useState({});
+      const [confirmDelete, setConfirmDelete] = useState(null);
+      const [dragOver, setDragOver] = useState(false);
+      const fileRef = React.useRef();
+      const replaceRefs = React.useRef({});
+
+      const headers = { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
+
+      const fetchPlacements = async () => {
+        try {
+          const res = await fetch(`/api/placements?action=list&sponsorId=${sponsorId}`, { headers });
+          if (res.ok) setPlacements(await res.json());
+        } catch {}
+        setLoading(false);
+      };
+      useEffect(() => { fetchPlacements(); }, [sponsorId]);
+
+      const fetchFull = async (pid) => {
+        try {
+          const res = await fetch(`/api/placements?action=get&sponsorId=${sponsorId}&placementId=${pid}`, { headers });
+          if (res.ok) { const d = await res.json(); setExpandedData(p => ({ ...p, [pid]: d })); }
+        } catch {}
+      };
+
+      const handleFile = async (file) => {
+        if (!file) return;
+        setImgError(null);
+        try { const d = await compressImage(file); setNewImage(d); }
+        catch (e) { setImgError(e.message); }
+      };
+
+      const handleDrop = (e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
+
+      const createPlacement = async (sendForReview) => {
+        if (!newImage) return;
+        setSaving(true);
+        const activeContract = contracts.find(c => c.isActive);
+        try {
+          await fetch("/api/placements?action=create", {
+            method: "POST", headers,
+            body: JSON.stringify({ sponsorId, contractId: activeContract?.id || null, scheduledDate: newDate || null, headline: newHeadline, notes: newNotes, imageData: newImage, sendForReview }),
+          });
+          setNewImage(null); setNewDate(""); setNewHeadline(""); setNewNotes("");
+          await fetchPlacements();
+        } catch {}
+        setSaving(false);
+      };
+
+      const doAction = async (action, pid, body = {}) => {
+        await fetch(`/api/placements?action=${action}&sponsorId=${sponsorId}&placementId=${pid}`, { method: "POST", headers, body: JSON.stringify(body) });
+        await fetchPlacements();
+      };
+
+      const handleReplaceFile = async (pid, file) => {
+        if (!file) return;
+        try {
+          const d = await compressImage(file);
+          setReplaceImage(p => ({ ...p, [pid]: d }));
+        } catch (e) { setImgError(e.message); }
+      };
+
+      const doResubmit = async (pid) => {
+        const body = {};
+        if (replaceImage[pid]) body.imageData = replaceImage[pid];
+        const ef = editFields[pid];
+        if (ef?.headline !== undefined) body.headline = ef.headline;
+        if (ef?.notes !== undefined) body.notes = ef.notes;
+        await fetch(`/api/placements?action=resubmit&sponsorId=${sponsorId}&placementId=${pid}`, { method: "POST", headers, body: JSON.stringify(body) });
+        setReplaceImage(p => { const n = { ...p }; delete n[pid]; return n; });
+        setEditFields(p => { const n = { ...p }; delete n[pid]; return n; });
+        await fetchPlacements();
+      };
+
+      const doBatchComplete = async () => {
+        const ids = Object.keys(batchSelect).filter(k => batchSelect[k]);
+        if (!ids.length) return;
+        await fetch(`/api/placements?action=batch-complete&sponsorId=${sponsorId}`, { method: "POST", headers, body: JSON.stringify({ placementIds: ids }) });
+        setBatchSelect({});
+        await fetchPlacements();
+      };
+
+      const totalRuns = contracts.find(c => c.isActive)?.totalRuns || 0;
+      const counts = { draft: 0, pending_review: 0, changes_requested: 0, approved: 0, completed: 0 };
+      placements.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
+
+      const filtered = statusFilter ? placements.filter(p => p.status === statusFilter) : placements;
+      const ordered = [...filtered].sort((a, b) => {
+        const pri = { changes_requested: 0, pending_review: 1, draft: 2, approved: 3, completed: 4 };
+        return (pri[a.status] ?? 5) - (pri[b.status] ?? 5) || new Date(a.scheduledDate || 0) - new Date(b.scheduledDate || 0);
+      });
+
+      const statusLabel = { draft: "DRAFT", pending_review: "PENDING REVIEW", changes_requested: "CHANGES REQUESTED", approved: "APPROVED", completed: "COMPLETED" };
+      const statusIcon = { draft: "\u{1F4DD}", pending_review: "\u231B", changes_requested: "\u{1F534}", approved: "\u2713", completed: "\u2713" };
+      const statusColor = { draft: C.dim, pending_review: C.amber, changes_requested: C.red, approved: C.green, completed: C.dim };
+      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No date";
+
+      const approvedIds = placements.filter(p => p.status === "approved").map(p => p.placementId);
+      const anyBatchSelected = Object.keys(batchSelect).some(k => batchSelect[k]);
+
+      if (loading) return null;
+
+      return (
+        <div style={{ marginTop: 32 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Placements</h3>
+            {totalRuns > 0 && <span style={{ fontSize: 12, color: C.dim }}>{placements.length} of {totalRuns} placements created</span>}
+          </div>
+
+          {/* Status pipeline */}
+          <div style={{ display: "flex", gap: 0, marginBottom: 20, background: C.card, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden", flexWrap: "wrap" }}>
+            {["draft", "pending_review", "changes_requested", "approved", "completed"].map((s, i, arr) => (
+              <button key={s} onClick={() => setStatusFilter(statusFilter === s ? null : s)} style={{
+                flex: 1, minWidth: isMobile ? "33%" : 0, padding: "10px 8px", background: statusFilter === s ? "rgba(79,143,247,0.1)" : "transparent",
+                border: "none", borderRight: i < arr.length - 1 && !isMobile ? `1px solid ${C.border}` : "none", cursor: "pointer", fontFamily: FONT, textAlign: "center",
+              }}>
+                <span style={{ fontSize: 18, fontWeight: 700, color: statusColor[s], display: "block" }}>{counts[s]}</span>
+                <span style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5 }}>{statusLabel[s].replace("_", " ")}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* New placement form */}
+          <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: isMobile ? 16 : 24, marginBottom: 24 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>+ New Placement</p>
+            {!newImage ? (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+                style={{
+                  border: `2px dashed ${dragOver ? C.accent : C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
+                  cursor: "pointer", transition: "border-color 0.15s", background: dragOver ? "rgba(79,143,247,0.05)" : "transparent",
+                }}
+              >
+                <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Drag & drop placement image here</p>
+                <p style={{ color: C.dim, fontSize: 12 }}>or click to browse</p>
+                <p style={{ color: C.dim, fontSize: 11, marginTop: 8 }}>PNG, JPG — will be compressed to JPEG</p>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleFile(e.target.files[0])} />
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <img src={newImage} style={{ maxWidth: 400, width: "100%", borderRadius: 10, border: `1px solid ${C.border}` }} />
+                <button onClick={() => setNewImage(null)} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12 }}>Remove image</button>
+              </div>
+            )}
+            {imgError && <p style={{ color: C.red, fontSize: 13, marginTop: 8 }}>{imgError}</p>}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginTop: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Scheduled Date</label>
+                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Headline</label>
+                <input value={newHeadline} onChange={e => setNewHeadline(e.target.value)} placeholder="Ad headline" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Notes (internal)</label>
+              <input value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Internal notes" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+              <Btn onClick={() => createPlacement(false)} color={C.muted} bg={C.bg} disabled={saving || !newImage}>Save as Draft</Btn>
+              <Btn onClick={() => createPlacement(true)} color={C.white} bg={C.accent} disabled={saving || !newImage}>Send for Review →</Btn>
+            </div>
+          </div>
+
+          {/* Batch complete */}
+          {approvedIds.length > 1 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+              <Btn onClick={doBatchComplete} color={C.white} bg={C.green} disabled={!anyBatchSelected} small>Mark Selected as Completed</Btn>
+              <span style={{ fontSize: 11, color: C.dim }}>Select approved placements below</span>
+            </div>
+          )}
+
+          {/* Placement cards */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {ordered.map(p => {
+              const sc = statusColor[p.status];
+              const full = expandedData[p.placementId];
+              const isExpanded = expandedId === p.placementId;
+              const ri = replaceImage[p.placementId];
+              const ef = editFields[p.placementId] || {};
+              const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
+
+              return (
+                <div key={p.placementId} style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: isMobile ? 16 : 20, borderLeft: `3px solid ${sc}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: sc, fontSize: 13, fontWeight: 700 }}>{statusIcon[p.status]} {statusLabel[p.status]}</span>
+                      {p.status === "pending_review" && p.submittedAt && <span style={{ fontSize: 11, color: C.dim }}>— Sent {new Date(p.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+                      {p.status === "approved" && p.approvedAt && <span style={{ fontSize: 11, color: C.dim }}>— {new Date(p.approvedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
+                      {p.version > 1 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#3B82F6", fontWeight: 600 }}>v{p.version}</span>}
+                    </div>
+                    {p.status === "approved" && approvedIds.length > 1 && (
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 11, color: C.dim }}>
+                        <input type="checkbox" checked={!!batchSelect[p.placementId]} onChange={e => setBatchSelect(s => ({ ...s, [p.placementId]: e.target.checked }))} />
+                      </label>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 16, flexDirection: isMobile ? "column" : "row" }}>
+                    {/* Thumbnail / image */}
+                    <div style={{ flexShrink: 0 }}>
+                      {(ri || (full && full.imageData)) ? (
+                        <img src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer" }} onClick={() => { if (!isExpanded) { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); } else setExpandedId(null); }} />
+                      ) : (
+                        <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                          <span style={{ fontSize: 11, color: C.dim }}>{full === undefined ? "Click to load" : "No image"}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{fmtD(p.scheduledDate)}</p>
+                      <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{p.headline || "Untitled"}</p>
+
+                      {/* Changes requested feedback */}
+                      {p.status === "changes_requested" && lastChange && (
+                        <div style={{ background: C.redDim, borderRadius: 8, padding: 12, marginBottom: 12, border: `1px solid rgba(248,113,113,0.2)` }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: C.red, marginBottom: 4 }}>Sponsor feedback:</p>
+                          <p style={{ fontSize: 13, color: C.text, fontStyle: "italic" }}>"{lastChange.message}"</p>
+                        </div>
+                      )}
+
+                      {full?.notes && <p style={{ fontSize: 12, color: C.dim, fontStyle: "italic", marginBottom: 8 }}>Notes: {full.notes}</p>}
+
+                      {/* Action buttons by status */}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                        {p.status === "draft" && (
+                          <React.Fragment>
+                            <Btn onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} color={C.accent} bg={C.accentDim} small>Edit</Btn>
+                            <Btn onClick={() => doAction("submit", p.placementId)} color={C.white} bg={C.accent} small>Send for Review →</Btn>
+                            <Btn onClick={() => setConfirmDelete(p.placementId)} color={C.red} bg={C.redDim} small>Delete</Btn>
+                          </React.Fragment>
+                        )}
+                        {p.status === "pending_review" && (
+                          <Btn onClick={() => doAction("recall", p.placementId)} color={C.amber} bg={C.amberDim} small>Recall</Btn>
+                        )}
+                        {p.status === "changes_requested" && (
+                          <React.Fragment>
+                            <Btn onClick={() => { if (!replaceRefs.current[p.placementId]) replaceRefs.current[p.placementId] = document.createElement("input"); const inp = replaceRefs.current[p.placementId]; inp.type = "file"; inp.accept = "image/*"; inp.onchange = (ev) => handleReplaceFile(p.placementId, ev.target.files[0]); inp.click(); }} color={C.accent} bg={C.accentDim} small>Replace Image</Btn>
+                            <Btn onClick={() => doResubmit(p.placementId)} color={C.white} bg={C.accent} small>Resubmit for Review →</Btn>
+                          </React.Fragment>
+                        )}
+                        {p.status === "approved" && (
+                          <Btn onClick={() => doAction("complete", p.placementId)} color={C.white} bg={C.green} small>Mark as Completed</Btn>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Delete confirmation */}
+                  {confirmDelete === p.placementId && (
+                    <div style={{ marginTop: 12, padding: 12, background: C.redDim, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 13, color: C.red }}>Delete this draft?</span>
+                      <Btn onClick={() => { doAction("delete", p.placementId); setConfirmDelete(null); }} color={C.white} bg={C.red} small>Yes, Delete</Btn>
+                      <Btn onClick={() => setConfirmDelete(null)} color={C.dim} bg={C.card} small>Cancel</Btn>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {ordered.length === 0 && <div style={{ textAlign: "center", padding: 32, background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}><p style={{ color: C.dim, fontSize: 13 }}>No placements yet</p></div>}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SPONSOR PLACEMENTS (sponsor-facing Placements tab)
+    // ═══════════════════════════════════════════════════════════════
+    function SponsorPlacements({ shareToken, isMobile }) {
+      const [placements, setPlacements] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [fullData, setFullData] = useState({});
+      const [changeFeedback, setChangeFeedback] = useState({});
+      const [showChangeForm, setShowChangeForm] = useState(null);
+      const [confirmApprove, setConfirmApprove] = useState(null);
+      const [approving, setApproving] = useState(null);
+      const [submittingChange, setSubmittingChange] = useState(null);
+      const [toast, setToast] = useState(null);
+      const [lightbox, setLightbox] = useState(null);
+      const [showAllCompleted, setShowAllCompleted] = useState(false);
+      const [fadingOut, setFadingOut] = useState(null);
+
+      const fetchList = async () => {
+        try {
+          const res = await fetch(`/api/sponsor-placements?action=list&token=${shareToken}`);
+          if (res.ok) setPlacements(await res.json());
+        } catch {}
+        setLoading(false);
+      };
+
+      const fetchFull = async (pid) => {
+        if (fullData[pid]) return fullData[pid];
+        try {
+          const res = await fetch(`/api/sponsor-placements?action=get&token=${shareToken}&placementId=${pid}`);
+          if (res.ok) { const d = await res.json(); setFullData(p => ({ ...p, [pid]: d })); return d; }
+        } catch {}
+        return null;
+      };
+
+      useEffect(() => { fetchList(); }, []);
+
+      // Auto-fetch images for review items
+      const reviewItems = placements.filter(p => p.status === "pending_review");
+      useEffect(() => { reviewItems.forEach(p => fetchFull(p.placementId)); }, [reviewItems.map(p => p.placementId + p.version).join(",")]);
+
+      const handleApprove = async (pid) => {
+        setApproving(pid);
+        try {
+          const res = await fetch(`/api/sponsor-placements?action=approve&token=${shareToken}&placementId=${pid}`, { method: "POST", headers: { "Content-Type": "application/json" } });
+          if (res.ok) {
+            setFadingOut(pid);
+            setConfirmApprove(null);
+            setToast("Approved!");
+            setTimeout(() => setToast(null), 2500);
+            setTimeout(async () => { setFadingOut(null); await fetchList(); }, 600);
+          }
+        } catch {}
+        setApproving(null);
+      };
+
+      const handleRequestChanges = async (pid) => {
+        const msg = changeFeedback[pid];
+        if (!msg?.trim()) return;
+        setSubmittingChange(pid);
+        try {
+          const res = await fetch(`/api/sponsor-placements?action=request-changes&token=${shareToken}&placementId=${pid}`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg.trim() }),
+          });
+          if (res.ok) {
+            setShowChangeForm(null);
+            setChangeFeedback(p => { const n = { ...p }; delete n[pid]; return n; });
+            await fetchList();
+          }
+        } catch {}
+        setSubmittingChange(null);
+      };
+
+      if (loading) return <div style={{ textAlign: "center", padding: 40, color: C.dim }}><p>Loading...</p></div>;
+      if (placements.length === 0) return (
+        <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+          <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.6 }}>No placements yet. Your first placement will appear here when it's ready for review.</p>
+        </div>
+      );
+
+      const review = placements.filter(p => p.status === "pending_review").sort((a, b) => new Date(a.scheduledDate || "9999") - new Date(b.scheduledDate || "9999"));
+      const upcoming = placements.filter(p => p.status === "approved").sort((a, b) => new Date(a.scheduledDate || "9999") - new Date(b.scheduledDate || "9999"));
+      const changesReq = placements.filter(p => p.status === "changes_requested");
+      const completed = placements.filter(p => p.status === "completed").sort((a, b) => new Date(b.scheduledDate || 0) - new Date(a.scheduledDate || 0));
+      const visibleCompleted = showAllCompleted ? completed : completed.slice(0, 6);
+      const fmtD = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
+      return (
+        <div>
+          {/* Toast */}
+          {toast && <div className="fade-in" style={{ position: "fixed", top: 24, right: 24, background: "#22C55E", color: "#fff", padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, zIndex: 300, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>{toast}</div>}
+
+          {/* Zone 1: Needs Your Review */}
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Needs Your Review</h2>
+              {review.length > 0 && <span style={{ fontSize: 13, color: C.dim }}>{review.length} item{review.length !== 1 ? "s" : ""}</span>}
+            </div>
+
+            {review.length === 0 && changesReq.length === 0 ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", background: "rgba(34,197,94,0.06)", borderRadius: 10, border: "1px solid rgba(34,197,94,0.15)" }}>
+                <span style={{ color: "#22C55E", fontSize: 18 }}>&#10003;</span>
+                <span style={{ fontSize: 14, color: C.muted }}>You're all caught up — no placements need your review right now.</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {review.map(p => {
+                  const full = fullData[p.placementId];
+                  const isFading = fadingOut === p.placementId;
+                  const lastChange = full?.changeHistory?.length > 0 ? full.changeHistory[full.changeHistory.length - 1] : null;
+                  const showChanges = showChangeForm === p.placementId;
+
+                  return (
+                    <div key={p.placementId} className="fade-in" style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: isMobile ? 16 : 24, opacity: isFading ? 0 : 1, transform: isFading ? "translateY(-10px)" : "none", transition: "opacity 0.4s, transform 0.4s" }}>
+                      {/* Image */}
+                      {full?.imageData ? (
+                        <div style={{ position: "relative", marginBottom: 16 }}>
+                          <img src={full.imageData} style={{ width: "100%", maxWidth: 480, borderRadius: 8, display: "block" }} />
+                          {p.version > 1 && (
+                            <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6 }}>Updated v{p.version}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ width: "100%", maxWidth: 480, height: 200, background: "#F3F4F6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                          <span style={{ color: "#9CA3AF", fontSize: 13 }}>Loading image...</span>
+                        </div>
+                      )}
+
+                      {/* Resubmission note */}
+                      {p.version > 1 && lastChange?.message && (
+                        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 13 }}>
+                          <p style={{ color: "#3B82F6", fontWeight: 600, marginBottom: 4 }}>Updated based on your feedback</p>
+                          <p style={{ color: "#6B7280", fontStyle: "italic" }}>Your previous note: "{lastChange.message}"</p>
+                        </div>
+                      )}
+
+                      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{fmtD(p.scheduledDate)}</p>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}>{p.headline || "Untitled"}</p>
+
+                      {/* Approve / Request Changes */}
+                      {confirmApprove === p.placementId ? (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14, color: "#374151" }}>Approve this placement for {fmtD(p.scheduledDate)}?</span>
+                          <button onClick={() => handleApprove(p.placementId)} disabled={approving === p.placementId} style={{ padding: "8px 20px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>{approving === p.placementId ? "Approving..." : "Yes, Approve"}</button>
+                          <button onClick={() => setConfirmApprove(null)} style={{ padding: "8px 16px", background: "none", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 14, color: "#6B7280", cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
+                          <button onClick={() => setConfirmApprove(p.placementId)} style={{ padding: "10px 24px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT, flex: isMobile ? undefined : "none" }}>Approve &#10003;</button>
+                          <button onClick={() => setShowChangeForm(showChanges ? null : p.placementId)} style={{ padding: "10px 24px", background: "none", border: "1px solid #6B7280", borderRadius: 8, fontSize: 14, color: "#374151", cursor: "pointer", fontFamily: FONT, transition: "border-color 0.15s, color 0.15s" }}>Request Changes</button>
+                        </div>
+                      )}
+
+                      {/* Change request textarea */}
+                      {showChanges && (
+                        <div style={{ marginTop: 16, overflow: "hidden", transition: "max-height 0.3s" }}>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 8 }}>What would you like changed?</p>
+                          <textarea value={changeFeedback[p.placementId] || ""} onChange={e => setChangeFeedback(f => ({ ...f, [p.placementId]: e.target.value }))} placeholder="Describe the changes needed" rows={3} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #D1D5DB", fontFamily: FONT, fontSize: 14, resize: "vertical", color: "#111827" }} />
+                          <button onClick={() => handleRequestChanges(p.placementId)} disabled={submittingChange === p.placementId || !(changeFeedback[p.placementId] || "").trim()} style={{ marginTop: 8, padding: "10px 20px", background: "#E8909C", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT, opacity: (changeFeedback[p.placementId] || "").trim() ? 1 : 0.5 }}>{submittingChange === p.placementId ? "Submitting..." : "Submit Feedback"}</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Zone 2: Upcoming (approved) */}
+          {upcoming.length > 0 && (
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Upcoming</h2>
+                <span style={{ fontSize: 13, color: C.dim }}>{upcoming.length} placement{upcoming.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+                {upcoming.map(p => {
+                  const full = fullData[p.placementId];
+                  return (
+                    <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer", transition: "box-shadow 0.15s" }}>
+                      {full?.imageData ? (
+                        <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 10, color: "#9CA3AF" }}>Click to load</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                        <span style={{ fontSize: 12, color: "#6B7280" }}>{p.scheduledDate ? new Date(p.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+                        <span style={{ color: "#22C55E", fontSize: 12, fontWeight: 700 }}>&#10003;</span>
+                      </div>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline || "Untitled"}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Zone 3: Completed */}
+          {completed.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: C.muted }}>Completed</h2>
+                <span style={{ fontSize: 13, color: C.dim }}>{completed.length} placement{completed.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(140px, 1fr))", gap: 12, opacity: 0.7 }}>
+                {visibleCompleted.map(p => {
+                  const full = fullData[p.placementId];
+                  return (
+                    <div key={p.placementId} onClick={() => { fetchFull(p.placementId).then(d => { if (d) setLightbox(d); }); }} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, padding: 8, cursor: "pointer" }}>
+                      {full?.imageData ? (
+                        <img src={full.imageData} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 8 }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 100, background: "#F3F4F6", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: 10, color: "#9CA3AF" }}>Click to load</span>
+                        </div>
+                      )}
+                      <p style={{ fontSize: 12, color: "#6B7280" }}>{p.scheduledDate ? new Date(p.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</p>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.headline || "Untitled"}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              {completed.length > 6 && !showAllCompleted && (
+                <button onClick={() => setShowAllCompleted(true)} style={{ display: "block", margin: "12px auto 0", padding: "8px 20px", background: "none", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 13, color: "#6B7280", cursor: "pointer", fontFamily: FONT }}>Show More ({completed.length - 6} more)</button>
+              )}
+            </div>
+          )}
+
+          {/* Lightbox */}
+          {lightbox && (
+            <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
+              <div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: "#fff", borderRadius: 16, padding: isMobile ? 16 : 24, maxWidth: 600, width: "100%", maxHeight: "90vh", overflow: "auto", position: "relative" }}>
+                <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, color: "#6B7280", cursor: "pointer" }}>&#10005;</button>
+                {lightbox.imageData && <img src={lightbox.imageData} style={{ width: "100%", borderRadius: 8, marginBottom: 16 }} />}
+                <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{lightbox.scheduledDate ? new Date(lightbox.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{lightbox.headline || "Untitled"}</p>
+                {lightbox.approvedAt && <p style={{ fontSize: 13, color: "#22C55E" }}>Approved on {new Date(lightbox.approvedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
+                {lightbox.completedAt && <p style={{ fontSize: 13, color: "#6B7280" }}>Completed {new Date(lightbox.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // SPONSOR POLL PICKER (sponsor-facing)
     // ═══════════════════════════════════════════════════════════════
     function SponsorPollPicker({ shareToken, contract, isMobile }) {
@@ -2059,11 +2619,7 @@
 
             {/* ─── Placements Tab ──────────────────────────── */}
             {activeTab === "placements" && !isDemo && !onBack && (
-              <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📍</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Placements</h2>
-                <p style={{ fontSize: 15, color: C.muted, maxWidth: 400, margin: "0 auto" }}>View and manage your newsletter ad placements. This feature is coming soon.</p>
-              </div>
+              <SponsorPlacements shareToken={shareToken} isMobile={isMobile} />
             )}
 
             {/* ─── Reports Tab ─────────────────────────────── */}
