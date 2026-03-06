@@ -1762,7 +1762,10 @@
     function sanitizeHtml(html) {
       const allowed = new Set(["IMG","A","TABLE","THEAD","TBODY","TFOOT","TR","TD","TH","DIV","SPAN","P","H1","H2","H3","H4","H5","H6","BR","HR","STRONG","EM","B","I","U","UL","OL","LI","STYLE","CENTER","SECTION","HEADER","FOOTER","FIGURE","FIGCAPTION","BLOCKQUOTE","SUP","SUB"]);
       const allowedAttrs = new Set(["style","class","href","src","alt","width","height","colspan","rowspan","align","valign","border","cellpadding","cellspacing","target","title","id"]);
-      const doc = new DOMParser().parseFromString(html, "text/html");
+      // Wrap in a body tag to ensure DOMParser produces a valid body
+      const wrapped = "<body>" + html + "</body>";
+      const doc = new DOMParser().parseFromString(wrapped, "text/html");
+      if (!doc.body) return html;
       const walk = (node) => {
         if (node.nodeType === 1) {
           if (node.tagName === "SCRIPT") { node.remove(); return; }
