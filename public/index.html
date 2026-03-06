@@ -1835,6 +1835,18 @@
         return () => document.removeEventListener("paste", handler);
       }, [contentMode, newHtml]);
 
+      // Listen for iframe height messages (admin HTML preview)
+      useEffect(() => {
+        const handler = (e) => {
+          if (e.data?.type === "iframeHeight" && e.data.id && e.data.height) {
+            const iframe = document.querySelector(`iframe[data-placement-id="${e.data.id}"]`);
+            if (iframe) iframe.style.height = (e.data.height + 32) + "px";
+          }
+        };
+        window.addEventListener("message", handler);
+        return () => window.removeEventListener("message", handler);
+      }, []);
+
       const fetchPlacements = async () => {
         try {
           const res = await fetch(`/api/placements?action=list&sponsorId=${sponsorId}`, { headers });
@@ -1995,9 +2007,12 @@
                       <button onClick={() => { setNewHtml(""); setHtmlWarning(null); }} style={{ marginLeft: "auto", background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 11 }}>Clear</button>
                       <button onClick={() => { setNewHtml(""); setHtmlWarning(null); }} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 11 }}>Replace</button>
                     </div>
-                    <div style={{ maxWidth: 600, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", background: "#fff", padding: 16, maxHeight: 400, overflowY: "auto", pointerEvents: "none" }}>
-                      <div dangerouslySetInnerHTML={{ __html: '<style>table{max-width:100%!important;}img{max-width:100%!important;height:auto!important;}a{max-width:100%!important;}</style>' + newHtml }} />
-                    </div>
+                    <iframe
+                      sandbox="allow-scripts"
+                      srcDoc={'<!DOCTYPE html><html><head><style>body{margin:0 auto;padding:16px;max-width:600px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}table{max-width:100%!important;}img{max-width:100%!important;height:auto!important;}a{max-width:100%!important;pointer-events:none;}</style></head><body>' + newHtml + '<script>window.addEventListener("load",function(){window.parent.postMessage({type:"iframeHeight",id:"admin-preview",height:document.body.scrollHeight},"*");});new ResizeObserver(function(){window.parent.postMessage({type:"iframeHeight",id:"admin-preview",height:document.body.scrollHeight},"*");}).observe(document.body);<\/script></body></html>'}
+                      style={{ width: "100%", maxWidth: 600, border: `1px solid ${C.border}`, borderRadius: 8, maxHeight: 600, display: "block", background: "#fff" }}
+                      data-placement-id="admin-preview"
+                    />
                   </div>
                 )}
                 {htmlWarning && <p style={{ color: C.amber, fontSize: 12, marginTop: 8 }}>{htmlWarning}</p>}
