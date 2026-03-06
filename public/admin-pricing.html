@@ -131,6 +131,9 @@ const DEFAULT_CONFIG = {
   stageMonthlyFlat: 500,
   partnerStageMonths: 1,
   audiencePollValue: 1000,
+  starterPolls: 0,
+  growthPolls: 1,
+  partnerPolls: 3,
   adCopyValuePerPlacement: 250,
   takeoverPremiumPct: 0.20,
   takeoverPerEmail: null,
@@ -675,9 +678,17 @@ function AdminApp({ token: initialToken }) {
 
           {/* Custom Audience Poll */}
           <div className="card">
-            <h3>Custom Audience Poll</h3>
-            <div className="hint" style={{ marginBottom: 12 }}>Partner only. Value shown in Partner breakdown.</div>
+            <h3>Custom Audience Polls</h3>
+            <div className="hint" style={{ marginBottom: 12 }}>Poll value shown in Partner breakdown. Poll counts shown on packages page per tier.</div>
             <NumField label="Poll Value" hint="Flat dollar value added to Partner anchor value" value={config.audiencePollValue} onChange={v => update("audiencePollValue", v)} step={100} min={0} suffix="$" />
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #2A2D37" }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#C0C2C9", marginBottom: 12 }}>Polls Included Per Tier</label>
+              <div className="field-row">
+                <NumField label="Starter Polls" value={config.starterPolls} onChange={v => update("starterPolls", v)} step={1} min={0} />
+                <NumField label="Growth Polls" value={config.growthPolls} onChange={v => update("growthPolls", v)} step={1} min={0} />
+                <NumField label="Partner Polls" value={config.partnerPolls} onChange={v => update("partnerPolls", v)} step={1} min={0} />
+              </div>
+            </div>
           </div>
 
           {/* Ad Copy */}

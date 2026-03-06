@@ -287,6 +287,26 @@
       const isTablet = width <= TABLET;
       const [, setAdminTick] = useState(0);
       useEffect(() => { const i = setInterval(() => setAdminTick(t => t + 1), 60000); return () => clearInterval(i); }, []);
+      const [pricingCfg, setPricingCfg] = useState(null);
+      useEffect(() => {
+        Promise.all([
+          fetch("/api/pricing-config").then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch("/api/newsletter-opens").then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch("/api/stats").then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([pc, opens, stats]) => {
+          const defaults = { anchorCPM: 45, starterDiscountPct: 0.50, growthDiscountPct: 0.55, partnerDiscountPct: 0.60, starterPlacements: 6, growthPlacements: 12, partnerPlacements: 24, starterMonths: 3, growthMonths: 6, partnerMonths: 12, takeoverPremiumPct: 0.20, takeoverPerEmail: null, roundToNearest: 500, starterPriceOverride: null, growthPriceOverride: null, partnerPriceOverride: null, starterPolls: 0, growthPolls: 1, partnerPolls: 3, subscriberOffset: 3000 };
+          const cfg = { ...defaults, ...(pc || {}) };
+          const engagedMoms = (stats?.engagedMoms || 29000) + (cfg.subscriberOffset || 3000);
+          const avgOpens = opens?.avgOpensPerSend || null;
+          const anchor = ((avgOpens || engagedMoms) / 1000) * cfg.anchorCPM;
+          const r = cfg.roundToNearest || 1;
+          const starterPrice = cfg.starterPriceOverride || Math.round((cfg.starterPlacements * anchor * (1 - cfg.starterDiscountPct)) / r) * r;
+          const growthPrice = cfg.growthPriceOverride || Math.round((cfg.growthPlacements * anchor * (1 - cfg.growthDiscountPct)) / r) * r;
+          const partnerPrice = cfg.partnerPriceOverride || Math.round((cfg.partnerPlacements * anchor * (1 - cfg.partnerDiscountPct)) / r) * r;
+          const takeoverPerEmail = cfg.takeoverPerEmail || Math.ceil((anchor * cfg.takeoverPremiumPct) / 25) * 25;
+          setPricingCfg({ ...cfg, starterPrice, growthPrice, partnerPrice, takeoverPerEmail });
+        });
+      }, []);
 
       // Auth gate
       if (!authToken) return <LoginScreen onLogin={login} />;
@@ -305,9 +325,15 @@
       }, []);
 
       // Sponsor CRUD
-      const addSponsor = (name, patterns) => {
+      const addSponsor = (name, patterns, contractData) => {
         const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString(), shareToken: uid() + uid() };
         saveSp([...sponsors, s]);
+        if (contractData) {
+          const updated = contracts.map(c => c.sponsorId === s.id ? { ...c, isActive: false } : c);
+          const nc = { id: uid(), sponsorId: s.id, name: contractData.contractName, totalPrice: contractData.totalPrice, totalRuns: contractData.totalRuns, startDate: contractData.startDate, endDate: contractData.endDate, packageTier: contractData.packageTier || "custom", pollsIncluded: contractData.pollsIncluded || 0, takeoverIncluded: contractData.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
+          saveCt([...updated, nc]);
+          setSelContract(nc.id);
+        }
         setSel(s.id);
         setModal(null);
       };
@@ -449,6 +475,7 @@
             isActive: !!c.isActive, showCpmToSponsor: sCpm, showCpcToSponsor: sCpc,
             exclusivePlacement: c.exclusivePlacement, primaryPlacement: c.primaryPlacement,
             categoryExclusivity: c.categoryExclusivity, pricingNotes: c.pricingNotes,
+            packageTier: c.packageTier || "custom", pollsIncluded: c.pollsIncluded || 0, takeoverIncluded: c.takeoverIncluded || false,
             runs: cRuns, costMetrics: cm };
         });
         const assignedIds = new Set(spContracts.map(c => c.id));
@@ -572,6 +599,7 @@
                 {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ position: "relative", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "inquiries" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Leads{newInquiryCount > 0 && <span style={{ marginLeft: 4, fontSize: 10, padding: "1px 5px", borderRadius: 8, background: C.green, color: C.bg, fontWeight: 700 }}>{newInquiryCount}</span>}</button>
+              <button onClick={() => { setSel(null); setView("polls"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "polls" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Polls</button>
               <a href="/admin/pricing" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, textDecoration: "none", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Pricing</a>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
@@ -600,10 +628,13 @@
             {config.apiKey && <div style={{ padding: "8px 12px 4px" }}><Btn onClick={syncAll} color={C.green} bg={C.greenDim} disabled={syncing} style={{ width: "100%" }}>{syncing ? "Syncing..." : "⟳ Sync All"}</Btn></div>}
             {config.apiKey && <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} /><span style={{ fontSize: 11, color: C.green }}>API Connected</span></div>}
             <div style={{ padding: "8px 12px 0" }}><Btn onClick={logout} color={C.dim} bg="transparent" style={{ width: "100%", fontSize: 11, border: `1px solid ${C.border}` }}>Logout</Btn></div>
-            <div style={{ padding: "12px 12px 0" }}>
+            <div style={{ padding: "12px 12px 0", display: "flex", flexDirection: "column", gap: 6 }}>
               <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ width: "100%", padding: "10px 14px", background: view === "inquiries" ? C.accentDim : "transparent", border: view === "inquiries" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "inquiries" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
                 <span>Inquiries</span>
                 {newInquiryCount > 0 && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: C.greenDim, color: C.green, fontWeight: 700 }}>{newInquiryCount}</span>}
+              </button>
+              <button onClick={() => { setSel(null); setView("polls"); }} style={{ width: "100%", padding: "10px 14px", background: view === "polls" ? C.accentDim : "transparent", border: view === "polls" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "polls" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
+                <span>Poll Calendar</span>
               </button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
@@ -628,7 +659,7 @@
 
           {/* Main */}
           <main style={{ flex: 1, padding: isMobile ? 16 : 32, overflow: "auto" }}>
-            {!sel && view !== "inquiries" && (
+            {!sel && view !== "inquiries" && view !== "polls" && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 16 }}>
                 <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📊</div>
                 <p style={{ color: C.dim, fontSize: 15, fontWeight: 500 }}>Select a sponsor to view their data</p>
@@ -695,6 +726,8 @@
                 </div>
               );
             })()}
+
+            {view === "polls" && !sel && <PollCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} />}
 
             {sel && sponsor && (
               <div className="fade-in">
@@ -946,22 +979,33 @@
                   </div>
                   );
                 })()}
+
+                {/* Reports placeholder */}
+                <div style={{ marginTop: 32 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Reports</h3>
+                    <Btn disabled color={C.dim} bg={C.card} small>+ Upload Report</Btn>
+                  </div>
+                  <div style={{ textAlign: "center", padding: "32px 24px", background: C.card, borderRadius: 14, border: `1px solid ${C.border}` }}>
+                    <p style={{ color: C.dim, fontSize: 13 }}>Report uploads coming soon</p>
+                  </div>
+                </div>
               </div>
             )}
           </main>
 
           {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} authToken={authToken} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
-          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} /></Overlay>}
+          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} pricingCfg={pricingCfg} /></Overlay>}
           {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
           {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "editContract" && viewingContract && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={viewingContract} onSave={d => updateContract(viewingContract.id, d)} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "convertInquiry" && convertInquiry && (
             <Overlay onClose={() => { setModal(null); setConvertInquiry(null); }}>
-              <ConvertInquiryForm inquiry={convertInquiry} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
+              <ConvertInquiryForm inquiry={convertInquiry} pricingCfg={pricingCfg} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
                 const newSponsor = { id: uid(), name: data.sponsorName, urlPatterns: [], created: new Date().toISOString(), shareToken: uid() + uid() };
                 saveSp([...sponsors, newSponsor]);
                 const updated = contracts.map(c => c.sponsorId === newSponsor.id ? { ...c, isActive: false } : c);
-                const nc = { id: uid(), sponsorId: newSponsor.id, name: data.contractName, totalPrice: data.totalPrice, totalRuns: data.totalRuns, startDate: data.startDate, endDate: data.endDate, isActive: true, created: new Date().toISOString() };
+                const nc = { id: uid(), sponsorId: newSponsor.id, name: data.contractName, totalPrice: data.totalPrice, totalRuns: data.totalRuns, startDate: data.startDate, endDate: data.endDate, packageTier: data.packageTier || "custom", pollsIncluded: data.pollsIncluded || 0, takeoverIncluded: data.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
                 saveCt([...updated, nc]);
                 await patchInquiry(convertInquiry.id, { status: "converted", convertedTo: data.sponsorName, convertedAt: new Date().toISOString() });
                 setSel(newSponsor.id);
@@ -980,6 +1024,322 @@
               <button onClick={() => undoDismiss(toast.undoId)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>Undo</button>
             </div>
           )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // POLL CALENDAR
+    // ═══════════════════════════════════════════════════════════════
+    function PollCalendar({ authToken, sponsors, contracts, isMobile }) {
+      const [pollConfig, setPollConfig] = useState({ sendDays: [1, 3, 5] });
+      const [schedules, setSchedules] = useState({});
+      const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+      const [selectedDate, setSelectedDate] = useState(null);
+      const [viewMode, setViewMode] = useState("calendar"); // calendar | list
+      const [loading, setLoading] = useState(true);
+      const [filterSponsor, setFilterSponsor] = useState("");
+      const [filterStatus, setFilterStatus] = useState("");
+
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const dayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+      const fetchConfig = async () => {
+        try {
+          const res = await fetch("/api/polls?action=config", { headers: { Authorization: `Bearer ${authToken}` } });
+          if (res.ok) { const d = await res.json(); setPollConfig(d); }
+        } catch {}
+      };
+
+      const fetchSchedules = async (month) => {
+        try {
+          const res = await fetch(`/api/polls?action=schedule&month=${month}`, { headers: { Authorization: `Bearer ${authToken}` } });
+          if (res.ok) { const d = await res.json(); setSchedules(d); }
+        } catch {}
+      };
+
+      useEffect(() => { fetchConfig().then(() => fetchSchedules(currentMonth)).then(() => setLoading(false)); }, []);
+      useEffect(() => { fetchSchedules(currentMonth); }, [currentMonth]);
+
+      const saveSendDays = async (days) => {
+        setPollConfig({ ...pollConfig, sendDays: days });
+        await fetch("/api/polls?action=config", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ sendDays: days }) });
+      };
+
+      const getSendDates = () => {
+        const [year, mon] = currentMonth.split("-").map(Number);
+        const daysInMonth = new Date(year, mon, 0).getDate();
+        const dates = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dt = new Date(year, mon - 1, d);
+          const dow = dt.getDay(); // 0=Sun
+          const jsDow = dow === 0 ? 7 : dow; // 1=Mon..7=Sun
+          if (pollConfig.sendDays.includes(jsDow)) {
+            dates.push(`${year}-${String(mon).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+          }
+        }
+        return dates;
+      };
+
+      const sendDates = getSendDates();
+
+      const getSlotSummary = (dateStr) => {
+        const sched = schedules[dateStr];
+        if (!sched) return { editorial: false, slots: [] };
+        return {
+          editorial: !!(sched.editorialPoll && sched.editorialPoll.question),
+          slots: sched.sponsorSlots || [],
+        };
+      };
+
+      const statusColor = (s) => s === "locked" ? C.green : s === "pending" ? C.amber : C.dim;
+      const statusLabel = (s) => s === "locked" ? "Locked" : s === "pending" ? "Pending" : "Open";
+
+      // Active sponsors with poll entitlements
+      const activeSponsorsWithPolls = sponsors.filter(sp => {
+        const spContracts = contracts.filter(c => c.sponsorId === sp.id && c.isActive && (c.pollsIncluded || 0) > 0);
+        return spContracts.length > 0;
+      });
+
+      const saveScheduleField = async (dateStr, field, value) => {
+        const sched = schedules[dateStr] || { date: dateStr };
+        const updated = { ...sched, [field]: value, date: dateStr };
+        setSchedules(prev => ({ ...prev, [dateStr]: updated }));
+        await fetch("/api/polls?action=schedule", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify(updated) });
+      };
+
+      const assignSlot = async (dateStr, slotIndex, sponsorId, sponsorName, contractId) => {
+        const res = await fetch("/api/polls?action=assign", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ date: dateStr, slotIndex, sponsorId, sponsorName, contractId }) });
+        if (res.ok) { const d = await res.json(); setSchedules(prev => ({ ...prev, [dateStr]: d.data })); }
+      };
+
+      const lockSlot = async (dateStr, slotIndex) => {
+        const res = await fetch("/api/polls?action=lock", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ date: dateStr, slotIndex }) });
+        if (res.ok) { const d = await res.json(); setSchedules(prev => ({ ...prev, [dateStr]: d.data })); }
+      };
+
+      const unlockSlot = async (dateStr, slotIndex) => {
+        const res = await fetch("/api/polls?action=unlock", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ date: dateStr, slotIndex }) });
+        if (res.ok) { const d = await res.json(); setSchedules(prev => ({ ...prev, [dateStr]: d.data })); }
+      };
+
+      const clearSlot = async (dateStr, slotIndex) => {
+        const res = await fetch("/api/polls?action=clear", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ date: dateStr, slotIndex }) });
+        if (res.ok) { const d = await res.json(); setSchedules(prev => ({ ...prev, [dateStr]: d.data })); }
+      };
+
+      const prevMonth = () => {
+        const [y, m] = currentMonth.split("-").map(Number);
+        const d = new Date(y, m - 2, 1);
+        setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      };
+      const nextMonth = () => {
+        const [y, m] = currentMonth.split("-").map(Number);
+        const d = new Date(y, m, 1);
+        setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      };
+
+      const monthLabel = (() => {
+        const [y, m] = currentMonth.split("-").map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      })();
+
+      if (loading) return <div style={{ textAlign: "center", padding: 64, color: C.dim }}>Loading poll calendar...</div>;
+
+      // ─── Date Detail Modal ────
+      const DateDetail = ({ dateStr, onClose }) => {
+        const sched = schedules[dateStr] || { date: dateStr, sponsorSlots: [] };
+        const [editQ, setEditQ] = useState(sched.editorialPoll?.question || "");
+        const [editOpts, setEditOpts] = useState((sched.editorialPoll?.options || []).join(", "));
+        const slots = sched.sponsorSlots || [];
+        const dateObj = new Date(dateStr + "T00:00:00");
+        const dateLabel = dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+        const saveEditorial = () => {
+          const opts = editOpts.split(",").map(o => o.trim()).filter(Boolean);
+          saveScheduleField(dateStr, "editorialPoll", { question: editQ.trim(), options: opts, status: editQ.trim() ? "assigned" : "none" });
+        };
+
+        const clearEditorial = () => {
+          setEditQ(""); setEditOpts("");
+          saveScheduleField(dateStr, "editorialPoll", { question: "", options: [], status: "none" });
+        };
+
+        // Ensure at least 2 slots
+        const displaySlots = [...slots];
+        while (displaySlots.length < 2) displaySlots.push({ slotId: `new-${displaySlots.length}`, status: "open" });
+
+        return (
+          <Overlay onClose={onClose}>
+            <div>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{dateLabel}</h3>
+              <p style={{ fontSize: 12, color: C.dim, marginBottom: 20 }}>Poll schedule for this send date</p>
+
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Editorial Poll</label>
+                <Input label="Question" value={editQ} onChange={e => setEditQ(e.target.value)} placeholder="e.g. How often do you exercise?" />
+                <Input label="Options (comma-separated)" value={editOpts} onChange={e => setEditOpts(e.target.value)} placeholder="Daily, A few times a week, Rarely, Never" />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Btn onClick={saveEditorial} color={C.white} bg={C.accent} small>Assign</Btn>
+                  <Btn onClick={clearEditorial} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }} small>Clear</Btn>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 12 }}>Sponsor Poll Slots</label>
+                {displaySlots.map((slot, idx) => (
+                  <div key={slot.slotId || idx} style={{ padding: 14, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Slot {idx + 1}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: statusColor(slot.status), padding: "2px 8px", borderRadius: 6, background: slot.status === "locked" ? C.greenDim : slot.status === "pending" ? C.amberDim : C.card }}>{statusLabel(slot.status)}{slot.status === "locked" && " \uD83D\uDD12"}</span>
+                    </div>
+                    {slot.sponsorName && <p style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>{slot.sponsorName}</p>}
+                    {slot.pollQuestion && <p style={{ fontSize: 12, color: C.muted, fontStyle: "italic", marginBottom: 4 }}>"{slot.pollQuestion}"</p>}
+                    {slot.lockedAt && <p style={{ fontSize: 11, color: C.dim }}>Locked: {fmtDate(slot.lockedAt)}</p>}
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      {slot.status === "open" && (
+                        <select onChange={e => { const [sid, sname, cid] = e.target.value.split("|"); if (sid) assignSlot(dateStr, idx, sid, sname, cid); e.target.value = ""; }}
+                          style={{ flex: 1, padding: "8px 10px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontFamily: FONT, fontSize: 12 }}>
+                          <option value="">Assign to sponsor...</option>
+                          {activeSponsorsWithPolls.map(sp => {
+                            const ac = contracts.find(c => c.sponsorId === sp.id && c.isActive);
+                            return <option key={sp.id} value={`${sp.id}|${sp.name}|${ac?.id || ""}`}>{sp.name}</option>;
+                          })}
+                        </select>
+                      )}
+                      {slot.status === "pending" && <Btn onClick={() => lockSlot(dateStr, idx)} color={C.white} bg={C.green} small>Lock</Btn>}
+                      {slot.status === "locked" && <Btn onClick={() => unlockSlot(dateStr, idx)} color={C.amber} bg={C.amberDim} small>Unlock</Btn>}
+                      {slot.sponsorId && <Btn onClick={() => clearSlot(dateStr, idx)} color={C.red} bg={C.redDim} small>Clear</Btn>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Overlay>
+        );
+      };
+
+      return (
+        <div className="fade-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+            <h2 style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, letterSpacing: -0.5 }}>Poll Calendar</h2>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["calendar", "list"].map(m => (
+                <button key={m} onClick={() => setViewMode(m)} style={{ padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: FONT, cursor: "pointer", border: "none", background: viewMode === m ? C.accentDim : C.card, color: viewMode === m ? C.accent : C.muted }}>{m === "calendar" ? "Calendar" : "List"}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Send Days Config */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, display: "block" }}>Newsletter Send Days</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[1, 2, 3, 4, 5, 6, 7].map(d => (
+                <button key={d} onClick={() => { const next = pollConfig.sendDays.includes(d) ? pollConfig.sendDays.filter(x => x !== d) : [...pollConfig.sendDays, d].sort(); saveSendDays(next); }}
+                  style={{ padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", border: "none", background: pollConfig.sendDays.includes(d) ? C.accent : C.bg, color: pollConfig.sendDays.includes(d) ? C.white : C.dim, transition: "all 0.15s" }}>
+                  {dayLabels[d - 1]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Month navigation */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <button onClick={prevMonth} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>&larr; Prev</button>
+            <h3 style={{ fontSize: 18, fontWeight: 700 }}>{monthLabel}</h3>
+            <button onClick={nextMonth} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", padding: "8px 16px", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>Next &rarr;</button>
+          </div>
+
+          {/* Calendar View */}
+          {viewMode === "calendar" && (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+              {sendDates.map(dateStr => {
+                const summary = getSlotSummary(dateStr);
+                const dateObj = new Date(dateStr + "T00:00:00");
+                const dayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                return (
+                  <div key={dateStr} onClick={() => setSelectedDate(dateStr)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, cursor: "pointer", transition: "border-color 0.15s", minHeight: 100 }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = C.accent} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 8 }}>{dayLabel}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 11 }}>📋</span>
+                      <span style={{ fontSize: 11, color: summary.editorial ? C.green : C.dim }}>{summary.editorial ? "Editorial: ✓" : "Editorial: —"}</span>
+                    </div>
+                    {summary.slots.length === 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11 }}>🏷</span>
+                        <span style={{ fontSize: 11, color: C.dim }}>No slots</span>
+                      </div>
+                    )}
+                    {summary.slots.map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 11 }}>🏷</span>
+                        <span style={{ fontSize: 11, color: statusColor(s.status) }}>
+                          {s.status === "open" ? `Slot ${i + 1}: Open` : `${s.sponsorName || "?"} (${statusLabel(s.status)})`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* List View */}
+          {viewMode === "list" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                <select value={filterSponsor} onChange={e => setFilterSponsor(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: FONT, fontSize: 12 }}>
+                  <option value="">All Sponsors</option>
+                  {sponsors.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                </select>
+                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontFamily: FONT, fontSize: 12 }}>
+                  <option value="">All Statuses</option>
+                  <option value="open">Open</option>
+                  <option value="pending">Pending</option>
+                  <option value="locked">Locked</option>
+                </select>
+              </div>
+              <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 2fr", padding: "12px 20px", borderBottom: `1px solid ${C.border}`, gap: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim }}>Date</p>
+                  <p style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim }}>Editorial Poll</p>
+                  <p style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: C.dim }}>Sponsor Slots</p>
+                </div>
+                {sendDates.filter(dateStr => {
+                  const summary = getSlotSummary(dateStr);
+                  if (filterSponsor && !summary.slots.some(s => s.sponsorId === filterSponsor)) return false;
+                  if (filterStatus && !summary.slots.some(s => s.status === filterStatus) && !(filterStatus === "open" && summary.slots.length === 0)) return false;
+                  return true;
+                }).map((dateStr, i) => {
+                  const summary = getSlotSummary(dateStr);
+                  const dateObj = new Date(dateStr + "T00:00:00");
+                  const dayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                  const openCount = summary.slots.filter(s => s.status === "open").length || (summary.slots.length === 0 ? 2 : 0);
+                  const lockedSlots = summary.slots.filter(s => s.status === "locked");
+                  const pendingSlots = summary.slots.filter(s => s.status === "pending");
+                  return (
+                    <div key={dateStr} onClick={() => setSelectedDate(dateStr)} style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 2fr", padding: "14px 20px", borderBottom: `1px solid ${C.border}`, gap: 12, cursor: "pointer", alignItems: "center" }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.accentDim} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{dayLabel}</p>
+                      <p style={{ fontSize: 12, color: summary.editorial ? C.text : C.dim, fontStyle: summary.editorial ? "normal" : "italic" }}>
+                        {summary.editorial ? schedules[dateStr]?.editorialPoll?.question : "[not assigned]"}
+                      </p>
+                      <p style={{ fontSize: 12, color: C.muted }}>
+                        {openCount > 0 && `${openCount} open`}
+                        {pendingSlots.length > 0 && `${openCount > 0 ? ", " : ""}${pendingSlots.length} pending (${pendingSlots.map(s => s.sponsorName).join(", ")})`}
+                        {lockedSlots.length > 0 && `${(openCount > 0 || pendingSlots.length > 0) ? ", " : ""}${lockedSlots.length} locked (${lockedSlots.map(s => s.sponsorName).join(", ")})`}
+                        {openCount === 0 && pendingSlots.length === 0 && lockedSlots.length === 0 && "2 open"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Date Detail Modal */}
+          {selectedDate && <DateDetail dateStr={selectedDate} onClose={() => setSelectedDate(null)} />}
         </div>
       );
     }
@@ -1224,7 +1584,244 @@
     // ═══════════════════════════════════════════════════════════════
     // SPONSOR VIEW
     // ═══════════════════════════════════════════════════════════════
-    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns, isDemo }) {
+    // ═══════════════════════════════════════════════════════════════
+    // SPONSOR POLL PICKER (sponsor-facing)
+    // ═══════════════════════════════════════════════════════════════
+    function SponsorPollPicker({ shareToken, contract, isMobile }) {
+      const [entitlements, setEntitlements] = useState(null);
+      const [availableDates, setAvailableDates] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [selectedDate, setSelectedDate] = useState(null);
+      const [pollQuestion, setPollQuestion] = useState("");
+      const [pollOptions, setPollOptions] = useState("");
+      const [isCustom, setIsCustom] = useState(false);
+      const [claiming, setClaiming] = useState(false);
+      const [locking, setLocking] = useState(false);
+      const [confirmLock, setConfirmLock] = useState(null);
+      const [error, setError] = useState(null);
+
+      const fetchData = async () => {
+        try {
+          const [entRes, datesRes] = await Promise.all([
+            fetch(`/api/sponsor-polls?action=entitlements&token=${shareToken}`),
+            fetch(`/api/sponsor-polls?action=available-dates&token=${shareToken}`),
+          ]);
+          if (entRes.ok) setEntitlements(await entRes.json());
+          if (datesRes.ok) {
+            const d = await datesRes.json();
+            setAvailableDates(d.dates || []);
+          }
+        } catch {}
+        setLoading(false);
+      };
+
+      useEffect(() => { fetchData(); }, []);
+
+      if (loading) return null;
+      if (!entitlements || entitlements.pollsIncluded === 0) return null;
+
+      const handleClaim = async () => {
+        if (!selectedDate) return;
+        setClaiming(true);
+        setError(null);
+        try {
+          const opts = pollOptions.split(",").map(o => o.trim()).filter(Boolean);
+          const res = await fetch(`/api/sponsor-polls?action=claim&token=${shareToken}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: selectedDate, pollQuestion: pollQuestion.trim() || null, pollOptions: opts.length > 0 ? opts : null, isCustomQuestion: isCustom }),
+          });
+          if (res.ok) {
+            setSelectedDate(null);
+            setPollQuestion("");
+            setPollOptions("");
+            setIsCustom(false);
+            await fetchData();
+          } else {
+            const d = await res.json();
+            setError(d.error || "Failed to claim slot");
+          }
+        } catch { setError("Network error"); }
+        setClaiming(false);
+      };
+
+      const handleLock = async (date) => {
+        setLocking(true);
+        try {
+          const res = await fetch(`/api/sponsor-polls?action=lock&token=${shareToken}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date }),
+          });
+          if (res.ok) { setConfirmLock(null); await fetchData(); }
+        } catch {}
+        setLocking(false);
+      };
+
+      const tierLabel = { starter: "Starter", growth: "Growth", partner: "Partner", custom: "Custom" };
+
+      // Group available dates by quarter
+      const datesByQuarter = {};
+      for (const d of availableDates) {
+        if (!datesByQuarter[d.quarter]) datesByQuarter[d.quarter] = [];
+        datesByQuarter[d.quarter].push(d);
+      }
+
+      return (
+        <div style={{ marginTop: isMobile ? 40 : 56, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Your Custom Audience Polls</h2>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: isMobile ? 16 : 24, marginBottom: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Package: {tierLabel[entitlements.tier] || entitlements.tier} — {entitlements.pollsIncluded} poll{entitlements.pollsIncluded !== 1 ? "s" : ""} included</span>
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Used: {entitlements.used} of {entitlements.pollsIncluded}</span>
+              <span style={{ fontSize: 13, color: entitlements.remaining > 0 ? C.green : C.dim }}>Remaining: {entitlements.remaining}</span>
+            </div>
+            <p style={{ fontSize: 12, color: C.dim }}>Quarterly limit: 1 poll per quarter</p>
+          </div>
+
+          {/* Existing selections */}
+          {entitlements.slots && entitlements.slots.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              {entitlements.slots.map((slot, i) => (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{slot.date ? new Date(slot.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "?"}</span>
+                    {slot.pollQuestion && <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>— "{slot.pollQuestion}"</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {slot.status === "locked" && <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>🔒 Locked</span>}
+                    {slot.status === "pending" && (
+                      <>
+                        <span style={{ fontSize: 12, color: C.amber, fontWeight: 600 }}>⏳ Pending</span>
+                        <Btn onClick={() => setConfirmLock(slot.date)} color={C.white} bg={C.green} small>Lock This Date</Btn>
+                      </>
+                    )}
+                    {slot.isCustomQuestion && slot.customQuestionApproved === null && <span style={{ fontSize: 11, color: C.amber }}>Pending Approval</span>}
+                    {slot.isCustomQuestion && slot.customQuestionApproved === false && <span style={{ fontSize: 11, color: C.red }}>Question not approved — please resubmit</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Lock confirmation modal */}
+          {confirmLock && (
+            <Overlay onClose={() => setConfirmLock(null)}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Lock This Date?</h3>
+                <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.6 }}>Once locked, poll dates can only be changed by The Mommy team. Contact us if you need to make changes.</p>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <Btn onClick={() => setConfirmLock(null)} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
+                  <Btn onClick={() => handleLock(confirmLock)} color={C.white} bg={C.green} disabled={locking}>{locking ? "Locking..." : "Confirm Lock"}</Btn>
+                </div>
+              </div>
+            </Overlay>
+          )}
+
+          {/* Date browser */}
+          {entitlements.remaining > 0 && (
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted, marginBottom: 16 }}>Select a Date for Your Next Poll</h3>
+              {Object.entries(datesByQuarter).map(([quarter, dates]) => {
+                const quarterUsed = dates[0]?.quarterUsed || 0;
+                const isQuarterFull = quarterUsed >= 1;
+                return (
+                  <div key={quarter} style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: isQuarterFull ? C.dim : C.text }}>{quarter}</span>
+                      {isQuarterFull && <span style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>— slot used</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {dates.map(d => {
+                        const dateObj = new Date(d.date + "T00:00:00");
+                        const label = dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", weekday: "short" });
+                        const isSelected = selectedDate === d.date;
+                        return (
+                          <button key={d.date} onClick={() => d.available ? setSelectedDate(isSelected ? null : d.date) : null}
+                            disabled={!d.available}
+                            style={{
+                              padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: FONT,
+                              cursor: d.available ? "pointer" : "not-allowed",
+                              border: isSelected ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
+                              background: isSelected ? C.accentDim : d.available ? C.card : C.bg,
+                              color: d.available ? (isSelected ? C.accent : C.text) : C.dim,
+                              opacity: d.available ? 1 : 0.4,
+                              transition: "all 0.15s",
+                            }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Selection panel */}
+              {selectedDate && (
+                <div style={{ background: C.card, border: `1px solid ${C.accent}`, borderRadius: 14, padding: isMobile ? 16 : 24, marginTop: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Select your poll for {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</h3>
+
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <button onClick={() => setIsCustom(false)} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", background: !isCustom ? C.accent : C.bg, color: !isCustom ? C.white : C.muted }}>From Library</button>
+                    <button onClick={() => setIsCustom(true)} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", background: isCustom ? C.accent : C.bg, color: isCustom ? C.white : C.muted }}>Custom Question</button>
+                  </div>
+
+                  {!isCustom && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>
+                      {["Where do you shop for kids' clothes?", "What's your favorite family vacation type?", "How do you handle screen time for your kids?", "What's your biggest parenting challenge right now?", "How do you meal plan for your family?"].map(q => (
+                        <button key={q} onClick={() => setPollQuestion(q)} style={{
+                          textAlign: "left", padding: "10px 14px", borderRadius: 8,
+                          background: pollQuestion === q ? C.accentDim : C.bg,
+                          border: `1px solid ${pollQuestion === q ? C.accent : C.border}`,
+                          color: pollQuestion === q ? C.accent : C.text,
+                          cursor: "pointer", fontSize: 13, fontFamily: FONT, transition: "all 0.15s",
+                        }}>
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isCustom && (
+                    <div style={{ marginBottom: 16 }}>
+                      <Input label="Your Question" value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="e.g. What's your morning routine?" />
+                      <Input label="Options (comma-separated, 2-4)" value={pollOptions} onChange={e => setPollOptions(e.target.value)} placeholder="Option A, Option B, Option C" />
+                      <p style={{ fontSize: 11, color: C.dim }}>Custom questions are submitted for approval by The Mommy team.</p>
+                    </div>
+                  )}
+
+                  {error && <p style={{ fontSize: 13, color: C.red, marginBottom: 12 }}>{error}</p>}
+
+                  <Btn onClick={handleClaim} color={C.white} bg={C.accent} disabled={claiming || !pollQuestion.trim()} style={{ width: "100%", padding: 14, fontSize: 15 }}>
+                    {claiming ? "Confirming..." : "Confirm Poll Selection"}
+                  </Btn>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function SponsorView({ sponsor, runs, totals, contract, costMetrics, onBack, onQuickSync, config, allContracts, allRuns, isDemo, shareToken }) {
+      const TABS = [
+        { id: "performance", label: "Performance" },
+        { id: "polls", label: "Polls" },
+        { id: "placements", label: "Placements" },
+        { id: "reports", label: "Reports" },
+      ];
+      const urlTab = new URLSearchParams(window.location.search).get("tab");
+      const [activeTab, setActiveTab] = useState(TABS.find(t => t.id === urlTab) ? urlTab : "performance");
+      const switchTab = (tabId) => {
+        setActiveTab(tabId);
+        const u = new URL(window.location);
+        if (tabId === "performance") u.searchParams.delete("tab");
+        else u.searchParams.set("tab", tabId);
+        window.history.replaceState({}, "", u);
+      };
       const [showPdfModal, setShowPdfModal] = useState(false);
       const [pdfIncludeCpm, setPdfIncludeCpm] = useState(true);
       const [pdfIncludeCpc, setPdfIncludeCpc] = useState(true);
@@ -1347,9 +1944,28 @@
           </div>
           <div style={{ maxWidth: 940, margin: "0 auto", padding: isMobile ? "24px 16px" : "56px 28px" }}>
             <div style={{ marginBottom: showSelector ? 20 : (isMobile ? 24 : 40) }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: C.dim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Campaign Performance Report</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: C.dim, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Sponsor Dashboard</p>
               <h1 style={{ fontSize: isMobile ? 28 : 42, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1 }}>{sponsor.name}</h1>
             </div>
+
+            {/* Tab bar */}
+            {!isDemo && !onBack && (
+              <div style={{ display: "flex", gap: isMobile ? 0 : 4, marginBottom: isMobile ? 20 : 32, borderBottom: `1px solid ${C.border}`, overflowX: "auto" }}>
+                {TABS.map(tab => {
+                  const active = activeTab === tab.id;
+                  return (
+                    <button key={tab.id} onClick={() => switchTab(tab.id)} style={{
+                      background: "none", border: "none", borderBottom: active ? `2px solid #E8909C` : "2px solid transparent",
+                      padding: isMobile ? "10px 14px" : "12px 20px", cursor: "pointer", fontFamily: FONT, fontSize: isMobile ? 13 : 14,
+                      fontWeight: active ? 700 : 500, color: active ? "#E8909C" : C.muted, transition: "all 0.15s", whiteSpace: "nowrap",
+                    }}>{tab.label}</button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ─── Performance Tab ──────────────────────────── */}
+            {(activeTab === "performance" || isDemo || onBack) && <React.Fragment>
 
             {/* View selector */}
             {showSelector && <ViewSelector options={viewOptions} selected={selectedView} onChange={setSelectedView} />}
@@ -1418,8 +2034,34 @@
               </React.Fragment>
             )}
             {vRuns.length === 0 && <div style={{ textAlign: "center", padding: isMobile ? 32 : 64, color: C.dim }}><p style={{ fontSize: 16 }}>Campaign data will appear here after the first send.</p></div>}
+
+            </React.Fragment>}
+
+            {/* ─── Polls Tab ────────────────────────────────── */}
+            {activeTab === "polls" && !isDemo && !onBack && (
+              <SponsorPollPicker shareToken={shareToken} contract={vContract} isMobile={isMobile} />
+            )}
+
+            {/* ─── Placements Tab ──────────────────────────── */}
+            {activeTab === "placements" && !isDemo && !onBack && (
+              <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📍</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Placements</h2>
+                <p style={{ fontSize: 15, color: C.muted, maxWidth: 400, margin: "0 auto" }}>View and manage your newsletter ad placements. This feature is coming soon.</p>
+              </div>
+            )}
+
+            {/* ─── Reports Tab ─────────────────────────────── */}
+            {activeTab === "reports" && !isDemo && !onBack && (
+              <div style={{ textAlign: "center", padding: isMobile ? 40 : 80 }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Reports</h2>
+                <p style={{ fontSize: 15, color: C.muted, maxWidth: 400, margin: "0 auto" }}>Download campaign reports and audience insights. This feature is coming soon.</p>
+              </div>
+            )}
+
             <div style={{ marginTop: isMobile ? 40 : 72, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
-              {vRuns.length > 0 && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
+              {vRuns.length > 0 && (activeTab === "performance" || isDemo || onBack) && <button onClick={handleDownloadClick} style={{ width: "100%", padding: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: "pointer", transition: "border-color 0.15s" }}>📄 Download Full Report (PDF)</button>}
               {config.campaignUrl && (
                 <div style={{ textAlign: "center", marginTop: 24 }}>
                   <p style={{ fontSize: 14, color: C.muted }}>Want to do more with {config.publicationName || "us"}?</p>
@@ -1778,38 +2420,142 @@
       );
     }
 
-    // ─── Convert Inquiry Form ────────────────────────────────────
-    function ConvertInquiryForm({ inquiry, onConvert, onCancel }) {
-      const tierMonths = { starter: 3, growth: 6, partner: 12 };
-      const tierLabel = { starter: "Starter", growth: "Growth", partner: "Partner" };
-      const today = new Date().toISOString().split("T")[0];
-      const months = tierMonths[inquiry.tier] || 6;
-      const endDefault = new Date(Date.now() + months * 30.44 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // ─── Package Selector (shared by Convert + Add Sponsor) ─────
+    function PackageSelector({ selected, onChange }) {
+      const tiers = ["custom", "starter", "growth", "partner"];
+      const labels = { custom: "Custom", starter: "Starter", growth: "Growth", partner: "Partner" };
+      return (
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Package</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {tiers.map(t => (
+              <button key={t} onClick={() => onChange(t)} style={{
+                flex: 1, padding: "9px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: FONT,
+                cursor: "pointer", transition: "all 0.15s", border: "none",
+                background: selected === t ? C.accent : C.bg,
+                color: selected === t ? C.white : C.muted,
+              }}>{labels[t]}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
 
+    function calcEndDate(startDate, months) {
+      if (!startDate) return "";
+      const d = new Date(startDate + "T00:00:00");
+      d.setMonth(d.getMonth() + months);
+      d.setDate(0); // last day of previous month = last day of target month
+      return d.toISOString().split("T")[0];
+    }
+
+    // ─── Convert Inquiry Form ────────────────────────────────────
+    function ConvertInquiryForm({ inquiry, onConvert, onCancel, pricingCfg }) {
+      const tierLabels = { starter: "Starter", growth: "Growth", partner: "Partner" };
+      const tierMonths = { starter: 3, growth: 6, partner: 12 };
+      const today = new Date().toISOString().split("T")[0];
+
+      const defaultTier = inquiry.tier && tierLabels[inquiry.tier] ? inquiry.tier : "custom";
+      const [pkgTier, setPkgTier] = useState(defaultTier);
       const [sponsorName, setSponsorName] = useState(inquiry.company || inquiry.name || "");
-      const [contractName, setContractName] = useState((tierLabel[inquiry.tier] || "Sponsor") + " Package");
-      const [price, setPrice] = useState(inquiry.price ?? "");
-      const [totalRuns, setTotalRuns] = useState(inquiry.placements ?? "");
+      const [contractName, setContractName] = useState("");
+      const [price, setPrice] = useState("");
+      const [totalRuns, setTotalRuns] = useState("");
       const [startDate, setStartDate] = useState(today);
-      const [endDate, setEndDate] = useState(endDefault);
+      const [endDate, setEndDate] = useState("");
+      const [takeover, setTakeover] = useState(inquiry.takeover || false);
+
+      const getTierConfig = (tier) => {
+        if (!pricingCfg || tier === "custom") return null;
+        const map = {
+          starter: { name: "Starter Package", price: pricingCfg.starterPrice, runs: pricingCfg.starterPlacements, months: pricingCfg.starterMonths || 3, polls: pricingCfg.starterPolls ?? 0 },
+          growth: { name: "Growth Package", price: pricingCfg.growthPrice, runs: pricingCfg.growthPlacements, months: pricingCfg.growthMonths || 6, polls: pricingCfg.growthPolls ?? 1 },
+          partner: { name: "Partner Package", price: pricingCfg.partnerPrice, runs: pricingCfg.partnerPlacements, months: pricingCfg.partnerMonths || 12, polls: pricingCfg.partnerPolls ?? 3 },
+        };
+        return map[tier] || null;
+      };
+
+      const handleTierChange = (tier) => {
+        setPkgTier(tier);
+        const tc = getTierConfig(tier);
+        if (tc) {
+          setContractName(tc.name);
+          setPrice(tc.price);
+          setTotalRuns(tc.runs);
+          setTakeover(false);
+          if (startDate) setEndDate(calcEndDate(startDate, tc.months));
+        } else {
+          setContractName("");
+          setPrice("");
+          setTotalRuns("");
+          setEndDate("");
+          setTakeover(false);
+        }
+      };
+
+      // Initialize from inquiry tier on mount
+      useEffect(() => {
+        if (defaultTier !== "custom") handleTierChange(defaultTier);
+        else {
+          setContractName((tierLabels[inquiry.tier] || "Sponsor") + " Package");
+          setPrice(inquiry.price ?? "");
+          setTotalRuns(inquiry.placements ?? "");
+          const months = tierMonths[inquiry.tier] || 6;
+          setEndDate(calcEndDate(today, months));
+          setTakeover(inquiry.takeover || false);
+        }
+      }, []);
+
+      const tc = getTierConfig(pkgTier);
+      const takeoverCost = tc && pricingCfg ? pricingCfg.takeoverPerEmail * tc.runs : 0;
+      const displayPrice = takeover && tc ? (parseFloat(price) || 0) + takeoverCost : parseFloat(price) || 0;
+
+      const handleStartChange = (val) => {
+        setStartDate(val);
+        if (tc && val) setEndDate(calcEndDate(val, tc.months));
+      };
 
       return (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Convert to Sponsor</h3>
           <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Review and adjust details, then confirm to create the sponsor and contract.</p>
           <Input label="Sponsor / Company Name" value={sponsorName} onChange={e => setSponsorName(e.target.value)} />
+          <PackageSelector selected={pkgTier} onChange={handleTierChange} />
           <Input label="Contract Name" value={contractName} onChange={e => setContractName(e.target.value)} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Input label="Total Price ($)" type="number" value={price} onChange={e => setPrice(e.target.value)} />
             <Input label="Number of Runs" type="number" value={totalRuns} onChange={e => setTotalRuns(e.target.value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Input label="Start Date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <Input label="Start Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
             <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
           </div>
+          {pkgTier !== "custom" && tc && (
+            <div style={{ marginBottom: 16 }}>
+              {tc.runs > 0 && pricingCfg?.takeoverPerEmail > 0 && (
+                <button onClick={() => { setTakeover(!takeover); if (!takeover) setPrice((parseFloat(price) || 0) + takeoverCost); else setPrice(Math.max(0, (parseFloat(price) || 0) - takeoverCost)); }} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", width: "100%",
+                  background: takeover ? C.greenDim : C.bg, border: `1px solid ${takeover ? "rgba(52,211,153,0.3)" : C.border}`,
+                  borderRadius: 8, cursor: "pointer", transition: "all 0.15s", marginBottom: 8,
+                }}>
+                  <div style={{ width: 36, height: 20, borderRadius: 10, padding: 2, background: takeover ? C.green : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", transform: takeover ? "translateX(16px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: takeover ? C.green : C.muted, fontFamily: FONT }}>Newsletter Takeover</span>
+                  <span style={{ fontSize: 12, color: C.dim, marginLeft: "auto" }}>+${takeoverCost.toLocaleString()}</span>
+                </button>
+              )}
+              {tc.polls > 0 && (
+                <div style={{ padding: "8px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: C.muted }}>Custom Polls</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.accent }}>{tc.polls} included</span>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => sponsorName.trim() && onConvert({ sponsorName: sponsorName.trim(), contractName: contractName.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null })} color={C.white} bg={C.accent} disabled={!sponsorName.trim()}>Convert</Btn>
+            <Btn onClick={() => sponsorName.trim() && onConvert({ sponsorName: sponsorName.trim(), contractName: contractName.trim(), totalPrice: parseFloat(price) || 0, totalRuns: parseInt(totalRuns) || 1, startDate: startDate || null, endDate: endDate || null, packageTier: pkgTier, pollsIncluded: tc ? tc.polls : 0, takeoverIncluded: takeover })} color={C.white} bg={C.accent} disabled={!sponsorName.trim()}>Convert</Btn>
           </div>
         </div>
       );
@@ -1881,13 +2627,68 @@
       );
     }
 
-    function AddSponsorForm({ onSave, onCancel }) {
+    function AddSponsorForm({ onSave, onCancel, pricingCfg }) {
       const [name, setName] = useState("");
       const [patterns, setPatterns] = useState([""]);
+      const [pkgTier, setPkgTier] = useState("custom");
+      const [contractName, setContractName] = useState("");
+      const [price, setPrice] = useState("");
+      const [totalRuns, setTotalRuns] = useState("");
+      const today = new Date().toISOString().split("T")[0];
+      const [startDate, setStartDate] = useState("");
+      const [endDate, setEndDate] = useState("");
+      const [takeover, setTakeover] = useState(false);
 
       const updatePat = (i, val) => { const p = [...patterns]; p[i] = val; setPatterns(p); };
       const addPat = () => setPatterns([...patterns, ""]);
       const removePat = (i) => { if (patterns.length <= 1) return; setPatterns(patterns.filter((_, idx) => idx !== i)); };
+
+      const getTierConfig = (tier) => {
+        if (!pricingCfg || tier === "custom") return null;
+        const map = {
+          starter: { name: "Starter Package", price: pricingCfg.starterPrice, runs: pricingCfg.starterPlacements, months: pricingCfg.starterMonths || 3, polls: pricingCfg.starterPolls ?? 0 },
+          growth: { name: "Growth Package", price: pricingCfg.growthPrice, runs: pricingCfg.growthPlacements, months: pricingCfg.growthMonths || 6, polls: pricingCfg.growthPolls ?? 1 },
+          partner: { name: "Partner Package", price: pricingCfg.partnerPrice, runs: pricingCfg.partnerPlacements, months: pricingCfg.partnerMonths || 12, polls: pricingCfg.partnerPolls ?? 3 },
+        };
+        return map[tier] || null;
+      };
+
+      const handleTierChange = (tier) => {
+        setPkgTier(tier);
+        const tc = getTierConfig(tier);
+        if (tc) {
+          setContractName(tc.name);
+          setPrice(tc.price);
+          setTotalRuns(tc.runs);
+          setTakeover(false);
+          if (startDate) setEndDate(calcEndDate(startDate, tc.months));
+        } else {
+          setContractName(""); setPrice(""); setTotalRuns(""); setEndDate(""); setTakeover(false);
+        }
+      };
+
+      const tc = getTierConfig(pkgTier);
+      const takeoverCost = tc && pricingCfg ? pricingCfg.takeoverPerEmail * tc.runs : 0;
+
+      const handleStartChange = (val) => {
+        setStartDate(val);
+        if (tc && val) setEndDate(calcEndDate(val, tc.months));
+      };
+
+      const handleSave = () => {
+        if (!name.trim()) return;
+        const contractData = (pkgTier !== "custom" || contractName.trim()) ? {
+          contractName: contractName.trim() || (name.trim() + " Contract"),
+          totalPrice: parseFloat(price) || 0,
+          totalRuns: parseInt(totalRuns) || 1,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          packageTier: pkgTier,
+          pollsIncluded: tc ? tc.polls : 0,
+          takeoverIncluded: takeover,
+        } : null;
+        onSave(name.trim(), patterns.filter(p => p.trim()), contractData);
+      };
 
       return (
         <div>
@@ -1902,11 +2703,48 @@
             </div>
           ))}
           <button onClick={addPat} style={{ background: "none", border: `1px dashed ${C.border}`, borderRadius: 8, color: C.dim, padding: "8px 12px", width: "100%", cursor: "pointer", fontFamily: FONT, fontSize: 12, marginBottom: 8 }}>+ Add Another Pattern</button>
-          <p style={{ fontSize: 10, color: C.dim, marginBottom: 20 }}>Each pattern matches any click URL containing that text. Use multiple patterns when a sponsor has different link formats across campaigns.</p>
+          <p style={{ fontSize: 10, color: C.dim, marginBottom: 20 }}>Each pattern matches any click URL containing that text.</p>
+
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginBottom: 16 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16 }}>Contract (optional)</p>
+            <PackageSelector selected={pkgTier} onChange={handleTierChange} />
+            {pkgTier !== "custom" && (
+              <>
+                <Input label="Contract Name" value={contractName} onChange={e => setContractName(e.target.value)} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Input label="Total Price ($)" type="number" value={price} onChange={e => setPrice(e.target.value)} />
+                  <Input label="Number of Runs" type="number" value={totalRuns} onChange={e => setTotalRuns(e.target.value)} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Input label="Start Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
+                  <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                </div>
+                {tc && pricingCfg?.takeoverPerEmail > 0 && (
+                  <button onClick={() => { setTakeover(!takeover); if (!takeover) setPrice((parseFloat(price) || 0) + takeoverCost); else setPrice(Math.max(0, (parseFloat(price) || 0) - takeoverCost)); }} style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", width: "100%",
+                    background: takeover ? C.greenDim : C.bg, border: `1px solid ${takeover ? "rgba(52,211,153,0.3)" : C.border}`,
+                    borderRadius: 8, cursor: "pointer", transition: "all 0.15s", marginBottom: 8,
+                  }}>
+                    <div style={{ width: 36, height: 20, borderRadius: 10, padding: 2, background: takeover ? C.green : C.dim, transition: "background 0.15s", display: "flex", alignItems: "center" }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", transform: takeover ? "translateX(16px)" : "translateX(0)", transition: "transform 0.15s" }} />
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: takeover ? C.green : C.muted }}>Newsletter Takeover</span>
+                    <span style={{ fontSize: 12, color: C.dim, marginLeft: "auto" }}>+${takeoverCost.toLocaleString()}</span>
+                  </button>
+                )}
+                {tc && tc.polls > 0 && (
+                  <div style={{ padding: "8px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <span style={{ fontSize: 13, color: C.muted }}>Custom Polls</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.accent }}>{tc.polls} included</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Btn onClick={onCancel} color={C.muted} bg="transparent" style={{ border: `1px solid ${C.border}` }}>Cancel</Btn>
-            <Btn onClick={() => name.trim() && onSave(name.trim(), patterns.filter(p => p.trim()))} color={C.white} bg={C.accent} disabled={!name.trim()}>Add</Btn>
+            <Btn onClick={handleSave} color={C.white} bg={C.accent} disabled={!name.trim()}>Add</Btn>
           </div>
         </div>
       );
@@ -2163,7 +3001,7 @@
         dTot.ctr = dTot.opens > 0 ? (dTot.clicks / dTot.opens) * 100 : 0;
         return (
           <div>
-            <SponsorView sponsor={sponsor} runs={defaultRuns} totals={dTot} contract={activeC || null} costMetrics={activeC?.costMetrics || null} onBack={null} onQuickSync={() => {}} config={config} allContracts={allContracts} allRuns={allRuns} />
+            <SponsorView sponsor={sponsor} runs={defaultRuns} totals={dTot} contract={activeC || null} costMetrics={activeC?.costMetrics || null} onBack={null} onQuickSync={() => {}} config={config} allContracts={allContracts} allRuns={allRuns} shareToken={shareToken} />
             {data.publishedAt && <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>Last updated {timeAgo(data.publishedAt)}</div>}
           </div>
         );
@@ -2180,7 +3018,7 @@
 
       return (
         <div>
-          <SponsorView sponsor={sponsor} runs={runs} totals={totals} contract={contract} costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config} />
+          <SponsorView sponsor={sponsor} runs={runs} totals={totals} contract={contract} costMetrics={costMetrics} onBack={null} onQuickSync={() => {}} config={config} shareToken={shareToken} />
           {data.publishedAt && <div style={{ textAlign: "center", padding: "12px 0 24px", color: C.dim, fontSize: 12, fontFamily: FONT }}>Last updated {timeAgo(data.publishedAt)}</div>}
         </div>
       );
