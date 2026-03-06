@@ -1762,26 +1762,30 @@
     function sanitizeHtml(html) {
       const allowed = new Set(["IMG","A","TABLE","THEAD","TBODY","TFOOT","TR","TD","TH","DIV","SPAN","P","H1","H2","H3","H4","H5","H6","BR","HR","STRONG","EM","B","I","U","UL","OL","LI","STYLE","CENTER","SECTION","HEADER","FOOTER","FIGURE","FIGCAPTION","BLOCKQUOTE","SUP","SUB"]);
       const allowedAttrs = new Set(["style","class","href","src","alt","width","height","colspan","rowspan","align","valign","border","cellpadding","cellspacing","target","title","id"]);
-      // Wrap in a body tag to ensure DOMParser produces a valid body
-      const wrapped = "<body>" + html + "</body>";
-      const doc = new DOMParser().parseFromString(wrapped, "text/html");
-      if (!doc.body) return html;
+      const temp = document.createElement("div");
+      temp.innerHTML = html;
+      // Remove all script tags
+      temp.querySelectorAll("script").forEach(el => el.remove());
+      // Walk and sanitize
       const walk = (node) => {
-        if (node.nodeType === 1) {
-          if (node.tagName === "SCRIPT") { node.remove(); return; }
-          if (!allowed.has(node.tagName)) {
-            while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
-            node.remove(); return;
+        const children = [...node.childNodes];
+        for (const child of children) {
+          if (child.nodeType === 1) {
+            if (!allowed.has(child.tagName)) {
+              while (child.firstChild) node.insertBefore(child.firstChild, child);
+              node.removeChild(child);
+              continue;
+            }
+            [...child.attributes].forEach(a => {
+              if (a.name.startsWith("on")) child.removeAttribute(a.name);
+              else if (!allowedAttrs.has(a.name)) child.removeAttribute(a.name);
+            });
+            walk(child);
           }
-          [...node.attributes].forEach(a => {
-            if (a.name.startsWith("on")) node.removeAttribute(a.name);
-            else if (!allowedAttrs.has(a.name)) node.removeAttribute(a.name);
-          });
         }
-        [...(node.childNodes || [])].forEach(walk);
       };
-      walk(doc.body);
-      return doc.body.innerHTML;
+      walk(temp);
+      return temp.innerHTML;
     }
 
     function AdminPlacements({ sponsorId, shareToken, contracts, authToken, isMobile }) {
