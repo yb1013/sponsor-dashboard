@@ -25,7 +25,14 @@ export default async function handler(req, res) {
   const sponsorData = await readRedis.get(`sponsor:${shareToken}`);
   if (!sponsorData) return res.status(404).json({ error: "Sponsor not found" });
   const data = typeof sponsorData === "string" ? JSON.parse(sponsorData) : sponsorData;
-  const sponsorId = data.id;
+
+  // Resolve sponsor ID: from published data, or from reverse mapping
+  let sponsorId = data.id;
+  if (!sponsorId) {
+    const mapped = await redis.get(`placements-map:${shareToken}`);
+    sponsorId = mapped || null;
+  }
+  if (!sponsorId) return res.status(200).json([]);
 
   // ─── List placements (index only, no image data) ──────
   if (action === "list" && req.method === "GET") {

@@ -481,7 +481,7 @@
         const assignedIds = new Set(spContracts.map(c => c.id));
         const unassignedRuns = [...spRuns.filter(r => !r.contractId || !assignedIds.has(r.contractId))].sort((a, b) => new Date(b.sendDate) - new Date(a.sendDate)).map(r => ({ ...cleanRun(r), price: r.price || 0 }));
         const pubData = {
-          sponsorName: sp.name, showCostToSponsor: !!sp.showCostToSponsor, oneOffShowCpm: !!sp.oneOffShowCpm, oneOffShowCpc: !!sp.oneOffShowCpc, contracts: pubContracts, unassignedRuns,
+          id: sponsorId, sponsorName: sp.name, showCostToSponsor: !!sp.showCostToSponsor, oneOffShowCpm: !!sp.oneOffShowCpm, oneOffShowCpc: !!sp.oneOffShowCpc, contracts: pubContracts, unassignedRuns,
           publishedAt: new Date().toISOString(), publicationName: config.publicationName || "", publicationUrl: config.publicationUrl || "", campaignUrl: config.campaignUrl || "",
         };
         try {
@@ -981,7 +981,7 @@
                 })()}
 
                 {/* Placements */}
-                <AdminPlacements sponsorId={sel} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
+                <AdminPlacements sponsorId={sel} shareToken={sponsor.shareToken} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
 
                 {/* Audience Intelligence Reports placeholder */}
                 <div style={{ marginTop: 32 }}>
@@ -1616,7 +1616,7 @@
       });
     }
 
-    function AdminPlacements({ sponsorId, contracts, authToken, isMobile }) {
+    function AdminPlacements({ sponsorId, shareToken, contracts, authToken, isMobile }) {
       const [placements, setPlacements] = useState([]);
       const [loading, setLoading] = useState(true);
       const [statusFilter, setStatusFilter] = useState(null);
@@ -1670,7 +1670,7 @@
         try {
           await fetch("/api/placements?action=create", {
             method: "POST", headers,
-            body: JSON.stringify({ sponsorId, contractId: activeContract?.id || null, scheduledDate: newDate || null, headline: newHeadline, notes: newNotes, imageData: newImage, sendForReview }),
+            body: JSON.stringify({ sponsorId, shareToken, contractId: activeContract?.id || null, scheduledDate: newDate || null, headline: newHeadline, notes: newNotes, imageData: newImage, sendForReview }),
           });
           setNewImage(null); setNewDate(""); setNewHeadline(""); setNewNotes("");
           await fetchPlacements();
@@ -1734,7 +1734,7 @@
       return (
         <div style={{ marginTop: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Placements</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>Placements{counts.changes_requested > 0 && <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 8, minWidth: 18, height: 18, borderRadius: 9, background: C.red, color: "#fff", fontSize: 10, fontWeight: 700, padding: "0 5px", lineHeight: 1 }}>{counts.changes_requested}</span>}</h3>
             {totalRuns > 0 && <span style={{ fontSize: 12, color: C.dim }}>{placements.length} of {totalRuns} placements created</span>}
           </div>
 
@@ -2403,6 +2403,16 @@
         return () => { clearInterval(syncInterval); clearInterval(tickInterval); };
       }, []);
 
+      // Fetch placement review count for tab badge
+      const [placementReviewCount, setPlacementReviewCount] = useState(0);
+      useEffect(() => {
+        if (!shareToken || isDemo || onBack) return;
+        fetch(`/api/sponsor-placements?action=list&token=${shareToken}`)
+          .then(r => r.ok ? r.json() : [])
+          .then(items => setPlacementReviewCount((items || []).filter(i => i.status === "pending_review").length))
+          .catch(() => {});
+      }, [shareToken, activeTab]);
+
       // ─── View selector logic ────────────────────────────────────
       const unassigned = allContracts ? (allRuns || []).filter(r => !r.contractId || !allContracts.find(c => c.id === r.contractId)) : [];
       const viewOptions = allContracts ? buildViewOptions(allContracts, unassigned, allRuns || []) : [];
@@ -2518,7 +2528,7 @@
                       background: "none", border: "none", borderBottom: active ? `2px solid #E8909C` : "2px solid transparent",
                       padding: isMobile ? "10px 14px" : "12px 20px", cursor: "pointer", fontFamily: FONT, fontSize: isMobile ? 13 : 14,
                       fontWeight: active ? 700 : 500, color: active ? "#E8909C" : C.muted, transition: "all 0.15s", whiteSpace: "nowrap",
-                    }}>{tab.label}</button>
+                    }}>{tab.label}{tab.id === "placements" && placementReviewCount > 0 && <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 6, minWidth: 18, height: 18, borderRadius: 9, background: "#E8909C", color: "#fff", fontSize: 10, fontWeight: 700, padding: "0 5px", lineHeight: 1 }}>{placementReviewCount}</span>}</button>
                   );
                 })}
               </div>

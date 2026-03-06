@@ -42,8 +42,11 @@ export default async function handler(req, res) {
 
   // ─── Create new placement ─────────────────────────────
   if (action === "create" && req.method === "POST") {
-    const { sponsorId: sid, contractId, scheduledDate, headline, notes, imageData, sendForReview } = req.body;
+    const { sponsorId: sid, shareToken: sToken, contractId, scheduledDate, headline, notes, imageData, sendForReview } = req.body;
     if (!sid) return res.status(400).json({ error: "sponsorId required" });
+
+    // Store share token → sponsor ID mapping for sponsor-side lookups
+    if (sToken) await redis.set(`placements-map:${sToken}`, sid);
 
     const id = uid();
     const now = new Date().toISOString();
