@@ -1590,6 +1590,149 @@
     // ═══════════════════════════════════════════════════════════════
     // ADMIN PLACEMENTS (admin sponsor detail page)
     // ═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
+    // IMAGE VIEWER — zoom/pan for placement images
+    // ═══════════════════════════════════════════════════════════════
+    function ImageViewer({ src, style = {}, imgStyle = {}, children }) {
+      const [scale, setScale] = useState(1);
+      const [pos, setPos] = useState({ x: 0, y: 0 });
+      const [dragging, setDragging] = useState(false);
+      const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+      const [showZoom, setShowZoom] = useState(false);
+      const zoomTimer = React.useRef(null);
+      const containerRef = React.useRef(null);
+      const imgRef = React.useRef(null);
+      const lastTouchDist = React.useRef(null);
+      const lastTouchCenter = React.useRef(null);
+
+      // Reset zoom when image source changes
+      useEffect(() => { setScale(1); setPos({ x: 0, y: 0 }); }, [src]);
+
+      const clampPos = (x, y, s) => {
+        if (s <= 1) return { x: 0, y: 0 };
+        const c = containerRef.current;
+        const img = imgRef.current;
+        if (!c || !img) return { x, y };
+        const cw = c.clientWidth, ch = c.clientHeight;
+        const iw = img.naturalWidth || img.clientWidth, ih = img.naturalHeight || img.clientHeight;
+        const dispW = img.clientWidth * s, dispH = img.clientHeight * s;
+        const minX = Math.min(0, cw - dispW), minY = Math.min(0, ch - dispH);
+        return { x: Math.max(minX, Math.min(0, x)), y: Math.max(minY, Math.min(0, y)) };
+      };
+
+      const flashZoom = () => {
+        setShowZoom(true);
+        clearTimeout(zoomTimer.current);
+        zoomTimer.current = setTimeout(() => setShowZoom(false), 1000);
+      };
+
+      // Use refs for wheel handler to avoid stale closures and enable passive:false
+      const scaleRef = React.useRef(scale);
+      const posRef = React.useRef(pos);
+      scaleRef.current = scale;
+      posRef.current = pos;
+
+      useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const onWheel = (e) => {
+          const s = scaleRef.current, p = posRef.current;
+          if (s <= 1 && e.deltaY > 0) return;
+          e.preventDefault();
+          const rect = el.getBoundingClientRect();
+          const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+          const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+          const ns = Math.max(1, Math.min(5, s * factor));
+          const ratio = ns / s;
+          const nx = cx - ratio * (cx - p.x), ny = cy - ratio * (cy - p.y);
+          const cp = clampPos(nx, ny, ns);
+          setScale(ns); setPos(cp); flashZoom();
+        };
+        el.addEventListener("wheel", onWheel, { passive: false });
+        return () => el.removeEventListener("wheel", onWheel);
+      }, []);
+
+      const handleMouseDown = (e) => {
+        if (scale <= 1) return;
+        e.preventDefault();
+        setDragging(true);
+        setDragStart({ x: e.clientX - pos.x, y: e.clientY - pos.y });
+      };
+      const handleMouseMove = (e) => {
+        if (!dragging) return;
+        const nx = e.clientX - dragStart.x, ny = e.clientY - dragStart.y;
+        setPos(clampPos(nx, ny, scale));
+      };
+      const handleMouseUp = () => setDragging(false);
+
+      useEffect(() => {
+        if (dragging) {
+          const up = () => setDragging(false);
+          window.addEventListener("mouseup", up);
+          window.addEventListener("mousemove", handleMouseMove);
+          return () => { window.removeEventListener("mouseup", up); window.removeEventListener("mousemove", handleMouseMove); };
+        }
+      }, [dragging, dragStart, scale]);
+
+      const handleDblClick = () => { setScale(1); setPos({ x: 0, y: 0 }); };
+
+      // Touch events
+      const getTouchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+      const getTouchCenter = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+
+      const handleTouchStart = (e) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          lastTouchDist.current = getTouchDist(e.touches);
+          lastTouchCenter.current = getTouchCenter(e.touches);
+        } else if (e.touches.length === 1 && scale > 1) {
+          setDragging(true);
+          setDragStart({ x: e.touches[0].clientX - pos.x, y: e.touches[0].clientY - pos.y });
+        }
+      };
+      const handleTouchMove = (e) => {
+        if (e.touches.length === 2 && lastTouchDist.current) {
+          e.preventDefault();
+          const dist = getTouchDist(e.touches);
+          const center = getTouchCenter(e.touches);
+          const rect = containerRef.current.getBoundingClientRect();
+          const cx = center.x - rect.left, cy = center.y - rect.top;
+          const factor = dist / lastTouchDist.current;
+          const ns = Math.max(1, Math.min(5, scale * factor));
+          const ratio = ns / scale;
+          const nx = cx - ratio * (cx - pos.x), ny = cy - ratio * (cy - pos.y);
+          setScale(ns); setPos(clampPos(nx, ny, ns)); flashZoom();
+          lastTouchDist.current = dist;
+          lastTouchCenter.current = center;
+        } else if (e.touches.length === 1 && dragging && scale > 1) {
+          e.preventDefault();
+          const nx = e.touches[0].clientX - dragStart.x, ny = e.touches[0].clientY - dragStart.y;
+          setPos(clampPos(nx, ny, scale));
+        }
+      };
+      const handleTouchEnd = (e) => {
+        if (e.touches.length < 2) { lastTouchDist.current = null; lastTouchCenter.current = null; }
+        if (e.touches.length === 0) setDragging(false);
+      };
+
+      const zoomed = scale > 1.01;
+
+      return (
+        <div ref={containerRef} onMouseDown={handleMouseDown} onDoubleClick={handleDblClick}
+          onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+          style={{ overflow: "hidden", position: "relative", borderRadius: 8, cursor: dragging ? "grabbing" : zoomed ? "grab" : "zoom-in", touchAction: zoomed ? "none" : "auto", ...style }}>
+          <img ref={imgRef} src={src} draggable={false} style={{ display: "block", width: "100%", transformOrigin: "0 0", transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, transition: dragging ? "none" : "transform 0.1s ease-out", userSelect: "none", pointerEvents: "none", ...imgStyle }} />
+          {zoomed && showZoom && (
+            <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, pointerEvents: "none", transition: "opacity 0.3s", fontFamily: FONT }}>{scale.toFixed(1)}x</div>
+          )}
+          {zoomed && (
+            <button onClick={(e) => { e.stopPropagation(); handleDblClick(); }} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.55)", color: "#fff", border: "none", fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontFamily: FONT }}>Reset zoom</button>
+          )}
+          {children}
+        </div>
+      );
+    }
+
     function compressImage(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1772,7 +1915,7 @@
               </div>
             ) : (
               <div style={{ marginBottom: 16 }}>
-                <img src={newImage} style={{ maxWidth: 400, width: "100%", borderRadius: 10, border: `1px solid ${C.border}` }} />
+                <ImageViewer src={newImage} style={{ maxWidth: 400, width: "100%", borderRadius: 10, border: `1px solid ${C.border}` }} />
                 <button onClick={() => setNewImage(null)} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: C.dim, cursor: "pointer", fontFamily: FONT, fontSize: 12 }}>Remove image</button>
               </div>
             )}
@@ -1835,7 +1978,7 @@
                     {/* Thumbnail / image */}
                     <div style={{ flexShrink: 0 }}>
                       {(ri || (full && full.imageData)) ? (
-                        <img src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer" }} onClick={() => { if (!isExpanded) { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); } else setExpandedId(null); }} />
+                        <ImageViewer src={ri || full.imageData} style={{ width: p.status === "completed" ? 120 : 200, borderRadius: 8, border: `1px solid ${C.border}` }} />
                       ) : (
                         <div onClick={() => { setExpandedId(p.placementId); if (!full) fetchFull(p.placementId); }} style={{ width: p.status === "completed" ? 120 : 200, height: p.status === "completed" ? 80 : 130, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                           <span style={{ fontSize: 11, color: C.dim }}>{full === undefined ? "Click to load" : "No image"}</span>
@@ -2013,11 +2156,12 @@
                     <div key={p.placementId} className="fade-in" style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: isMobile ? 16 : 24, opacity: isFading ? 0 : 1, transform: isFading ? "translateY(-10px)" : "none", transition: "opacity 0.4s, transform 0.4s" }}>
                       {/* Image */}
                       {full?.imageData ? (
-                        <div style={{ position: "relative", marginBottom: 16 }}>
-                          <img src={full.imageData} style={{ width: "100%", maxWidth: 480, borderRadius: 8, display: "block" }} />
-                          {p.version > 1 && (
-                            <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6 }}>Updated v{p.version}</span>
-                          )}
+                        <div style={{ marginBottom: 16 }}>
+                          <ImageViewer src={full.imageData} style={{ width: "100%", maxWidth: 480 }}>
+                            {p.version > 1 && (
+                              <span style={{ position: "absolute", top: 8, right: 8, background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, zIndex: 1, pointerEvents: "none" }}>Updated v{p.version}</span>
+                            )}
+                          </ImageViewer>
                         </div>
                       ) : (
                         <div style={{ width: "100%", maxWidth: 480, height: 200, background: "#F3F4F6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
@@ -2132,7 +2276,7 @@
             <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
               <div onClick={e => e.stopPropagation()} className="fade-in" style={{ background: "#fff", borderRadius: 16, padding: isMobile ? 16 : 24, maxWidth: 600, width: "100%", maxHeight: "90vh", overflow: "auto", position: "relative" }}>
                 <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 20, color: "#6B7280", cursor: "pointer" }}>&#10005;</button>
-                {lightbox.imageData && <img src={lightbox.imageData} style={{ width: "100%", borderRadius: 8, marginBottom: 16 }} />}
+                {lightbox.imageData && <ImageViewer src={lightbox.imageData} style={{ width: "100%", borderRadius: 8, marginBottom: 16 }} />}
                 <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>{lightbox.scheduledDate ? new Date(lightbox.scheduledDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}</p>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{lightbox.headline || "Untitled"}</p>
                 {lightbox.approvedAt && <p style={{ fontSize: 13, color: "#22C55E" }}>Approved on {new Date(lightbox.approvedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
