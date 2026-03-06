@@ -1953,7 +1953,8 @@
               <div>
                 {!newHtml ? (
                   <div
-                    tabIndex={0}
+                    contentEditable="true"
+                    suppressContentEditableWarning={true}
                     onPaste={(e) => {
                       e.preventDefault();
                       const html = e.clipboardData.getData("text/html");
@@ -1963,16 +1964,20 @@
                       } else if (text) {
                         setHtmlWarning("Only plain text was captured. Try selecting the content directly from the browser preview of your newsletter (not the Beehiiv editor) and copying again.");
                       }
+                      e.target.textContent = "";
                     }}
+                    onInput={(e) => { e.target.textContent = ""; }}
+                    onKeyDown={(e) => { if (!(e.ctrlKey || e.metaKey)) e.preventDefault(); }}
                     style={{
                       border: `2px dashed ${C.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center",
                       cursor: "text", outline: "none", transition: "border-color 0.15s, background 0.15s",
+                      caretColor: "transparent", userSelect: "none",
                     }}
-                    onFocus={(e) => { e.target.style.borderColor = "#E8909C"; e.target.style.background = "rgba(232,144,156,0.05)"; }}
-                    onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.background = "transparent"; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#E8909C"; e.currentTarget.style.background = "rgba(232,144,156,0.05)"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = "transparent"; e.currentTarget.textContent = ""; }}
                   >
-                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4 }}>Click here, then paste your newsletter content (Ctrl+V)</p>
-                    <p style={{ color: C.dim, fontSize: 12 }}>HTML from the browser preview of your newsletter</p>
+                    <p style={{ color: C.muted, fontSize: 14, marginBottom: 4, pointerEvents: "none" }}>Click here, then paste your newsletter content (Ctrl+V)</p>
+                    <p style={{ color: C.dim, fontSize: 12, pointerEvents: "none" }}>HTML from the browser preview of your newsletter</p>
                   </div>
                 ) : (
                   <div>
