@@ -282,6 +282,7 @@
       const [selContract, setSelContract] = useState(null);
       const [downloading, setDownloading] = useState(false);
       const [publishTimes, setPublishTimes] = useState(() => store.get(KEYS.publishTimes) || {});
+      const [calendarUrgent, setCalendarUrgent] = useState(0);
       const width = useWindowWidth();
       const isMobile = width <= MOBILE;
       const isTablet = width <= TABLET;
@@ -626,7 +627,7 @@
               </select>
               <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ position: "relative", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "inquiries" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Leads{newInquiryCount > 0 && <span style={{ marginLeft: 4, fontSize: 10, padding: "1px 5px", borderRadius: 8, background: C.green, color: C.bg, fontWeight: 700 }}>{newInquiryCount}</span>}</button>
               <button onClick={() => { setSel(null); setView("polls"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "polls" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Polls</button>
-              <button onClick={() => { setSel(null); setView("master-calendar"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "master-calendar" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Calendar</button>
+              <button onClick={() => { setSel(null); setView("master-calendar"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "master-calendar" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Calendar{calendarUrgent > 0 && <span style={{ marginLeft: 4, fontSize: 10, padding: "1px 5px", borderRadius: 8, background: C.red, color: C.bg, fontWeight: 700 }}>{calendarUrgent}</span>}</button>
               <a href="/admin/pricing" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, textDecoration: "none", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Pricing</a>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
@@ -665,6 +666,7 @@
               </button>
               <button onClick={() => { setSel(null); setView("master-calendar"); }} style={{ width: "100%", padding: "10px 14px", background: view === "master-calendar" ? C.accentDim : "transparent", border: view === "master-calendar" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "master-calendar" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
                 <span>Master Calendar</span>
+                {calendarUrgent > 0 && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "#FEE2E2", color: C.red, fontWeight: 700 }}>{calendarUrgent}</span>}
               </button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
@@ -759,7 +761,7 @@
 
             {view === "polls" && !sel && <PollCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} />}
 
-            {view === "master-calendar" && !sel && <MasterCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} />}
+            {!sel && <div style={{ display: view === "master-calendar" ? "block" : "none" }}><MasterCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} onUrgentCount={setCalendarUrgent} /></div>}
 
             {sel && sponsor && (
               <div className="fade-in">
@@ -1014,7 +1016,7 @@
                 })()}
 
                 {/* Placements */}
-                <AdminPlacements sponsorId={sel} shareToken={sponsor.shareToken} sponsorName={sponsor.name} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} />
+                <AdminPlacements sponsorId={sel} shareToken={sponsor.shareToken} sponsorName={sponsor.name} contracts={sponsorContracts} authToken={authToken} isMobile={isMobile} sponsors={sponsors} />
 
                 {/* Audience Intelligence Reports placeholder */}
                 <div style={{ marginTop: 32 }}>
@@ -1031,13 +1033,13 @@
           </main>
 
           {modal === "settings" && <Overlay onClose={() => setModal(null)}><SettingsForm config={config} authToken={authToken} onSave={c => { saveCfg(c); setModal(null); }} onCancel={() => setModal(null)} /></Overlay>}
-          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} pricingCfg={pricingCfg} authToken={authToken} /></Overlay>}
+          {modal === "addSponsor" && <Overlay onClose={() => setModal(null)}><AddSponsorForm onSave={addSponsor} onCancel={() => setModal(null)} pricingCfg={pricingCfg} authToken={authToken} sponsors={sponsors} /></Overlay>}
           {(modal === "addRun" || modal === "editRun") && <Overlay onClose={() => { setModal(null); setEditRun(null); }}><RunForm sponsorId={sel} run={editRun} contracts={sponsorContracts} activeContract={activeContract} onSave={d => editRun ? updateRunManual(editRun.id, d) : addRunManual(d)} onCancel={() => { setModal(null); setEditRun(null); }} /></Overlay>}
           {modal === "addContract" && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={null} onSave={addContract} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "editContract" && viewingContract && <Overlay onClose={() => setModal(null)}><ContractForm sponsorId={sel} contract={viewingContract} onSave={d => updateContract(viewingContract.id, d)} onCancel={() => setModal(null)} /></Overlay>}
           {modal === "convertInquiry" && convertInquiry && (
             <Overlay onClose={() => { setModal(null); setConvertInquiry(null); }}>
-              <ConvertInquiryForm inquiry={convertInquiry} pricingCfg={pricingCfg} authToken={authToken} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
+              <ConvertInquiryForm inquiry={convertInquiry} pricingCfg={pricingCfg} authToken={authToken} sponsors={sponsors} onCancel={() => { setModal(null); setConvertInquiry(null); }} onConvert={async (data) => {
                 const newSponsor = { id: uid(), name: data.sponsorName, urlPatterns: [], created: new Date().toISOString(), shareToken: uid() + uid() };
                 saveSp([...sponsors, newSponsor]);
                 const updated = contracts.map(c => c.sponsorId === newSponsor.id ? { ...c, isActive: false } : c);
@@ -1084,7 +1086,7 @@
     // ═══════════════════════════════════════════════════════════════
     // MASTER CALENDAR — all sponsor placements across all dates
     // ═══════════════════════════════════════════════════════════════
-    function MasterCalendar({ authToken, sponsors, contracts, isMobile }) {
+    function MasterCalendar({ authToken, sponsors, contracts, isMobile, onUrgentCount }) {
       const [allPlacements, setAllPlacements] = useState([]);
       const [loading, setLoading] = useState(true);
       const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
@@ -1140,12 +1142,35 @@
       // List view: upcoming placements sorted by date
       const upcoming = allPlacements.filter(p => p.scheduledDate && p.status !== "completed").sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
 
+      // Urgency detection
+      const today = new Date().toISOString().slice(0, 10);
+      const in3days = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const isUrgent = (p) => {
+        if (p.status === "changes_requested") return "changes_requested";
+        if (p.status === "placeholder" && p.scheduledDate && p.scheduledDate <= in7days && p.scheduledDate >= today) return "placeholder_soon";
+        if (p.status !== "approved" && p.status !== "completed" && p.scheduledDate && p.scheduledDate <= in3days && p.scheduledDate >= today) return "not_approved_soon";
+        return null;
+      };
+      const urgentCount = allPlacements.filter(p => isUrgent(p)).length;
+      const urgentColor = { changes_requested: C.red, placeholder_soon: "#F59E0B", not_approved_soon: "#F97316" };
+      const urgentLabel = { changes_requested: "Changes requested", placeholder_soon: "Placeholder within 7 days", not_approved_soon: "Not approved within 3 days" };
+
+      useEffect(() => { if (onUrgentCount) onUrgentCount(urgentCount); }, [urgentCount]);
+
       if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.dim }}>Loading all sponsor schedules...</div>;
 
       return (
         <div className="fade-in" style={{ maxWidth: 900 }}>
           <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Master Calendar</h2>
-          <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>All sponsor placements across all send dates</p>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>All sponsor placements across all send dates</p>
+          {urgentCount > 0 && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>⚠</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#991B1B" }}>{urgentCount} placement{urgentCount !== 1 ? "s" : ""} need{urgentCount === 1 ? "s" : ""} attention</span>
+              <span style={{ fontSize: 12, color: "#B91C1C" }}>— changes requested, placeholders within 7 days, or not approved within 3 days</span>
+            </div>
+          )}
 
           {/* Month navigation */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
@@ -1172,11 +1197,14 @@
                 <div key={day} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
                   style={{ padding: "6px 4px", minHeight: isMobile ? 50 : 70, background: isSelected ? C.accentDim : (isSendDay ? C.card : C.bg), border: `1px solid ${isSelected ? C.accent : (isToday ? C.green : C.border)}`, borderRadius: 6, cursor: "pointer", transition: "all 0.1s" }}>
                   <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.green : C.text, marginBottom: 2 }}>{day}</div>
-                  {pls.slice(0, 3).map((p, pi) => (
-                    <div key={pi} style={{ fontSize: 9, padding: "1px 3px", marginBottom: 1, borderRadius: 3, background: statusColor(p.status) + "22", color: statusColor(p.status), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {p.sponsorName}
+                  {pls.slice(0, 3).map((p, pi) => {
+                    const urg = isUrgent(p);
+                    return (
+                    <div key={pi} style={{ fontSize: 9, padding: "1px 3px", marginBottom: 1, borderRadius: 3, background: urg ? (urgentColor[urg] + "22") : (statusColor(p.status) + "22"), color: urg ? urgentColor[urg] : statusColor(p.status), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: urg ? `2px solid ${urgentColor[urg]}` : "none" }}>
+                      {urg && "⚠ "}{p.sponsorName}
                     </div>
-                  ))}
+                    );
+                  })}
                   {pls.length > 3 && <div style={{ fontSize: 9, color: C.dim }}>+{pls.length - 3} more</div>}
                 </div>
               );
@@ -1194,16 +1222,22 @@
                 <p style={{ fontSize: 12, color: C.dim }}>No placements scheduled for this date.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {selPlacements.map((p, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                  {selPlacements.map((p, i) => {
+                    const urg = isUrgent(p);
+                    return (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: urg ? (urgentColor[urg] + "0D") : C.bg, borderRadius: 8, border: `1px solid ${urg ? urgentColor[urg] : C.border}`, borderLeft: urg ? `3px solid ${urgentColor[urg]}` : `1px solid ${C.border}` }}>
                       <div>
                         <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.sponsorName}</span>
                         {p.campaignName && <span style={{ fontSize: 11, color: C.dim, marginLeft: 8 }}>{p.campaignName}</span>}
                         {p.runNumber && <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>Run {p.runNumber}{p.totalRuns ? `/${p.totalRuns}` : ""}</span>}
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: statusColor(p.status), textTransform: "capitalize" }}>{(p.status || "").replace(/_/g, " ")}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {urg && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: urgentColor[urg] + "22", color: urgentColor[urg], fontWeight: 600 }}>{urgentLabel[urg]}</span>}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: statusColor(p.status), textTransform: "capitalize" }}>{(p.status || "").replace(/_/g, " ")}</span>
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1216,18 +1250,24 @@
               <p style={{ fontSize: 12, color: C.dim }}>No upcoming placements scheduled.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {upcoming.slice(0, 30).map((p, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: C.card, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                {upcoming.slice(0, 30).map((p, i) => {
+                  const urg = isUrgent(p);
+                  return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: urg ? (urgentColor[urg] + "0D") : C.card, borderRadius: 8, border: `1px solid ${urg ? urgentColor[urg] : C.border}`, borderLeft: urg ? `3px solid ${urgentColor[urg]}` : `1px solid ${C.border}` }}>
                     <span style={{ fontSize: 12, fontFamily: MONO, color: C.muted, minWidth: 85 }}>{p.scheduledDate}</span>
-                    <span style={{ fontSize: 12, color: C.text, flex: 1 }}>{p.sponsorName}</span>
+                    <span style={{ fontSize: 12, color: C.text, flex: 1 }}>{urg && "⚠ "}{p.sponsorName}</span>
                     {p.campaignName && <span style={{ fontSize: 11, color: C.dim }}>{p.campaignName}</span>}
+                    {urg && <span style={{ fontSize: 9, padding: "2px 5px", borderRadius: 4, background: urgentColor[urg] + "22", color: urgentColor[urg], fontWeight: 600, whiteSpace: "nowrap" }}>{urgentLabel[urg]}</span>}
                     <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(p.status), textTransform: "capitalize" }}>{(p.status || "").replace(/_/g, " ")}</span>
                   </div>
-                ))}
+                  );
+                })}
                 {upcoming.length > 30 && <p style={{ fontSize: 11, color: C.dim, paddingLeft: 12 }}>...and {upcoming.length - 30} more</p>}
               </div>
             )}
           </div>
+
+          <p style={{ fontSize: 11, color: C.dim, marginTop: 24, fontStyle: "italic" }}>Note: Poll Calendar will be merged into this view in a future update.</p>
         </div>
       );
     }
@@ -2020,7 +2060,7 @@
       return '<!DOCTYPE html><html><head>' + baseTag + '<style>body{margin:0 auto;padding:16px;max-width:600px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}table{max-width:100%!important;margin-left:auto!important;margin-right:auto!important;}td{text-align:inherit!important;}img{max-width:100%!important;height:auto!important;}a{max-width:100%!important;}a[style*="background"]{display:inline-block!important;}' + pointerRule + '</style></head><body>' + htmlContent + '<script>window.addEventListener("load",function(){window.parent.postMessage({type:"iframeHeight",id:"' + iframeId + '",height:document.body.scrollHeight},"*");});new ResizeObserver(function(){window.parent.postMessage({type:"iframeHeight",id:"' + iframeId + '",height:document.body.scrollHeight},"*");}).observe(document.body);<\/script></body></html>';
     }
 
-    function AdminPlacements({ sponsorId, shareToken, sponsorName, contracts, authToken, isMobile }) {
+    function AdminPlacements({ sponsorId, shareToken, sponsorName, contracts, authToken, isMobile, sponsors }) {
       const [placements, setPlacements] = useState([]);
       const [loading, setLoading] = useState(true);
       const [statusFilter, setStatusFilter] = useState(null);
@@ -2472,6 +2512,7 @@
                 completedRuns={genSchedInProgress ? genSchedCompleted : 0}
                 authToken={authToken}
                 onScheduleChange={setGenSchedData}
+                sponsors={sponsors}
               />
               {genSchedData && (
                 <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -2780,7 +2821,7 @@
       useEffect(() => { fetchList(); }, []);
 
       // Auto-fetch + auto-expand review items
-      const reviewItems = placements.filter(p => p.status === "pending_review" || p.status === "changes_requested");
+      const reviewItems = placements.filter(p => p.status === "pending_review");
       useEffect(() => {
         reviewItems.forEach(p => fetchFull(p.placementId));
         const autoExpand = {};
@@ -2854,7 +2895,7 @@
       const filtered = selectedCampaign === "all" ? placements : placements.filter(p => p.contractId === selectedCampaign);
 
       // Review count for banner
-      const needsReview = filtered.filter(p => p.status === "pending_review" || p.status === "changes_requested");
+      const needsReview = filtered.filter(p => p.status === "pending_review");
 
       // Progress per campaign
       const getProgress = (items) => {
@@ -2872,18 +2913,21 @@
       // Status styling
       const rowIcon = (status) => {
         if (status === "completed") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#22C55E", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, flexShrink: 0 }}>&#10003;</span>;
-        if (status === "pending_review" || status === "changes_requested") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#E8909C", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, flexShrink: 0 }}>!</span>;
+        if (status === "pending_review") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#E8909C", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, flexShrink: 0 }}>!</span>;
+        if (status === "changes_requested") return <span style={{ width: 24, height: 24, borderRadius: 12, background: "#F59E0B", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, flexShrink: 0 }}>&#10003;</span>;
         if (status === "approved") return <span style={{ width: 24, height: 24, borderRadius: 12, border: "2px solid #3B82F6", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#3B82F6", fontSize: 13, flexShrink: 0 }}>&#10003;</span>;
         return <span style={{ width: 24, height: 24, borderRadius: 12, border: "2px dashed #D1D5DB", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} />;
       };
       const rowLabel = (status) => {
         if (status === "completed") return <span style={{ fontSize: 13, color: "#6B7280" }}>Completed</span>;
-        if (status === "pending_review" || status === "changes_requested") return <span style={{ fontSize: 13, color: "#E8909C", fontWeight: 700 }}>Needs Your Review</span>;
+        if (status === "pending_review") return <span style={{ fontSize: 13, color: "#E8909C", fontWeight: 700 }}>Needs Your Review</span>;
+        if (status === "changes_requested") return <span style={{ fontSize: 13, color: "#F59E0B", fontWeight: 600 }}>Feedback Submitted</span>;
         if (status === "approved") return <span style={{ fontSize: 13, color: "#3B82F6" }}>Approved — Scheduled</span>;
         return <span style={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic" }}>Creative coming soon</span>;
       };
       const rowBg = (status) => {
-        if (status === "pending_review" || status === "changes_requested") return "#FDF2F4";
+        if (status === "pending_review") return "#FDF2F4";
+        if (status === "changes_requested") return "#FFFBEB";
         return "#fff";
       };
 
@@ -2934,7 +2978,11 @@
                 ) : (
                   <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
                     <button onClick={() => setConfirmApprove(p.placementId)} style={{ padding: "10px 24px", background: "#22C55E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Approve &#10003;</button>
-                    <button onClick={() => setShowChangeForm(showChanges ? null : p.placementId)} style={{ padding: "10px 24px", background: "none", border: "1px solid #6B7280", borderRadius: 8, fontSize: 14, color: "#374151", cursor: "pointer", fontFamily: FONT }}>Request Changes</button>
+                    {p.status === "changes_requested" ? (
+                      <span style={{ padding: "10px 24px", background: "#F59E0B22", border: "1px solid #F59E0B", borderRadius: 8, fontSize: 14, color: "#B45309", fontFamily: FONT, fontWeight: 600 }}>Feedback Submitted &#10003;</span>
+                    ) : (
+                      <button onClick={() => setShowChangeForm(showChanges ? null : p.placementId)} style={{ padding: "10px 24px", background: "none", border: "1px solid #6B7280", borderRadius: 8, fontSize: 14, color: "#374151", cursor: "pointer", fontFamily: FONT }}>Request Changes</button>
+                    )}
                   </div>
                 )}
                 {showChanges && (
@@ -2989,7 +3037,8 @@
                 <p style={{ fontSize: 13, color: "#6B7280" }}>
                   {completedCount} of {total} completed
                   {prog.approved > 0 && <span> · {prog.approved} approved</span>}
-                  {(prog.pending_review + prog.changes_requested) > 0 && <span> · {prog.pending_review + prog.changes_requested} needs review</span>}
+                  {prog.pending_review > 0 && <span> · {prog.pending_review} needs review</span>}
+                  {prog.changes_requested > 0 && <span> · {prog.changes_requested} awaiting update</span>}
                   {prog.placeholder > 0 && <span> · {prog.placeholder} remaining</span>}
                 </p>
               </div>
@@ -3055,7 +3104,7 @@
 
           {/* Bottom contact */}
           <p style={{ textAlign: "center", fontSize: 13, color: "#9CA3AF", marginTop: 32, lineHeight: 1.6 }}>
-            Questions about your placements? Reach out to Danielle at <a href="mailto:danielle@themommy.news" style={{ color: "#E8909C", textDecoration: "none" }}>danielle@themommy.news</a>
+            Questions about your placements? Reach out to Matt at <a href="mailto:matt@themommy.news" style={{ color: "#E8909C", textDecoration: "none" }}>matt@themommy.news</a>
           </p>
         </div>
       );
@@ -3968,7 +4017,7 @@
     }
 
     // ─── Schedule Preview (shared by Add Sponsor + Convert Inquiry + standalone) ─────
-    function SchedulePreview({ totalPlacements, startDate, completedRuns, authToken, onScheduleChange, compact }) {
+    function SchedulePreview({ totalPlacements, startDate, completedRuns, authToken, onScheduleChange, compact, sponsors }) {
       const [schedule, setSchedule] = useState([]);
       const [loading, setLoading] = useState(false);
       const [editingIdx, setEditingIdx] = useState(null);
@@ -3981,9 +4030,11 @@
         const timer = setTimeout(async () => {
           setLoading(true);
           try {
+            const nameMap = {};
+            const sIds = (sponsors || []).map(s => { nameMap[s.id] = s.name; return s.id; });
             const res = await fetch("/api/placements?action=generate-schedule", {
               method: "POST", headers: hdrs,
-              body: JSON.stringify({ startDate, totalPlacements: parseInt(totalPlacements), completedRuns: parseInt(completedRuns) || 0 }),
+              body: JSON.stringify({ startDate, totalPlacements: parseInt(totalPlacements), completedRuns: parseInt(completedRuns) || 0, sponsorIds: sIds, sponsorNameMap: nameMap }),
             });
             if (res.ok) {
               const data = await res.json();
@@ -4002,9 +4053,18 @@
         const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         updated[idx] = { ...updated[idx], date: newDate, weekday: weekdays[dow], edited: true };
         updated[idx].nonSendDay = ![1, 3, 5].includes(dow);
-        updated[idx].duplicate = updated.some((s, i) => i !== idx && s.date === newDate);
-        setSchedule(updated);
-        if (onScheduleChange) onScheduleChange(updated);
+        // Sort chronologically and renumber
+        const completed = updated.filter(s => s.preCompleted);
+        const upcoming = updated.filter(s => !s.preCompleted);
+        completed.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        upcoming.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        completed.forEach((s, i) => { s.runNumber = i + 1; });
+        upcoming.forEach((s, i) => { s.runNumber = completed.length + i + 1; });
+        const sorted = [...completed, ...upcoming];
+        // Check for duplicates after sort
+        sorted.forEach((s, i) => { s.duplicate = sorted.some((o, j) => j !== i && o.date === s.date && s.date); });
+        setSchedule(sorted);
+        if (onScheduleChange) onScheduleChange(sorted);
         setEditingIdx(null);
       };
 
@@ -4052,6 +4112,7 @@
                       <td style={{ ...tdStyle, color: C.muted }}>{s.weekday || "\u2014"}</td>
                       <td style={tdStyle}>
                         <span style={{ color: sc2, fontWeight: s.preCompleted ? 400 : 600, fontSize: 11 }}>{statusText}</span>
+                        {s.movedFrom && <span style={{ fontSize: 9, color: C.amber, marginLeft: 4 }}>moved from {new Date(s.movedFrom + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}{s.takenBy ? ` — taken by ${s.takenBy}` : ""}</span>}
                         {s.edited && <span style={{ fontSize: 9, color: C.accent, marginLeft: 4 }}>edited</span>}
                         {s.nonSendDay && <span style={{ fontSize: 9, color: C.amber, marginLeft: 4 }}>non-send day</span>}
                         {s.duplicate && <span style={{ fontSize: 9, color: C.red, marginLeft: 4 }}>duplicate</span>}
@@ -4068,7 +4129,7 @@
     }
 
     // ─── Convert Inquiry Form ────────────────────────────────────
-    function ConvertInquiryForm({ inquiry, onConvert, onCancel, pricingCfg, authToken }) {
+    function ConvertInquiryForm({ inquiry, onConvert, onCancel, pricingCfg, authToken, sponsors }) {
       const tierLabels = { starter: "Starter", growth: "Growth", partner: "Partner" };
       const tierMonths = { starter: 3, growth: 6, partner: 12 };
       const today = new Date().toISOString().split("T")[0];
@@ -4217,6 +4278,7 @@
                 authToken={authToken}
                 onScheduleChange={setScheduleData}
                 compact={true}
+                sponsors={sponsors}
               />
             </div>
           )}
@@ -4296,7 +4358,7 @@
       );
     }
 
-    function AddSponsorForm({ onSave, onCancel, pricingCfg, authToken }) {
+    function AddSponsorForm({ onSave, onCancel, pricingCfg, authToken, sponsors }) {
       const [name, setName] = useState("");
       const [patterns, setPatterns] = useState([""]);
       const [pkgTier, setPkgTier] = useState("custom");
@@ -4446,6 +4508,7 @@
                 completedRuns={schedInProgress ? schedCompletedRuns : 0}
                 authToken={authToken}
                 onScheduleChange={setScheduleData}
+                sponsors={sponsors}
               />
             </div>
           )}

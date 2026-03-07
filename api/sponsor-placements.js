@@ -72,7 +72,7 @@ export default async function handler(req, res) {
     if (!existing) return res.status(404).json({ error: "Placement not found" });
     const pl = typeof existing === "string" ? JSON.parse(existing) : existing;
 
-    if (pl.status !== "pending_review") return res.status(400).json({ error: "Placement is not pending review" });
+    if (pl.status !== "pending_review" && pl.status !== "changes_requested") return res.status(400).json({ error: "Placement is not pending review" });
 
     const now = new Date().toISOString();
     pl.status = "approved";

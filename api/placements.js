@@ -5,7 +5,7 @@ function indexKey(sponsorId) { return `placements-index:${sponsorId}`; }
 function placementKey(sponsorId, placementId) { return `placements:${sponsorId}:${placementId}`; }
 function uid() { return "pl-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
-// ─── Schedule generation (simple biweekly) ──────────────────
+// ─── Schedule generation (biweekly, conflict-aware) ─────────
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function generateForwardDates(startDate, count) {
@@ -18,6 +18,52 @@ function generateForwardDates(startDate, count) {
     cur.setDate(cur.getDate() + 14);
   }
   return dates;
+}
+
+// Conflict-aware: tries Mon then Fri of same week, then skips +14d
+function resolveConflicts(dates, takenMap, count) {
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const resolved = [];
+  for (const dateStr of dates) {
+    if (resolved.length >= count) break;
+    const d = new Date(dateStr + "T00:00:00");
+    const dow = d.getDay();
+    // Try original date
+    if (!takenMap[dateStr]) {
+      resolved.push({ date: dateStr, movedFrom: null, takenBy: null });
+      continue;
+    }
+    // Try Monday of that week
+    const mon = new Date(d);
+    mon.setDate(mon.getDate() - ((dow + 6) % 7)); // go to Monday
+    const monStr = fmt(mon);
+    if (monStr !== dateStr && !takenMap[monStr] && !resolved.some(r => r.date === monStr)) {
+      resolved.push({ date: monStr, movedFrom: dateStr, takenBy: takenMap[dateStr] });
+      continue;
+    }
+    // Try Friday of that week
+    const fri = new Date(mon);
+    fri.setDate(fri.getDate() + 4);
+    const friStr = fmt(fri);
+    if (friStr !== dateStr && !takenMap[friStr] && !resolved.some(r => r.date === friStr)) {
+      resolved.push({ date: friStr, movedFrom: dateStr, takenBy: takenMap[dateStr] });
+      continue;
+    }
+    // Whole week booked — skip, will add extra at end
+    resolved.push(null); // placeholder for skipped
+  }
+
+  // Remove skipped entries and add extras at the end
+  const good = resolved.filter(r => r !== null);
+  let lastDate = good.length > 0 ? new Date(good[good.length - 1].date + "T00:00:00") : new Date(dates[dates.length - 1] + "T00:00:00");
+  while (good.length < count) {
+    lastDate.setDate(lastDate.getDate() + 14);
+    const extra = fmt(new Date(lastDate));
+    if (!takenMap[extra] && !good.some(r => r.date === extra)) {
+      good.push({ date: extra, movedFrom: null, takenBy: null });
+    }
+  }
+  return good;
 }
 
 function generateBackwardDates(startDate, count) {
@@ -101,15 +147,36 @@ export default async function handler(req, res) {
 
   // ─── Generate schedule (preview — no records created) ─
   if (action === "generate-schedule" && req.method === "POST") {
-    const { startDate, totalPlacements, completedRuns = 0 } = req.body;
+    const { startDate, totalPlacements, completedRuns = 0, sponsorIds } = req.body;
     if (!startDate || !totalPlacements) return res.status(400).json({ error: "startDate and totalPlacements required" });
 
     const tp = parseInt(totalPlacements) || 0;
     const cr = parseInt(completedRuns) || 0;
     const forwardCount = tp - cr;
 
+    // Build map of taken dates from all sponsors' existing placements
+    const takenMap = {}; // date -> sponsor name
+    const allSponsorIds = sponsorIds || [];
+    for (const sid of allSponsorIds) {
+      const idx = await redis.get(indexKey(sid));
+      const items = idx ? (typeof idx === "string" ? JSON.parse(idx) : idx) : [];
+      items.forEach(item => {
+        if (item.scheduledDate && item.status !== "completed") {
+          // Store the first sponsor that has this date
+          if (!takenMap[item.scheduledDate]) takenMap[item.scheduledDate] = sid;
+        }
+      });
+    }
+
+    // Resolve sponsor names for display
+    const sponsorNameMap = {};
+    if (req.body.sponsorNameMap) {
+      Object.assign(sponsorNameMap, req.body.sponsorNameMap);
+    }
+
     const backDates = generateBackwardDates(startDate, cr);
-    const forwardDates = generateForwardDates(startDate, forwardCount);
+    const rawForwardDates = generateForwardDates(startDate, forwardCount);
+    const resolved = resolveConflicts(rawForwardDates, takenMap, forwardCount);
 
     const schedule = [];
     for (let i = 0; i < cr; i++) {
@@ -119,11 +186,14 @@ export default async function handler(req, res) {
         preCompleted: true,
       });
     }
-    for (let i = 0; i < forwardCount; i++) {
-      const date = forwardDates[i] || null;
+    for (let i = 0; i < resolved.length; i++) {
+      const r = resolved[i];
       schedule.push({
-        runNumber: cr + i + 1, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T00:00:00").getDay()] : "",
+        runNumber: cr + i + 1, date: r.date,
+        weekday: r.date ? WEEKDAY_NAMES[new Date(r.date + "T00:00:00").getDay()] : "",
         preCompleted: false,
+        movedFrom: r.movedFrom || null,
+        takenBy: r.takenBy ? (sponsorNameMap[r.takenBy] || r.takenBy) : null,
       });
     }
 
