@@ -18,8 +18,10 @@ export default async function handler(req, res) {
 
     const raw = await redis.get(`sponsor:${token}`);
     if (!raw) {
+      console.log(`[sponsor-data] 404: no data for token=${token.substring(0, 8)}...`);
       return res.status(404).json({ error: "Not found" });
     }
+    console.log(`[sponsor-data] Found data for token=${token.substring(0, 8)}...`);
 
     const data = typeof raw === "string" ? JSON.parse(raw) : raw;
     return res.status(200).json(data);

@@ -327,14 +327,15 @@
       // Sponsor CRUD
       const addSponsor = async (name, patterns, contractData) => {
         const s = { id: uid(), name, urlPatterns: patterns.filter(p => p.trim()), created: new Date().toISOString(), shareToken: uid() + uid() };
-        saveSp([...sponsors, s]);
-        let ncId = null;
+        const newSponsors = [...sponsors, s];
+        saveSp(newSponsors);
+        let newContracts = contracts;
         if (contractData) {
           const updated = contracts.map(c => c.sponsorId === s.id ? { ...c, isActive: false } : c);
           const nc = { id: uid(), sponsorId: s.id, name: contractData.contractName, totalPrice: contractData.totalPrice, totalRuns: contractData.totalRuns, startDate: contractData.startDate, endDate: contractData.endDate, packageTier: contractData.packageTier || "custom", pollsIncluded: contractData.pollsIncluded || 0, takeoverIncluded: contractData.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
-          saveCt([...updated, nc]);
+          newContracts = [...updated, nc];
+          saveCt(newContracts);
           setSelContract(nc.id);
-          ncId = nc.id;
           // Confirm schedule if provided
           if (contractData.schedule && authToken) {
             try {
@@ -352,6 +353,8 @@
         }
         setSel(s.id);
         setModal(null);
+        // Auto-publish so share link works immediately — pass new sponsor & contracts directly since state is async
+        await publishSponsor(s.id, undefined, s, newContracts);
       };
       const updateSponsor = (id, updates) => {
         saveSp(sponsors.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -467,10 +470,11 @@
 
       // Full sync with depth control
       // ─── Publish sponsor data to KV ────────────────────────────
-      const publishSponsor = async (sponsorId, currentRuns) => {
-        const sp = sponsors.find(s => s.id === sponsorId);
-        if (!sp || !sp.shareToken || !authToken) return;
-        const spContracts = contracts.filter(c => c.sponsorId === sponsorId);
+      // accepts optional overrides for when state hasn't updated yet (e.g. right after addSponsor)
+      const publishSponsor = async (sponsorId, currentRuns, overrideSponsor, overrideContracts) => {
+        const sp = overrideSponsor || sponsors.find(s => s.id === sponsorId);
+        if (!sp || !sp.shareToken || !authToken) { console.log("[publishSponsor] SKIP: no sponsor/token/auth", { sponsorId, hasSponsor: !!sp, hasToken: sp?.shareToken, hasAuth: !!authToken }); return; }
+        const spContracts = (overrideContracts || contracts).filter(c => c.sponsorId === sponsorId);
         const spRuns = (currentRuns || runs).filter(r => r.sponsorId === sponsorId);
         const cleanRun = (r) => ({ id: r.id, emailName: r.emailName, sendDate: r.sendDate, totalOpens: r.totalOpens, totalClicks: getRunClicks(r), webUrl: r.webUrl || null, description: r.description || null });
         const pubContracts = spContracts.map(c => {
@@ -500,10 +504,16 @@
           id: sponsorId, sponsorName: sp.name, showCostToSponsor: !!sp.showCostToSponsor, oneOffShowCpm: !!sp.oneOffShowCpm, oneOffShowCpc: !!sp.oneOffShowCpc, contracts: pubContracts, unassignedRuns,
           publishedAt: new Date().toISOString(), publicationName: config.publicationName || "", publicationUrl: config.publicationUrl || "", campaignUrl: config.campaignUrl || "",
         };
+        console.log("[publishSponsor] Writing to KV:", { shareToken: sp.shareToken.substring(0, 8) + "...", sponsorId, sponsorName: sp.name, hasId: !!pubData.id, contractCount: pubContracts.length });
         try {
           const res = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` }, body: JSON.stringify({ shareToken: sp.shareToken, data: pubData }) });
-          if (res.ok) savePt({ ...publishTimes, [sponsorId]: new Date().toISOString() });
-        } catch (e) { console.error("Publish failed:", e); }
+          if (res.ok) {
+            savePt({ ...publishTimes, [sponsorId]: new Date().toISOString() });
+            console.log("[publishSponsor] SUCCESS: KV write confirmed for", sp.name);
+          } else {
+            console.error("[publishSponsor] FAILED:", res.status, await res.text());
+          }
+        } catch (e) { console.error("[publishSponsor] ERROR:", e); }
       };
 
       const doSync = async (sponsorIds, pages = syncDepth) => {
@@ -616,6 +626,7 @@
               </select>
               <button onClick={() => { setSel(null); setView("inquiries"); }} style={{ position: "relative", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "inquiries" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Leads{newInquiryCount > 0 && <span style={{ marginLeft: 4, fontSize: 10, padding: "1px 5px", borderRadius: 8, background: C.green, color: C.bg, fontWeight: 700 }}>{newInquiryCount}</span>}</button>
               <button onClick={() => { setSel(null); setView("polls"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "polls" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Polls</button>
+              <button onClick={() => { setSel(null); setView("master-calendar"); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: view === "master-calendar" ? C.accent : C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Calendar</button>
               <a href="/admin/pricing" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, textDecoration: "none", fontFamily: FONT, fontSize: 11, padding: "8px 10px", minHeight: 44, display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>Pricing</a>
               <button onClick={() => setModal("settings")} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer", fontFamily: FONT, fontSize: 18, padding: "8px 12px", minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</button>
               <Btn onClick={() => setModal("addSponsor")} color={C.accent} bg={C.accentDim} style={{ minHeight: 44 }}>+</Btn>
@@ -652,6 +663,9 @@
               <button onClick={() => { setSel(null); setView("polls"); }} style={{ width: "100%", padding: "10px 14px", background: view === "polls" ? C.accentDim : "transparent", border: view === "polls" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "polls" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
                 <span>Poll Calendar</span>
               </button>
+              <button onClick={() => { setSel(null); setView("master-calendar"); }} style={{ width: "100%", padding: "10px 14px", background: view === "master-calendar" ? C.accentDim : "transparent", border: view === "master-calendar" ? `1px solid rgba(79,143,247,0.2)` : `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: view === "master-calendar" ? C.accent : C.text, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all 0.15s" }}>
+                <span>Master Calendar</span>
+              </button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: "12px 0 4px" }}>
               {sponsors.map(s => {
@@ -675,7 +689,7 @@
 
           {/* Main */}
           <main style={{ flex: 1, padding: isMobile ? 16 : 32, overflow: "auto" }}>
-            {!sel && view !== "inquiries" && view !== "polls" && (
+            {!sel && view !== "inquiries" && view !== "polls" && view !== "master-calendar" && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 16 }}>
                 <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📊</div>
                 <p style={{ color: C.dim, fontSize: 15, fontWeight: 500 }}>Select a sponsor to view their data</p>
@@ -745,6 +759,8 @@
 
             {view === "polls" && !sel && <PollCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} />}
 
+            {view === "master-calendar" && !sel && <MasterCalendar authToken={authToken} sponsors={sponsors} contracts={contracts} isMobile={isMobile} />}
+
             {sel && sponsor && (
               <div className="fade-in">
                 {/* Header */}
@@ -755,7 +771,7 @@
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {sRuns.length > 0 && <button onClick={() => { setDownloading(true); try { downloadReport({ sponsor, contract: viewingContract, runs: sRuns, totals: tot, costMetrics, config }); } catch(e) { console.error(e); } setTimeout(() => setDownloading(false), 1000); }} disabled={downloading} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: downloading ? C.dim : C.muted, cursor: downloading ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 14px", opacity: downloading ? 0.6 : 1 }}>{downloading ? "Opening..." : "↓ Download Report"}</button>}
                     <Btn onClick={() => publishSponsor(sponsor.id)} color={C.green} bg={C.greenDim}>Publish</Btn>
-                    <Btn onClick={() => setView("sponsor")} color={C.accent} bg={C.accentDim}>Sponsor View</Btn>
+                    <Btn onClick={() => window.open(`${window.location.origin}/s/${sponsor.shareToken}`, '_blank')} color={C.accent} bg={C.accentDim}>Sponsor View</Btn>
                     <Btn onClick={() => delSponsor(sponsor.id)} color={C.red} bg={C.redDim}>Delete</Btn>
                   </div>
                   {publishTimes[sponsor.id] && <span style={{ fontSize: 11, color: C.green }}>Published {timeAgo(publishTimes[sponsor.id])}</span>}
@@ -1026,7 +1042,8 @@
                 saveSp([...sponsors, newSponsor]);
                 const updated = contracts.map(c => c.sponsorId === newSponsor.id ? { ...c, isActive: false } : c);
                 const nc = { id: uid(), sponsorId: newSponsor.id, name: data.contractName, totalPrice: data.totalPrice, totalRuns: data.totalRuns, startDate: data.startDate, endDate: data.endDate, packageTier: data.packageTier || "custom", pollsIncluded: data.pollsIncluded || 0, takeoverIncluded: data.takeoverIncluded || false, isActive: true, created: new Date().toISOString() };
-                saveCt([...updated, nc]);
+                const newContracts = [...updated, nc];
+                saveCt(newContracts);
                 // Confirm schedule if provided
                 if (data.schedule && authToken) {
                   try {
@@ -1042,6 +1059,8 @@
                   } catch {}
                 }
                 await patchInquiry(convertInquiry.id, { status: "converted", convertedTo: data.sponsorName, convertedAt: new Date().toISOString() });
+                // Auto-publish BEFORE setting state — pass sponsor & contracts directly since state is async
+                await publishSponsor(newSponsor.id, undefined, newSponsor, newContracts);
                 setSel(newSponsor.id);
                 setSelContract(nc.id);
                 setView("admin");
@@ -1058,6 +1077,157 @@
               <button onClick={() => undoDismiss(toast.undoId)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>Undo</button>
             </div>
           )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MASTER CALENDAR — all sponsor placements across all dates
+    // ═══════════════════════════════════════════════════════════════
+    function MasterCalendar({ authToken, sponsors, contracts, isMobile }) {
+      const [allPlacements, setAllPlacements] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [currentMonth, setCurrentMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+      const [selectedDate, setSelectedDate] = useState(null);
+
+      const hdrs = { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" };
+
+      useEffect(() => {
+        (async () => {
+          setLoading(true);
+          const all = [];
+          for (const sp of sponsors) {
+            try {
+              const res = await fetch(`/api/placements?action=list&sponsorId=${sp.id}`, { headers: hdrs });
+              if (res.ok) {
+                const items = await res.json();
+                items.forEach(p => all.push({ ...p, sponsorId: sp.id, sponsorName: sp.name }));
+              }
+            } catch {}
+          }
+          setAllPlacements(all);
+          setLoading(false);
+        })();
+      }, [sponsors.length]);
+
+      const [year, month] = currentMonth.split("-").map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const firstDow = new Date(year, month - 1, 1).getDay();
+      const sendDays = [1, 3, 5]; // Mon, Wed, Fri
+
+      const byDate = {};
+      allPlacements.forEach(p => {
+        if (p.scheduledDate) {
+          if (!byDate[p.scheduledDate]) byDate[p.scheduledDate] = [];
+          byDate[p.scheduledDate].push(p);
+        }
+      });
+
+      const prevMonth = () => {
+        let m = month - 1, y = year;
+        if (m < 1) { m = 12; y--; }
+        setCurrentMonth(`${y}-${String(m).padStart(2, "0")}`);
+      };
+      const nextMonth = () => {
+        let m = month + 1, y = year;
+        if (m > 12) { m = 1; y++; }
+        setCurrentMonth(`${y}-${String(m).padStart(2, "0")}`);
+      };
+
+      const selPlacements = selectedDate ? (byDate[selectedDate] || []) : [];
+      const statusColor = (s) => ({ completed: C.green, approved: C.green, pending_review: C.amber, draft: C.muted, placeholder: C.dim, changes_requested: C.red }[s] || C.dim);
+
+      // List view: upcoming placements sorted by date
+      const upcoming = allPlacements.filter(p => p.scheduledDate && p.status !== "completed").sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
+      if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.dim }}>Loading all sponsor schedules...</div>;
+
+      return (
+        <div className="fade-in" style={{ maxWidth: 900 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Master Calendar</h2>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>All sponsor placements across all send dates</p>
+
+          {/* Month navigation */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <button onClick={prevMonth} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, cursor: "pointer", padding: "6px 12px", fontFamily: FONT, fontSize: 14 }}>&larr;</button>
+            <span style={{ fontSize: 16, fontWeight: 600, minWidth: 160, textAlign: "center" }}>{new Date(year, month - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
+            <button onClick={nextMonth} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, cursor: "pointer", padding: "6px 12px", fontFamily: FONT, fontSize: 14 }}>&rarr;</button>
+          </div>
+
+          {/* Calendar grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 20 }}>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+              <div key={d} style={{ padding: "8px 4px", textAlign: "center", fontSize: 11, fontWeight: 600, color: C.dim, textTransform: "uppercase" }}>{d}</div>
+            ))}
+            {Array(firstDow).fill(null).map((_, i) => <div key={"e" + i} />)}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const dow = new Date(year, month - 1, day).getDay();
+              const isSendDay = sendDays.includes(dow);
+              const pls = byDate[dateStr] || [];
+              const isSelected = selectedDate === dateStr;
+              const isToday = dateStr === new Date().toISOString().slice(0, 10);
+              return (
+                <div key={day} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  style={{ padding: "6px 4px", minHeight: isMobile ? 50 : 70, background: isSelected ? C.accentDim : (isSendDay ? C.card : C.bg), border: `1px solid ${isSelected ? C.accent : (isToday ? C.green : C.border)}`, borderRadius: 6, cursor: "pointer", transition: "all 0.1s" }}>
+                  <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.green : C.text, marginBottom: 2 }}>{day}</div>
+                  {pls.slice(0, 3).map((p, pi) => (
+                    <div key={pi} style={{ fontSize: 9, padding: "1px 3px", marginBottom: 1, borderRadius: 3, background: statusColor(p.status) + "22", color: statusColor(p.status), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.sponsorName}
+                    </div>
+                  ))}
+                  {pls.length > 3 && <div style={{ fontSize: 9, color: C.dim }}>+{pls.length - 3} more</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Detail panel for selected date */}
+          {selectedDate && (
+            <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, padding: 16, marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                <span style={{ fontSize: 12, color: C.dim, marginLeft: 8 }}>({selPlacements.length} placement{selPlacements.length !== 1 ? "s" : ""})</span>
+              </h3>
+              {selPlacements.length === 0 ? (
+                <p style={{ fontSize: 12, color: C.dim }}>No placements scheduled for this date.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {selPlacements.map((p, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.sponsorName}</span>
+                        {p.campaignName && <span style={{ fontSize: 11, color: C.dim, marginLeft: 8 }}>{p.campaignName}</span>}
+                        {p.runNumber && <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>Run {p.runNumber}{p.totalRuns ? `/${p.totalRuns}` : ""}</span>}
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: statusColor(p.status), textTransform: "capitalize" }}>{(p.status || "").replace(/_/g, " ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Upcoming list */}
+          <div style={{ marginTop: 8 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Upcoming Placements</h3>
+            {upcoming.length === 0 ? (
+              <p style={{ fontSize: 12, color: C.dim }}>No upcoming placements scheduled.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {upcoming.slice(0, 30).map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: C.card, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 12, fontFamily: MONO, color: C.muted, minWidth: 85 }}>{p.scheduledDate}</span>
+                    <span style={{ fontSize: 12, color: C.text, flex: 1 }}>{p.sponsorName}</span>
+                    {p.campaignName && <span style={{ fontSize: 11, color: C.dim }}>{p.campaignName}</span>}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(p.status), textTransform: "capitalize" }}>{(p.status || "").replace(/_/g, " ")}</span>
+                  </div>
+                ))}
+                {upcoming.length > 30 && <p style={{ fontSize: 11, color: C.dim, paddingLeft: 12 }}>...and {upcoming.length - 30} more</p>}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -1883,11 +2053,11 @@
       const [showGenSchedule, setShowGenSchedule] = useState(false);
       const [genSchedContract, setGenSchedContract] = useState(null);
       const [genSchedStartDate, setGenSchedStartDate] = useState("");
-      const [genSchedDay, setGenSchedDay] = useState("monday");
       const [genSchedInProgress, setGenSchedInProgress] = useState(false);
       const [genSchedCompleted, setGenSchedCompleted] = useState(0);
       const [genSchedData, setGenSchedData] = useState(null);
       const [genSchedSaving, setGenSchedSaving] = useState(false);
+      const [editingDate, setEditingDate] = useState(null); // { placementId, date }
       const fileRef = React.useRef();
       const replaceRefs = React.useRef({});
 
@@ -2048,6 +2218,22 @@
         await fetchPlacements();
       };
 
+      const rescheduleDate = async (pid, newDate) => {
+        await fetch(`/api/placements?action=update&sponsorId=${sponsorId}&placementId=${pid}`, {
+          method: "POST", headers, body: JSON.stringify({ scheduledDate: newDate }),
+        });
+        setEditingDate(null);
+        await fetchPlacements();
+      };
+
+      const skipPlacement = async (pid) => {
+        if (!confirm("Skip this run? It will be removed and a new run added at the end of the schedule.")) return;
+        await fetch(`/api/placements?action=skip-placement&sponsorId=${sponsorId}&placementId=${pid}`, {
+          method: "POST", headers, body: JSON.stringify({}),
+        });
+        await fetchPlacements();
+      };
+
       const counts = { placeholder: 0, draft: 0, pending_review: 0, changes_requested: 0, approved: 0, completed: 0 };
       placements.forEach(p => { if (counts[p.status] !== undefined) counts[p.status]++; });
 
@@ -2097,19 +2283,38 @@
         const isPlaceholder = p.status === "placeholder";
 
         if (isPlaceholder) {
+          const isEditingThisDate = editingDate?.placementId === p.placementId;
           return (
-            <div key={p.placementId} onClick={() => {
-              setEditingPlaceholder(p);
-              setNewDate(p.scheduledDate || ""); setNewHeadline(p.headline || ""); setNewNotes("");
-              setSelCampaign(campaignOptions.find(c => c.id === p.contractId) || null);
-              setSelRunNumber(p.runNumber ? String(p.runNumber) : "");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }} style={{ background: C.card, borderRadius: 14, border: `2px dashed ${C.border}`, padding: isMobile ? 14 : 18, cursor: "pointer", opacity: 0.7 }}>
+            <div key={p.placementId} style={{ background: C.card, borderRadius: 14, border: `2px dashed ${C.border}`, padding: isMobile ? 14 : 18, opacity: 0.85 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ width: 24, height: 24, borderRadius: 12, border: `2px dashed ${C.dim}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} />
-                <div>
+                <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 14, fontWeight: 600, color: C.dim }}>{runLabel}</p>
-                  <p style={{ fontSize: 12, color: C.dim }}>{fmtD(p.scheduledDate)} — <em>No creative yet — click to add content</em></p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                    {isEditingThisDate ? (
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="date" defaultValue={p.scheduledDate || ""} autoFocus onChange={e => setEditingDate({ placementId: p.placementId, date: e.target.value })}
+                          onKeyDown={e => { if (e.key === "Enter" && editingDate?.date) rescheduleDate(p.placementId, editingDate.date); if (e.key === "Escape") setEditingDate(null); }}
+                          style={{ padding: "4px 6px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 12 }} />
+                        <button onClick={() => editingDate?.date && rescheduleDate(p.placementId, editingDate.date)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, fontFamily: FONT }}>✓</button>
+                        <button onClick={() => setEditingDate(null)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 13 }}>✕</button>
+                      </div>
+                    ) : (
+                      <span onClick={(e) => { e.stopPropagation(); setEditingDate({ placementId: p.placementId, date: p.scheduledDate || "" }); }}
+                        style={{ fontSize: 12, color: C.muted, cursor: "pointer", borderBottom: `1px dashed ${C.dim}` }}>{fmtD(p.scheduledDate)}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => {
+                    setEditingPlaceholder(p);
+                    setNewDate(p.scheduledDate || ""); setNewHeadline(p.headline || ""); setNewNotes("");
+                    setSelCampaign(campaignOptions.find(c => c.id === p.contractId) || null);
+                    setSelRunNumber(p.runNumber ? String(p.runNumber) : "");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.accentDim, color: C.accent, cursor: "pointer", fontFamily: FONT, fontSize: 11, fontWeight: 600 }}>Add Content</button>
+                  <button onClick={(e) => { e.stopPropagation(); skipPlacement(p.placementId); }}
+                    style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.redDim, color: C.red, cursor: "pointer", fontFamily: FONT, fontSize: 11, fontWeight: 600 }}>Skip</button>
                 </div>
               </div>
             </div>
@@ -2151,7 +2356,18 @@
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{runLabel}</p>
                 {p.campaignName && <p style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{p.campaignName}</p>}
-                <p style={{ fontSize: 12, color: C.dim, marginBottom: 8 }}>{fmtD(p.scheduledDate)}</p>
+                {editingDate?.placementId === p.placementId ? (
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 8 }}>
+                    <input type="date" defaultValue={p.scheduledDate || ""} autoFocus onChange={e => setEditingDate({ placementId: p.placementId, date: e.target.value })}
+                      onKeyDown={e => { if (e.key === "Enter" && editingDate?.date) rescheduleDate(p.placementId, editingDate.date); if (e.key === "Escape") setEditingDate(null); }}
+                      style={{ padding: "4px 6px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 12 }} />
+                    <button onClick={() => editingDate?.date && rescheduleDate(p.placementId, editingDate.date)} style={{ background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13 }}>✓</button>
+                    <button onClick={() => setEditingDate(null)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 13 }}>✕</button>
+                  </div>
+                ) : (
+                  <p onClick={() => { if (p.status !== "completed") setEditingDate({ placementId: p.placementId, date: p.scheduledDate || "" }); }}
+                    style={{ fontSize: 12, color: C.dim, marginBottom: 8, cursor: p.status !== "completed" ? "pointer" : "default", borderBottom: p.status !== "completed" ? `1px dashed ${C.dim}` : "none", display: "inline-block" }}>{fmtD(p.scheduledDate)}</p>
+                )}
 
                 {/* Changes requested feedback */}
                 {p.status === "changes_requested" && lastChange && (
@@ -2228,19 +2444,9 @@
                 <p style={{ fontSize: 14, fontWeight: 600 }}>Generate Schedule — {genSchedContract.name}</p>
                 <button onClick={() => { setShowGenSchedule(false); setGenSchedData(null); }} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 18 }}>&times;</button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>First Placement Date</label>
-                  <input type="date" value={genSchedStartDate} onChange={e => setGenSchedStartDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13 }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>Preferred Send Day</label>
-                  <select value={genSchedDay} onChange={e => setGenSchedDay(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: FONT, fontSize: 13 }}>
-                    <option value="monday">Monday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="friday">Friday</option>
-                  </select>
-                </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, color: C.dim, display: "block", marginBottom: 4 }}>First Placement Date</label>
+                <input type="date" value={genSchedStartDate} onChange={e => setGenSchedStartDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: MONO, fontSize: 13, maxWidth: 220 }} />
               </div>
               <div style={{ marginBottom: 12 }}>
                 <button onClick={() => setGenSchedInProgress(!genSchedInProgress)} style={{
@@ -2263,7 +2469,6 @@
               <SchedulePreview
                 totalPlacements={genSchedContract.totalRuns}
                 startDate={genSchedStartDate}
-                preferredWeekday={genSchedDay}
                 completedRuns={genSchedInProgress ? genSchedCompleted : 0}
                 authToken={authToken}
                 onScheduleChange={setGenSchedData}
@@ -3763,7 +3968,7 @@
     }
 
     // ─── Schedule Preview (shared by Add Sponsor + Convert Inquiry + standalone) ─────
-    function SchedulePreview({ totalPlacements, startDate, preferredWeekday, completedRuns, authToken, onScheduleChange, compact }) {
+    function SchedulePreview({ totalPlacements, startDate, completedRuns, authToken, onScheduleChange, compact }) {
       const [schedule, setSchedule] = useState([]);
       const [loading, setLoading] = useState(false);
       const [editingIdx, setEditingIdx] = useState(null);
@@ -3778,7 +3983,7 @@
           try {
             const res = await fetch("/api/placements?action=generate-schedule", {
               method: "POST", headers: hdrs,
-              body: JSON.stringify({ startDate, preferredWeekday: preferredWeekday || "monday", totalPlacements: parseInt(totalPlacements), completedRuns: parseInt(completedRuns) || 0 }),
+              body: JSON.stringify({ startDate, totalPlacements: parseInt(totalPlacements), completedRuns: parseInt(completedRuns) || 0 }),
             });
             if (res.ok) {
               const data = await res.json();
@@ -3789,30 +3994,18 @@
           setLoading(false);
         }, 400);
         return () => clearTimeout(timer);
-      }, [startDate, preferredWeekday, totalPlacements, completedRuns]);
+      }, [startDate, totalPlacements, completedRuns]);
 
-      const updateDateInline = async (idx, newDate) => {
+      const updateDateInline = (idx, newDate) => {
         const updated = [...schedule];
         const dow = new Date(newDate + "T00:00:00").getDay();
         const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         updated[idx] = { ...updated[idx], date: newDate, weekday: weekdays[dow], edited: true };
         updated[idx].nonSendDay = ![1, 3, 5].includes(dow);
         updated[idx].duplicate = updated.some((s, i) => i !== idx && s.date === newDate);
-        try {
-          const res = await fetch(`/api/placements?action=get-density&date=${newDate}`, { headers: hdrs });
-          if (res.ok) updated[idx].density = await res.json();
-        } catch {}
         setSchedule(updated);
         if (onScheduleChange) onScheduleChange(updated);
         setEditingIdx(null);
-      };
-
-      const densityDots = (d) => {
-        const t = d?.total || 0;
-        if (t === 0) return { color: C.dim, text: `(${t})`, dots: "" };
-        if (t <= 2) return { color: C.green, text: `(${t})`, dots: Array(t).fill("\u25CF").join("") };
-        if (t === 3) return { color: C.amber, text: `(${t})`, dots: "\u25CF\u25CF\u25CF" };
-        return { color: C.red, text: `(${t})`, dots: Array(Math.min(t, 5)).fill("\u25CF").join("") };
       };
 
       if (loading) return <p style={{ fontSize: 12, color: C.dim, padding: 12 }}>Generating schedule...</p>;
@@ -3825,7 +4018,7 @@
 
       return (
         <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Schedule Preview</label>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 8 }}>Schedule Preview (biweekly)</label>
           <div style={{ maxHeight: maxH, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, background: C.bg }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
@@ -3833,13 +4026,11 @@
                   <th style={thStyle}>#</th>
                   <th style={thStyle}>Date</th>
                   <th style={thStyle}>Day</th>
-                  <th style={thStyle}>Density</th>
                   <th style={thStyle}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {schedule.map((s, i) => {
-                  const dd = densityDots(s.density);
                   const isEditing = editingIdx === i;
                   const statusText = s.preCompleted ? "Completed*" : (i === cr ? "\u2190 Current" : "Upcoming");
                   const sc2 = s.preCompleted ? C.dim : (i === cr ? C.accent : C.muted);
@@ -3859,10 +4050,6 @@
                         )}
                       </td>
                       <td style={{ ...tdStyle, color: C.muted }}>{s.weekday || "\u2014"}</td>
-                      <td style={tdStyle}>
-                        <span style={{ color: dd.color, fontSize: 11 }}>{dd.dots} {dd.text}</span>
-                        {s.density?.sponsors?.length > 0 && <span style={{ fontSize: 10, color: C.dim, marginLeft: 4 }}>{s.density.sponsors.join(", ")}</span>}
-                      </td>
                       <td style={tdStyle}>
                         <span style={{ color: sc2, fontWeight: s.preCompleted ? 400 : 600, fontSize: 11 }}>{statusText}</span>
                         {s.edited && <span style={{ fontSize: 9, color: C.accent, marginLeft: 4 }}>edited</span>}
@@ -3896,7 +4083,6 @@
       const [endDate, setEndDate] = useState("");
       const [takeover, setTakeover] = useState(inquiry.takeover || false);
       // Schedule state
-      const [schedPreferredDay, setSchedPreferredDay] = useState("monday");
       const [schedInProgress, setSchedInProgress] = useState(false);
       const [schedCompletedRuns, setSchedCompletedRuns] = useState(0);
       const [scheduleData, setScheduleData] = useState(null);
@@ -4005,17 +4191,7 @@
           {(parseInt(totalRuns) || 0) > 0 && startDate && (
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 8, marginBottom: 16 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Schedule Campaign</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Preferred Send Day</label>
-                  <select value={schedPreferredDay} onChange={e => setSchedPreferredDay(e.target.value)} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box" }}>
-                    <option value="monday">Monday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="friday">Friday</option>
-                  </select>
-                </div>
-              </div>
+              <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
               <div style={{ marginBottom: 12 }}>
                 <button onClick={() => setSchedInProgress(!schedInProgress)} style={{
                   display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
@@ -4037,7 +4213,6 @@
               <SchedulePreview
                 totalPlacements={parseInt(totalRuns) || 0}
                 startDate={startDate}
-                preferredWeekday={schedPreferredDay}
                 completedRuns={schedInProgress ? schedCompletedRuns : 0}
                 authToken={authToken}
                 onScheduleChange={setScheduleData}
@@ -4133,7 +4308,6 @@
       const [endDate, setEndDate] = useState("");
       const [takeover, setTakeover] = useState(false);
       // Schedule state
-      const [schedPreferredDay, setSchedPreferredDay] = useState("monday");
       const [schedInProgress, setSchedInProgress] = useState(false);
       const [schedCompletedRuns, setSchedCompletedRuns] = useState(0);
       const [scheduleData, setScheduleData] = useState(null);
@@ -4247,17 +4421,7 @@
           {pkgTier !== "custom" && (parseInt(totalRuns) || 0) > 0 && startDate && (
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 16 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>Schedule Campaign</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: C.muted, marginBottom: 6 }}>Preferred Send Day</label>
-                  <select value={schedPreferredDay} onChange={e => setSchedPreferredDay(e.target.value)} style={{ width: "100%", padding: "11px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontFamily: FONT, fontSize: 14, boxSizing: "border-box" }}>
-                    <option value="monday">Monday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="friday">Friday</option>
-                  </select>
-                </div>
-              </div>
+              <Input label="First Placement Date" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
               <div style={{ marginBottom: 12 }}>
                 <button onClick={() => setSchedInProgress(!schedInProgress)} style={{
                   display: "flex", alignItems: "center", gap: 8, padding: "7px 14px",
@@ -4279,7 +4443,6 @@
               <SchedulePreview
                 totalPlacements={parseInt(totalRuns) || 0}
                 startDate={startDate}
-                preferredWeekday={schedPreferredDay}
                 completedRuns={schedInProgress ? schedCompletedRuns : 0}
                 authToken={authToken}
                 onScheduleChange={setScheduleData}

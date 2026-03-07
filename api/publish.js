@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     });
 
     await redis.set(`sponsor:${shareToken}`, JSON.stringify(data));
+    console.log(`[publish] Wrote sponsor data for token=${shareToken.substring(0, 8)}... sponsorName=${data.sponsorName || "unknown"}`);
     return res.status(200).json({ ok: true });
   } catch (err) {
     return res.status(500).json({ error: `KV error: ${err.message}` });

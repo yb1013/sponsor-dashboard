@@ -3,76 +3,19 @@ import { verifyToken } from "./_verify.js";
 
 function indexKey(sponsorId) { return `placements-index:${sponsorId}`; }
 function placementKey(sponsorId, placementId) { return `placements:${sponsorId}:${placementId}`; }
-function densityKey(date) { return `schedule-density:${date}`; }
 function uid() { return "pl-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
-// ─── Density helpers ────────────────────────────────────────
-async function getDensity(redis, date) {
-  if (!date) return { total: 0, sponsors: [] };
-  const raw = await redis.get(densityKey(date));
-  if (!raw) return { total: 0, sponsors: [] };
-  return typeof raw === "string" ? JSON.parse(raw) : raw;
-}
-
-async function addDensity(redis, date, sponsorName) {
-  if (!date || !sponsorName) return;
-  const d = await getDensity(redis, date);
-  if (!d.sponsors.includes(sponsorName)) {
-    d.sponsors.push(sponsorName);
-    d.total = d.sponsors.length;
-  }
-  await redis.set(densityKey(date), JSON.stringify(d));
-}
-
-async function removeDensity(redis, date, sponsorName) {
-  if (!date || !sponsorName) return;
-  const d = await getDensity(redis, date);
-  d.sponsors = d.sponsors.filter(s => s !== sponsorName);
-  d.total = d.sponsors.length;
-  if (d.total === 0) await redis.del(densityKey(date));
-  else await redis.set(densityKey(date), JSON.stringify(d));
-}
-
-// ─── Schedule generation ────────────────────────────────────
+// ─── Schedule generation (simple biweekly) ──────────────────
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function generateForwardDates(startDate, preferredWeekday, count) {
-  const dayMap = { monday: 1, wednesday: 3, friday: 5 };
-  const sendDays = [1, 3, 5];
-  let targetDay = dayMap[(preferredWeekday || "monday").toLowerCase()];
-  if (targetDay === undefined) {
-    const dow = new Date(startDate + "T00:00:00").getDay();
-    let best = 1, bestDist = 7;
-    for (const sd of sendDays) {
-      const dist = Math.min(Math.abs(sd - dow), 7 - Math.abs(sd - dow));
-      if (dist < bestDist) { bestDist = dist; best = sd; }
-    }
-    targetDay = best;
-  }
-
+function generateForwardDates(startDate, count) {
   const fmt = (d) => d.toISOString().slice(0, 10);
   const start = new Date(startDate + "T00:00:00");
   const dates = [];
-  let year = start.getFullYear(), month = start.getMonth();
-
-  while (dates.length < count) {
-    const occs = [];
-    const d = new Date(year, month, 1);
-    while (d.getMonth() === month) {
-      if (d.getDay() === targetDay) occs.push(new Date(d));
-      d.setDate(d.getDate() + 1);
-    }
-    const picks = [];
-    if (occs.length >= 1) picks.push(occs[0]);
-    if (occs.length >= 3) picks.push(occs[2]);
-    else if (occs.length >= 2) picks.push(occs[occs.length - 1]);
-
-    for (const p of picks) {
-      if (p >= start && dates.length < count) dates.push(fmt(p));
-    }
-    month++;
-    if (month > 11) { month = 0; year++; }
-    if (year > start.getFullYear() + 3) break;
+  let cur = new Date(start);
+  for (let i = 0; i < count; i++) {
+    dates.push(fmt(new Date(cur)));
+    cur.setDate(cur.getDate() + 14);
   }
   return dates;
 }
@@ -158,7 +101,7 @@ export default async function handler(req, res) {
 
   // ─── Generate schedule (preview — no records created) ─
   if (action === "generate-schedule" && req.method === "POST") {
-    const { startDate, preferredWeekday, totalPlacements, completedRuns = 0 } = req.body;
+    const { startDate, totalPlacements, completedRuns = 0 } = req.body;
     if (!startDate || !totalPlacements) return res.status(400).json({ error: "startDate and totalPlacements required" });
 
     const tp = parseInt(totalPlacements) || 0;
@@ -166,25 +109,21 @@ export default async function handler(req, res) {
     const forwardCount = tp - cr;
 
     const backDates = generateBackwardDates(startDate, cr);
-    const forwardDates = generateForwardDates(startDate, preferredWeekday || "monday", forwardCount);
+    const forwardDates = generateForwardDates(startDate, forwardCount);
 
-    // Build schedule with density
     const schedule = [];
     for (let i = 0; i < cr; i++) {
       const date = backDates[i] || null;
-      const density = date ? await getDensity(redis, date) : { total: 0, sponsors: [] };
       schedule.push({
         runNumber: i + 1, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T00:00:00").getDay()] : "",
-        density, preCompleted: true,
+        preCompleted: true,
       });
     }
     for (let i = 0; i < forwardCount; i++) {
       const date = forwardDates[i] || null;
-      const density = date ? await getDensity(redis, date) : { total: 0, sponsors: [] };
-      const runNum = cr + i + 1;
       schedule.push({
-        runNumber: runNum, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T00:00:00").getDay()] : "",
-        density, preCompleted: false,
+        runNumber: cr + i + 1, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T00:00:00").getDay()] : "",
+        preCompleted: false,
       });
     }
 
@@ -222,20 +161,10 @@ export default async function handler(req, res) {
       };
       await redis.set(placementKey(sid, id), JSON.stringify(placement));
       await updateIndex(redis, sid, placement);
-      // Update density
-      if (entry.date && sponsorName) await addDensity(redis, entry.date, sponsorName);
       created.push({ placementId: id, runNumber: entry.runNumber, date: entry.date, status: placement.status });
     }
 
     return res.status(200).json({ ok: true, count: created.length, placements: created });
-  }
-
-  // ─── Fetch density for a single date ──────────────────
-  if (action === "get-density" && req.method === "GET") {
-    const { date } = req.query;
-    if (!date) return res.status(400).json({ error: "date required" });
-    const density = await getDensity(redis, date);
-    return res.status(200).json(density);
   }
 
   // ─── Create new placement ─────────────────────────────
@@ -278,9 +207,6 @@ export default async function handler(req, res) {
     await redis.set(placementKey(sid, id), JSON.stringify(placement));
     await updateIndex(redis, sid, placement);
 
-    // Update density
-    if (scheduledDate && sponsorName) await addDensity(redis, scheduledDate, sponsorName);
-
     return res.status(200).json({ ok: true, placement: { ...placement, imageData: undefined, htmlContent: undefined } });
   }
 
@@ -312,7 +238,6 @@ export default async function handler(req, res) {
       };
       await redis.set(placementKey(sid, id), JSON.stringify(placement));
       await updateIndex(redis, sid, placement);
-      if (dates[i] && sponsorName) await addDensity(redis, dates[i], sponsorName);
       created.push({ ...placement, imageData: undefined, htmlContent: undefined });
     }
 
@@ -326,10 +251,8 @@ export default async function handler(req, res) {
     if (!existing) return res.status(404).json({ error: "Placement not found" });
     const pl = typeof existing === "string" ? JSON.parse(existing) : existing;
 
-    const { scheduledDate, headline, notes, imageData, contentType, htmlContent, previewUrl, campaignName, runNumber, totalRuns, sponsorName } = req.body;
+    const { scheduledDate, headline, notes, imageData, contentType, htmlContent, previewUrl, campaignName, runNumber, totalRuns } = req.body;
 
-    // Track date change for density
-    const oldDate = pl.scheduledDate;
     if (scheduledDate !== undefined) pl.scheduledDate = scheduledDate;
     if (headline !== undefined) pl.headline = headline;
     if (notes !== undefined) pl.notes = notes;
@@ -350,12 +273,6 @@ export default async function handler(req, res) {
 
     await redis.set(placementKey(sponsorId, placementId), JSON.stringify(pl));
     await updateIndex(redis, sponsorId, pl);
-
-    // Update density if date changed
-    if (scheduledDate !== undefined && scheduledDate !== oldDate && sponsorName) {
-      if (oldDate) await removeDensity(redis, oldDate, sponsorName);
-      if (scheduledDate) await addDensity(redis, scheduledDate, sponsorName);
-    }
 
     return res.status(200).json({ ok: true });
   }
@@ -475,16 +392,84 @@ export default async function handler(req, res) {
 
     if (pl.status !== "draft" && pl.status !== "placeholder") return res.status(400).json({ error: "Only drafts and placeholders can be deleted" });
 
-    // Update density before deleting
-    const { sponsorName } = req.body || {};
-    if (pl.scheduledDate && sponsorName) await removeDensity(redis, pl.scheduledDate, sponsorName);
-
     await redis.del(placementKey(sponsorId, placementId));
     const index = await redis.get(indexKey(sponsorId));
     const items = index ? (typeof index === "string" ? JSON.parse(index) : index) : [];
     const filtered = items.filter(i => i.placementId !== placementId);
     await redis.set(indexKey(sponsorId), JSON.stringify(filtered));
     return res.status(200).json({ ok: true });
+  }
+
+  // ─── Skip placement (delete + renumber + add new at end) ─
+  if (action === "skip-placement" && req.method === "POST") {
+    if (!sponsorId || !placementId) return res.status(400).json({ error: "sponsorId and placementId required" });
+    const existing = await redis.get(placementKey(sponsorId, placementId));
+    if (!existing) return res.status(404).json({ error: "Placement not found" });
+    const pl = typeof existing === "string" ? JSON.parse(existing) : existing;
+
+    if (pl.status !== "placeholder") return res.status(400).json({ error: "Only placeholders can be skipped" });
+
+    const contractId = pl.contractId;
+    const skippedRun = pl.runNumber;
+
+    // Delete the skipped placement
+    await redis.del(placementKey(sponsorId, placementId));
+
+    // Get all placements for this contract, renumber, and add new one at end
+    const index = await redis.get(indexKey(sponsorId));
+    const items = index ? (typeof index === "string" ? JSON.parse(index) : index) : [];
+    const contractItems = items.filter(i => i.contractId === contractId && i.placementId !== placementId);
+    const otherItems = items.filter(i => i.contractId !== contractId);
+
+    // Sort by current run number
+    contractItems.sort((a, b) => (a.runNumber || 0) - (b.runNumber || 0));
+
+    // Renumber sequentially
+    for (let i = 0; i < contractItems.length; i++) {
+      contractItems[i].runNumber = i + 1;
+      // Also update the full placement record
+      const fullRaw = await redis.get(placementKey(sponsorId, contractItems[i].placementId));
+      if (fullRaw) {
+        const full = typeof fullRaw === "string" ? JSON.parse(fullRaw) : fullRaw;
+        full.runNumber = i + 1;
+        await redis.set(placementKey(sponsorId, contractItems[i].placementId), JSON.stringify(full));
+      }
+    }
+
+    // Find last date and add new placeholder 14 days after
+    const lastDate = contractItems.filter(i => i.scheduledDate).map(i => i.scheduledDate).sort().pop();
+    const newDate = lastDate ? (() => {
+      const d = new Date(lastDate + "T00:00:00");
+      d.setDate(d.getDate() + 14);
+      return d.toISOString().slice(0, 10);
+    })() : null;
+
+    const newId = uid();
+    const now = new Date().toISOString();
+    const newPlacement = {
+      placementId: newId, sponsorId, contractId,
+      campaignName: pl.campaignName || null,
+      runNumber: contractItems.length + 1,
+      totalRuns: pl.totalRuns,
+      scheduledDate: newDate, headline: "",
+      notes: "", contentType: "placeholder",
+      imageData: null, htmlContent: null, previewUrl: null,
+      status: "placeholder", version: 1, createdAt: now,
+      submittedAt: null, reviewedAt: null, approvedAt: null, completedAt: null,
+      changeHistory: [],
+    };
+    await redis.set(placementKey(sponsorId, newId), JSON.stringify(newPlacement));
+
+    const newEntry = {
+      placementId: newId, status: "placeholder", scheduledDate: newDate,
+      headline: "", version: 1, submittedAt: null, reviewedAt: null, approvedAt: null, completedAt: null,
+      contractId, contentType: "placeholder",
+      campaignName: pl.campaignName || null,
+      runNumber: contractItems.length + 1, totalRuns: pl.totalRuns,
+    };
+
+    await redis.set(indexKey(sponsorId), JSON.stringify([...otherItems, ...contractItems, newEntry]));
+    return res.status(200).json({ ok: true, newPlacementId: newId, newDate });
   }
 
   return res.status(400).json({ error: "Unknown action" });
