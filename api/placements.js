@@ -8,13 +8,19 @@ function uid() { return "pl-" + Date.now().toString(36) + Math.random().toString
 // ─── Schedule generation (biweekly, conflict-aware) ─────────
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+function fmtLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function generateForwardDates(startDate, count) {
-  const fmt = (d) => d.toISOString().slice(0, 10);
-  const start = new Date(startDate + "T00:00:00");
+  const start = new Date(startDate + "T12:00:00");
   const dates = [];
   let cur = new Date(start);
   for (let i = 0; i < count; i++) {
-    dates.push(fmt(new Date(cur)));
+    dates.push(fmtLocal(cur));
     cur.setDate(cur.getDate() + 14);
   }
   return dates;
@@ -22,11 +28,10 @@ function generateForwardDates(startDate, count) {
 
 // Conflict-aware: tries Mon then Fri of same week, then skips +14d
 function resolveConflicts(dates, takenMap, count) {
-  const fmt = (d) => d.toISOString().slice(0, 10);
   const resolved = [];
   for (const dateStr of dates) {
     if (resolved.length >= count) break;
-    const d = new Date(dateStr + "T00:00:00");
+    const d = new Date(dateStr + "T12:00:00");
     const dow = d.getDay();
     // Try original date
     if (!takenMap[dateStr]) {
@@ -36,7 +41,7 @@ function resolveConflicts(dates, takenMap, count) {
     // Try Monday of that week
     const mon = new Date(d);
     mon.setDate(mon.getDate() - ((dow + 6) % 7)); // go to Monday
-    const monStr = fmt(mon);
+    const monStr = fmtLocal(mon);
     if (monStr !== dateStr && !takenMap[monStr] && !resolved.some(r => r.date === monStr)) {
       resolved.push({ date: monStr, movedFrom: dateStr, takenBy: takenMap[dateStr] });
       continue;
@@ -44,7 +49,7 @@ function resolveConflicts(dates, takenMap, count) {
     // Try Friday of that week
     const fri = new Date(mon);
     fri.setDate(fri.getDate() + 4);
-    const friStr = fmt(fri);
+    const friStr = fmtLocal(fri);
     if (friStr !== dateStr && !takenMap[friStr] && !resolved.some(r => r.date === friStr)) {
       resolved.push({ date: friStr, movedFrom: dateStr, takenBy: takenMap[dateStr] });
       continue;
@@ -55,10 +60,10 @@ function resolveConflicts(dates, takenMap, count) {
 
   // Remove skipped entries and add extras at the end
   const good = resolved.filter(r => r !== null);
-  let lastDate = good.length > 0 ? new Date(good[good.length - 1].date + "T00:00:00") : new Date(dates[dates.length - 1] + "T00:00:00");
+  let lastDate = good.length > 0 ? new Date(good[good.length - 1].date + "T12:00:00") : new Date(dates[dates.length - 1] + "T12:00:00");
   while (good.length < count) {
     lastDate.setDate(lastDate.getDate() + 14);
-    const extra = fmt(new Date(lastDate));
+    const extra = fmtLocal(lastDate);
     if (!takenMap[extra] && !good.some(r => r.date === extra)) {
       good.push({ date: extra, movedFrom: null, takenBy: null });
     }
@@ -68,13 +73,12 @@ function resolveConflicts(dates, takenMap, count) {
 
 function generateBackwardDates(startDate, count) {
   if (count <= 0) return [];
-  const fmt = (d) => d.toISOString().slice(0, 10);
-  const start = new Date(startDate + "T00:00:00");
+  const start = new Date(startDate + "T12:00:00");
   const dates = [];
   let cur = new Date(start);
   for (let i = 0; i < count; i++) {
     cur.setDate(cur.getDate() - 14);
-    dates.push(fmt(new Date(cur)));
+    dates.push(fmtLocal(cur));
   }
   dates.reverse();
   return dates;
@@ -174,6 +178,9 @@ export default async function handler(req, res) {
       Object.assign(sponsorNameMap, req.body.sponsorNameMap);
     }
 
+    console.log(`[generate-schedule] sponsorIds=${allSponsorIds.length}, takenDates=${Object.keys(takenMap).length}, startDate=${startDate}, forward=${forwardCount}`);
+    if (Object.keys(takenMap).length > 0) console.log(`[generate-schedule] taken dates:`, Object.keys(takenMap).slice(0, 10));
+
     const backDates = generateBackwardDates(startDate, cr);
     const rawForwardDates = generateForwardDates(startDate, forwardCount);
     const resolved = resolveConflicts(rawForwardDates, takenMap, forwardCount);
@@ -182,7 +189,7 @@ export default async function handler(req, res) {
     for (let i = 0; i < cr; i++) {
       const date = backDates[i] || null;
       schedule.push({
-        runNumber: i + 1, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T00:00:00").getDay()] : "",
+        runNumber: i + 1, date, weekday: date ? WEEKDAY_NAMES[new Date(date + "T12:00:00").getDay()] : "",
         preCompleted: true,
       });
     }
@@ -509,9 +516,9 @@ export default async function handler(req, res) {
     // Find last date and add new placeholder 14 days after
     const lastDate = contractItems.filter(i => i.scheduledDate).map(i => i.scheduledDate).sort().pop();
     const newDate = lastDate ? (() => {
-      const d = new Date(lastDate + "T00:00:00");
+      const d = new Date(lastDate + "T12:00:00");
       d.setDate(d.getDate() + 14);
-      return d.toISOString().slice(0, 10);
+      return fmtLocal(d);
     })() : null;
 
     const newId = uid();
